@@ -1,0 +1,28 @@
+# ETF Monitoring System - Dependencies
+# =====================================
+
+# Excel handling
+openpyxl>=3.1.2
+pandas>=2.0.0
+
+# Market data (OHLCV)
+yfinance>=0.2.30
+
+# Web dashboard
+flask>=3.0.0
+gunicorn>=21.0.0
+
+# Scheduling
+schedule>=1.2.0
+
+# Data analysis
+numpy>=1.24.0
+
+# Date handling
+python-dateutil>=2.8.2
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Database PostgreSQL
+psycopg2-binary>=2.9.9
