@@ -18,6 +18,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 import json
 import time
+import numpy as np
 from decimal import Decimal
 from pathlib import Path
 
@@ -314,11 +315,17 @@ class ETFMonitor:
                 dashboard_data['categories'][category] = []
             dashboard_data['categories'][category].append(etf_data)
 
-        # Salva JSON (converte Decimal dal DB in float)
+        # Salva JSON (converte Decimal e tipi numpy in tipi Python nativi)
         class DecimalEncoder(json.JSONEncoder):
             def default(self, obj):
                 if isinstance(obj, Decimal):
                     return float(obj)
+                if isinstance(obj, (np.integer,)):
+                    return int(obj)
+                if isinstance(obj, (np.floating,)):
+                    return float(obj)
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
                 return super().default(obj)
 
         with open('data/dashboard_data.json', 'w') as f:
