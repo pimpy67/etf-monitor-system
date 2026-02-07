@@ -327,7 +327,7 @@ class ETFMonitor:
 
         for r in results:
             signal = r['analysis'].get('final_signal', 'HOLD')
-            level = r['livello']
+            level = r['analysis'].get('suggested_level', r['livello'])
             category = r['categoria']
 
             if signal == 'BUY':
