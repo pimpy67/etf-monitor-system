@@ -1,7 +1,9 @@
 """
 database.py - Gestione database PostgreSQL per storico prezzi ETF
 =================================================================
-Salva e recupera lo storico OHLCV degli ETF su PostgreSQL (Railway)
+Salva e recupera lo storico prezzi degli ETF su PostgreSQL (Railway).
+Supporta sia identificazione per ticker che per ISIN.
+Fonte dati: JustETF (solo Close) e yfinance (OHLCV legacy).
 """
 
 import os
@@ -138,8 +140,29 @@ class PriceDatabase:
                     CREATE INDEX IF NOT EXISTS idx_etf_price_history_ticker_date
                     ON etf_price_history(ticker, date DESC)
                 """)
+
+                # === MIGRAZIONE ISIN ===
+                # Aggiungi colonna isin se non esiste
+                cur.execute("""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_name = 'etf_price_history' AND column_name = 'isin'
+                        ) THEN
+                            ALTER TABLE etf_price_history ADD COLUMN isin VARCHAR(20);
+                        END IF;
+                    END $$;
+                """)
+                # Indice per query per ISIN
+                cur.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_etf_price_isin_date
+                    ON etf_price_history(isin, date DESC)
+                    WHERE isin IS NOT NULL
+                """)
+
                 conn.commit()
-                print("Tabella etf_price_history pronta (con vincolo UNIQUE)")
+                print("Tabella etf_price_history pronta (con supporto ISIN)")
         except Exception as e:
             logging.error(f"Errore creazione tabella: {e}")
         finally:
@@ -228,6 +251,92 @@ class PriceDatabase:
             conn.close()
 
         return saved
+
+    def save_close_bulk(self, isin: str, df: pd.DataFrame, source: str = 'justetf') -> int:
+        """
+        Salva dati Close in blocco da JustETF (solo prezzo chiusura).
+
+        Args:
+            isin: Codice ISIN dell'ETF
+            df: DataFrame con colonna 'Close' e index=Date
+            source: Fonte del dato
+
+        Returns:
+            Numero di record salvati
+        """
+        conn = self._get_connection()
+        if not conn:
+            return 0
+
+        saved = 0
+        try:
+            with conn.cursor() as cur:
+                for date_idx, row in df.iterrows():
+                    date_str = date_idx.strftime('%Y-%m-%d') if hasattr(date_idx, 'strftime') else str(date_idx)
+                    close_val = float(row['Close'])
+                    try:
+                        cur.execute("""
+                            INSERT INTO etf_price_history (ticker, isin, date, close, source)
+                            VALUES (%s, %s, %s, %s, %s)
+                            ON CONFLICT (ticker, date)
+                            DO UPDATE SET close = EXCLUDED.close, source = EXCLUDED.source,
+                                          isin = EXCLUDED.isin
+                        """, (isin, isin, date_str, close_val, source))
+                        saved += 1
+                    except Exception:
+                        continue
+                conn.commit()
+        except Exception as e:
+            print(f"Errore salvataggio bulk {isin}: {e}")
+        finally:
+            conn.close()
+
+        return saved
+
+    def get_close_by_isin(self, isin: str, days: int = 200) -> pd.DataFrame:
+        """
+        Recupera lo storico Close per un ETF tramite ISIN.
+
+        Args:
+            isin: Codice ISIN dell'ETF
+            days: Numero di giorni da recuperare
+
+        Returns:
+            DataFrame con colonne ['date', 'close'] o con colonna 'Close' e index=Date
+        """
+        conn = self._get_connection()
+        if not conn:
+            return pd.DataFrame()
+
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Cerca per ISIN (campo isin) o per ticker (che ora puo' contenere ISIN)
+                cur.execute("""
+                    SELECT date, close
+                    FROM etf_price_history
+                    WHERE isin = %s OR ticker = %s
+                    ORDER BY date DESC
+                    LIMIT %s
+                """, (isin, isin, days))
+                rows = cur.fetchall()
+
+                if rows:
+                    df = pd.DataFrame(rows)
+                    df['date'] = pd.to_datetime(df['date'])
+                    df = df.sort_values('date').reset_index(drop=True)
+                    df['close'] = df['close'].astype(float)
+                    # Restituisci in formato compatibile con analisi tecnica
+                    result = pd.DataFrame({
+                        'Close': df['close'].values
+                    }, index=df['date'])
+                    result.index.name = 'Date'
+                    return result
+                return pd.DataFrame()
+        except Exception as e:
+            logging.error(f"Errore recupero Close {isin}: {e}")
+            return pd.DataFrame()
+        finally:
+            conn.close()
 
     def get_ohlcv(self, ticker: str, days: int = 200) -> pd.DataFrame:
         """

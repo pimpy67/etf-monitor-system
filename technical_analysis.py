@@ -1,19 +1,19 @@
 """
-technical_analysis.py - Analisi tecnica per ETF
-=================================================
-Indicatori specifici per ETF (piu' volatili dei fondi):
+technical_analysis.py - Analisi tecnica per ETF (solo Close)
+=============================================================
+Indicatori basati solo sul prezzo di chiusura (Close):
 - EMA 13 (Exponential Moving Average veloce)
 - SMA 50 (Simple Moving Average lenta)
 - RSI 14 (Relative Strength Index)
-- ADX 14 (Average Directional Index - forza del trend)
-- Volume Ratio (volume vs media 20gg)
+- MACD (Moving Average Convergence Divergence - conferma momentum)
+- Bollinger Band Width (misura volatilita'/forza trend)
 
 Logica BUY (tutte e 5 le condizioni):
 1. Prezzo > EMA13 e Prezzo > SMA50 per 3+ giorni
 2. EMA13 > SMA50 (golden cross)
 3. RSI tra 55 e 65
-4. Volume > 1.5x media 20 giorni
-5. ADX > 25
+4. MACD positivo e crescente (conferma momentum)
+5. Bollinger Band Width in espansione (trend forte)
 
 Logica SELL:
 1. Prezzo < EMA13 e Prezzo < SMA50 per 3+ giorni
@@ -24,11 +24,11 @@ Logica SELL:
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from typing import Dict, Tuple
+from typing import Dict
 
 
 class ETFTechnicalAnalyzer:
-    """Analisi tecnica per ETF con EMA, ADX, Volume"""
+    """Analisi tecnica per ETF basata solo su prezzi Close"""
 
     def __init__(self, config: dict = None):
         self.config = config or {}
@@ -44,54 +44,28 @@ class ETFTechnicalAnalyzer:
         self.rsi_overbought = self.config.get('rsi_overbought', 75)
         self.rsi_oversold = self.config.get('rsi_oversold', 25)
 
-        # ADX
-        self.adx_period = self.config.get('adx_period', 14)
-        self.adx_threshold = self.config.get('adx_threshold', 25)
+        # MACD
+        self.macd_fast = self.config.get('macd_fast', 12)
+        self.macd_slow = self.config.get('macd_slow', 26)
+        self.macd_signal = self.config.get('macd_signal', 9)
 
-        # Volume
-        self.volume_multiplier = self.config.get('volume_multiplier', 1.5)
-        self.volume_avg_period = self.config.get('volume_avg_period', 20)
+        # Bollinger Bands
+        self.bb_period = self.config.get('bb_period', 20)
+        self.bb_std = self.config.get('bb_std', 2)
 
         # Giorni sopra MA per conferma
         self.days_above_ma = self.config.get('days_above_ma', 3)
 
     def calculate_ema(self, prices: pd.Series, period: int) -> pd.Series:
-        """
-        Calcola Exponential Moving Average
-
-        Args:
-            prices: Serie di prezzi
-            period: Periodo EMA
-
-        Returns:
-            Serie con valori EMA
-        """
+        """Calcola Exponential Moving Average"""
         return prices.ewm(span=period, adjust=False).mean()
 
     def calculate_sma(self, prices: pd.Series, period: int) -> pd.Series:
-        """
-        Calcola Simple Moving Average
-
-        Args:
-            prices: Serie di prezzi
-            period: Periodo SMA
-
-        Returns:
-            Serie con valori SMA
-        """
+        """Calcola Simple Moving Average"""
         return prices.rolling(window=period).mean()
 
     def calculate_rsi(self, prices: pd.Series, period: int = None) -> pd.Series:
-        """
-        Calcola Relative Strength Index
-
-        Args:
-            prices: Serie di prezzi
-            period: Periodo RSI (default: self.rsi_period)
-
-        Returns:
-            Serie con valori RSI (0-100)
-        """
+        """Calcola Relative Strength Index (0-100)"""
         period = period or self.rsi_period
         delta = prices.diff()
 
@@ -105,97 +79,60 @@ class ETFTechnicalAnalyzer:
         rsi = 100 - (100 / (1 + rs))
         return rsi
 
-    def calculate_adx(self, high: pd.Series, low: pd.Series,
-                      close: pd.Series, period: int = None) -> pd.Series:
+    def calculate_macd(self, prices: pd.Series) -> Dict:
         """
-        Calcola Average Directional Index (ADX)
-        Misura la forza del trend (non la direzione).
-        ADX > 25 = trend forte, ADX < 20 = trend debole/laterale.
-
-        Args:
-            high: Serie prezzi massimi
-            low: Serie prezzi minimi
-            close: Serie prezzi chiusura
-            period: Periodo ADX (default: self.adx_period)
+        Calcola MACD (Moving Average Convergence Divergence).
 
         Returns:
-            Serie con valori ADX
+            Dict con 'macd_line', 'signal_line', 'histogram' (pd.Series)
         """
-        period = period or self.adx_period
+        ema_fast = prices.ewm(span=self.macd_fast, adjust=False).mean()
+        ema_slow = prices.ewm(span=self.macd_slow, adjust=False).mean()
 
-        # True Range
-        high_low = high - low
-        high_close_prev = (high - close.shift(1)).abs()
-        low_close_prev = (low - close.shift(1)).abs()
-        tr = pd.concat([high_low, high_close_prev, low_close_prev], axis=1).max(axis=1)
+        macd_line = ema_fast - ema_slow
+        signal_line = macd_line.ewm(span=self.macd_signal, adjust=False).mean()
+        histogram = macd_line - signal_line
 
-        # Directional Movement
-        up_move = high - high.shift(1)
-        down_move = low.shift(1) - low
+        return {
+            'macd_line': macd_line,
+            'signal_line': signal_line,
+            'histogram': histogram
+        }
 
-        plus_dm = pd.Series(0.0, index=high.index)
-        minus_dm = pd.Series(0.0, index=high.index)
-
-        # +DM: up_move > 0 AND up_move > down_move
-        plus_dm = np.where((up_move > 0) & (up_move > down_move), up_move, 0)
-        plus_dm = pd.Series(plus_dm, index=high.index)
-
-        # -DM: down_move > 0 AND down_move > up_move
-        minus_dm = np.where((down_move > 0) & (down_move > up_move), down_move, 0)
-        minus_dm = pd.Series(minus_dm, index=high.index)
-
-        # Smoothed TR, +DM, -DM (EMA)
-        atr = tr.ewm(span=period, adjust=False).mean()
-        plus_di = 100 * plus_dm.ewm(span=period, adjust=False).mean() / atr
-        minus_di = 100 * minus_dm.ewm(span=period, adjust=False).mean() / atr
-
-        # DX e ADX
-        di_sum = plus_di + minus_di
-        di_diff = (plus_di - minus_di).abs()
-
-        # Evita divisione per zero
-        dx = pd.Series(0.0, index=high.index)
-        mask = di_sum > 0
-        dx[mask] = 100 * di_diff[mask] / di_sum[mask]
-
-        adx = dx.ewm(span=period, adjust=False).mean()
-        return adx
-
-    def calculate_volume_ratio(self, volume: pd.Series, period: int = None) -> float:
+    def calculate_bollinger_bands(self, prices: pd.Series) -> Dict:
         """
-        Calcola il rapporto tra volume corrente e media volume
-
-        Args:
-            volume: Serie dei volumi
-            period: Periodo media volume (default: self.volume_avg_period)
+        Calcola Bollinger Bands e Band Width.
 
         Returns:
-            Rapporto volume corrente / media (es. 1.5 = 50% sopra media)
+            Dict con 'upper', 'middle', 'lower', 'width', 'pct_b' (pd.Series)
         """
-        period = period or self.volume_avg_period
+        middle = prices.rolling(window=self.bb_period).mean()
+        std = prices.rolling(window=self.bb_period).std()
 
-        if len(volume) < period + 1:
-            return 1.0  # Dati insufficienti
+        upper = middle + (std * self.bb_std)
+        lower = middle - (std * self.bb_std)
 
-        avg_vol = volume.iloc[-(period + 1):-1].mean()
-        current_vol = volume.iloc[-1]
+        # Band Width: (upper - lower) / middle * 100
+        width = pd.Series(0.0, index=prices.index)
+        mask = middle > 0
+        width[mask] = (upper[mask] - lower[mask]) / middle[mask] * 100
 
-        if avg_vol > 0:
-            return round(current_vol / avg_vol, 2)
-        return 1.0
+        # %B: posizione del prezzo rispetto alle bande (0=lower, 1=upper)
+        band_range = upper - lower
+        pct_b = pd.Series(0.5, index=prices.index)
+        mask = band_range > 0
+        pct_b[mask] = (prices[mask] - lower[mask]) / band_range[mask]
+
+        return {
+            'upper': upper,
+            'middle': middle,
+            'lower': lower,
+            'width': width,
+            'pct_b': pct_b
+        }
 
     def count_days_above(self, prices: pd.Series, ma: pd.Series, max_days: int = 10) -> int:
-        """
-        Conta giorni consecutivi con prezzo sopra la media mobile
-
-        Args:
-            prices: Serie di prezzi
-            ma: Serie della media mobile
-            max_days: Massimo giorni da controllare
-
-        Returns:
-            Numero di giorni consecutivi sopra MA
-        """
+        """Conta giorni consecutivi con prezzo sopra la media mobile"""
         if len(prices) < 2 or len(ma) < 2:
             return 0
 
@@ -234,12 +171,10 @@ class ETFTechnicalAnalyzer:
 
     def detect_crossover(self, ema_fast: pd.Series, sma_slow: pd.Series) -> str:
         """
-        Rileva incrocio tra EMA veloce e SMA lenta
+        Rileva incrocio tra EMA veloce e SMA lenta.
 
         Returns:
-            'golden_cross' se EMA > SMA (rialzista)
-            'death_cross' se EMA < SMA (ribassista)
-            'neutral' se nessun incrocio significativo
+            'golden_cross', 'death_cross' o 'neutral'
         """
         if len(ema_fast) < 2 or len(sma_slow) < 2:
             return 'neutral'
@@ -256,28 +191,31 @@ class ETFTechnicalAnalyzer:
             return 'death_cross'
         return 'neutral'
 
-    def analyze_etf(self, ohlcv_df: pd.DataFrame, level: int = 3) -> Dict:
+    def analyze_etf(self, close_df: pd.DataFrame, level: int = 3) -> Dict:
         """
-        Analisi tecnica completa di un ETF
+        Analisi tecnica completa di un ETF.
 
         Args:
-            ohlcv_df: DataFrame con colonne Open, High, Low, Close, Volume
+            close_df: DataFrame con almeno colonna 'Close'
             level: Livello attuale dell'ETF (1, 2, 3)
 
         Returns:
             Dizionario con tutti gli indicatori e segnali
         """
-        min_data = max(self.sma_slow_period, self.adx_period) + 5
+        min_data = self.sma_slow_period + 5  # ~55 giorni
 
-        if len(ohlcv_df) < min_data:
-            close_price = float(ohlcv_df['Close'].iloc[-1]) if len(ohlcv_df) > 0 else None
+        if len(close_df) < min_data:
+            close_price = float(close_df['Close'].iloc[-1]) if len(close_df) > 0 else None
             return {
                 'current_price': close_price,
                 'ema13': None,
                 'sma50': None,
                 'rsi': None,
-                'adx': None,
-                'volume_ratio': None,
+                'macd': None,
+                'macd_signal': None,
+                'macd_histogram': None,
+                'bb_width': None,
+                'bb_pct_b': None,
                 'crossover': 'neutral',
                 'days_above_ema': 0,
                 'days_above_sma': 0,
@@ -289,28 +227,32 @@ class ETFTechnicalAnalyzer:
                 'sell_conditions': {},
                 'suggested_level': level,
                 'level_change': False,
-                'level_reason': f'Dati insufficienti: {len(ohlcv_df)}/{min_data} giorni',
+                'level_reason': f'Dati insufficienti: {len(close_df)}/{min_data} giorni',
                 'data_status': 'insufficient'
             }
 
-        close = ohlcv_df['Close'].astype(float)
-        high = ohlcv_df['High'].astype(float)
-        low = ohlcv_df['Low'].astype(float)
-        volume = ohlcv_df['Volume'].astype(float)
-
+        close = close_df['Close'].astype(float)
         current_price = float(close.iloc[-1])
 
-        # Calcola indicatori
+        # === CALCOLO INDICATORI ===
         ema13 = self.calculate_ema(close, self.ema_fast_period)
         sma50 = self.calculate_sma(close, self.sma_slow_period)
         rsi = self.calculate_rsi(close)
-        adx = self.calculate_adx(high, low, close)
-        vol_ratio = self.calculate_volume_ratio(volume)
+        macd_data = self.calculate_macd(close)
+        bb_data = self.calculate_bollinger_bands(close)
 
         ema13_current = float(ema13.iloc[-1]) if pd.notna(ema13.iloc[-1]) else None
         sma50_current = float(sma50.iloc[-1]) if pd.notna(sma50.iloc[-1]) else None
         rsi_current = float(rsi.iloc[-1]) if pd.notna(rsi.iloc[-1]) else None
-        adx_current = float(adx.iloc[-1]) if pd.notna(adx.iloc[-1]) else None
+
+        macd_current = float(macd_data['macd_line'].iloc[-1]) if pd.notna(macd_data['macd_line'].iloc[-1]) else None
+        macd_signal_current = float(macd_data['signal_line'].iloc[-1]) if pd.notna(macd_data['signal_line'].iloc[-1]) else None
+        macd_hist_current = float(macd_data['histogram'].iloc[-1]) if pd.notna(macd_data['histogram'].iloc[-1]) else None
+        macd_hist_prev = float(macd_data['histogram'].iloc[-2]) if len(macd_data['histogram']) >= 2 and pd.notna(macd_data['histogram'].iloc[-2]) else None
+
+        bb_width_current = float(bb_data['width'].iloc[-1]) if pd.notna(bb_data['width'].iloc[-1]) else None
+        bb_width_prev = float(bb_data['width'].iloc[-2]) if len(bb_data['width']) >= 2 and pd.notna(bb_data['width'].iloc[-2]) else None
+        bb_pct_b_current = float(bb_data['pct_b'].iloc[-1]) if pd.notna(bb_data['pct_b'].iloc[-1]) else None
 
         # Crossover EMA/SMA
         crossover = self.detect_crossover(ema13, sma50)
@@ -322,31 +264,51 @@ class ETFTechnicalAnalyzer:
         days_below_sma = self.count_days_below(close, sma50)
 
         # === CONDIZIONI BUY (tutte e 5 devono essere vere) ===
+
+        # 1. Prezzo > EMA13 e SMA50 per 3+ giorni
         buy_cond_1 = (days_above_ema >= self.days_above_ma and
-                      days_above_sma >= self.days_above_ma)  # Prezzo > EMA13 & SMA50 per 3+ gg
-        buy_cond_2 = crossover == 'golden_cross'             # EMA13 > SMA50
+                      days_above_sma >= self.days_above_ma)
+
+        # 2. EMA13 > SMA50 (golden cross)
+        buy_cond_2 = crossover == 'golden_cross'
+
+        # 3. RSI tra 55 e 65 (zona ottimale)
         buy_cond_3 = (rsi_current is not None and
-                      self.rsi_buy_low <= rsi_current <= self.rsi_buy_high)  # RSI 55-65
-        buy_cond_4 = vol_ratio >= self.volume_multiplier     # Volume > 1.5x media
-        buy_cond_5 = (adx_current is not None and
-                      adx_current >= self.adx_threshold)     # ADX > 25
+                      self.rsi_buy_low <= rsi_current <= self.rsi_buy_high)
+
+        # 4. MACD positivo e crescente (conferma momentum)
+        buy_cond_4 = (macd_hist_current is not None and
+                      macd_hist_prev is not None and
+                      macd_hist_current > 0 and
+                      macd_hist_current > macd_hist_prev)
+
+        # 5. Bollinger Band Width in espansione (trend forte)
+        buy_cond_5 = (bb_width_current is not None and
+                      bb_width_prev is not None and
+                      bb_width_current > bb_width_prev)
 
         buy_conditions = {
             'price_above_ma_3days': buy_cond_1,
             'golden_cross': buy_cond_2,
             'rsi_optimal': buy_cond_3,
-            'volume_high': buy_cond_4,
-            'adx_strong': buy_cond_5
+            'macd_positive_rising': buy_cond_4,
+            'bb_width_expanding': buy_cond_5
         }
         buy_count = sum(buy_conditions.values())
 
         # === CONDIZIONI SELL ===
+
+        # 1. Prezzo < EMA13 e SMA50 per 3+ giorni
         sell_cond_1 = (days_below_ema >= self.days_above_ma and
-                       days_below_sma >= self.days_above_ma)  # Prezzo < EMA13 & SMA50 per 3+ gg
-        sell_cond_2 = crossover == 'death_cross'              # EMA13 < SMA50
+                       days_below_sma >= self.days_above_ma)
+
+        # 2. EMA13 < SMA50 (death cross)
+        sell_cond_2 = crossover == 'death_cross'
+
+        # 3. RSI > 75 (overbought) o RSI < 25 (oversold)
         sell_cond_3 = (rsi_current is not None and
                        (rsi_current > self.rsi_overbought or
-                        rsi_current < self.rsi_oversold))     # RSI > 75 o < 25
+                        rsi_current < self.rsi_oversold))
 
         sell_conditions = {
             'price_below_ma_3days': sell_cond_1,
@@ -363,7 +325,6 @@ class ETFTechnicalAnalyzer:
             final_signal = 'SELL'
             signal_strength = sell_count
         elif buy_count >= 3:
-            # BUY parziale (3-4 condizioni su 5)
             final_signal = 'HOLD'
             signal_strength = buy_count
         else:
@@ -381,8 +342,11 @@ class ETFTechnicalAnalyzer:
             'ema13': round(ema13_current, 4) if ema13_current else None,
             'sma50': round(sma50_current, 4) if sma50_current else None,
             'rsi': round(rsi_current, 2) if rsi_current else None,
-            'adx': round(adx_current, 2) if adx_current else None,
-            'volume_ratio': vol_ratio,
+            'macd': round(macd_current, 4) if macd_current else None,
+            'macd_signal': round(macd_signal_current, 4) if macd_signal_current else None,
+            'macd_histogram': round(macd_hist_current, 4) if macd_hist_current else None,
+            'bb_width': round(bb_width_current, 2) if bb_width_current else None,
+            'bb_pct_b': round(bb_pct_b_current, 2) if bb_pct_b_current else None,
             'crossover': crossover,
             'days_above_ema': days_above_ema,
             'days_above_sma': days_above_sma,
@@ -405,12 +369,11 @@ class ETFTechnicalAnalyzer:
                        buy_count: int, crossover: str, rsi: float,
                        current_level: int) -> Dict:
         """
-        Suggerisce il livello appropriato per un ETF
+        Suggerisce il livello appropriato per un ETF.
 
-        Logica:
-        - L3 (Universe): Tutti gli ETF monitorati
-        - L2 (Watchlist): EMA13 > SMA50 oppure RSI > 50
         - L1 (BUY Alert): Tutte e 5 le condizioni BUY soddisfatte
+        - L2 (Watchlist): EMA13 > SMA50 oppure RSI > 50
+        - L3 (Universe): Monitoraggio passivo
         """
         if buy_count == 5:
             suggested = 1
@@ -435,39 +398,30 @@ class ETFTechnicalAnalyzer:
 
 
 def test_analyzer():
-    """Test dell'analizzatore tecnico ETF"""
+    """Test dell'analizzatore tecnico ETF (solo Close)"""
     analyzer = ETFTechnicalAnalyzer()
 
-    # Genera dati OHLCV di test (100 giorni)
+    # Genera dati di test (100 giorni, solo Close)
     np.random.seed(42)
     n = 100
     dates = pd.date_range(end=datetime.now(), periods=n, freq='D')
-
     close = pd.Series(100 + np.cumsum(np.random.randn(n) * 2), index=dates)
-    high = close + np.abs(np.random.randn(n))
-    low = close - np.abs(np.random.randn(n))
-    open_p = close + np.random.randn(n) * 0.5
-    volume = pd.Series(np.random.randint(100000, 1000000, n), index=dates)
 
-    ohlcv = pd.DataFrame({
-        'Open': open_p,
-        'High': high,
-        'Low': low,
-        'Close': close,
-        'Volume': volume
-    }, index=dates)
+    close_df = pd.DataFrame({'Close': close}, index=dates)
 
-    result = analyzer.analyze_etf(ohlcv, level=3)
+    result = analyzer.analyze_etf(close_df, level=3)
 
     print("=" * 60)
-    print("TEST ETF TECHNICAL ANALYZER")
+    print("TEST ETF TECHNICAL ANALYZER (Close-only)")
     print("=" * 60)
-    print(f"Prezzo: {result['current_price']:.2f}")
-    print(f"EMA13:  {result['ema13']:.2f}" if result['ema13'] else "EMA13: N/A")
-    print(f"SMA50:  {result['sma50']:.2f}" if result['sma50'] else "SMA50: N/A")
-    print(f"RSI:    {result['rsi']:.1f}" if result['rsi'] else "RSI: N/A")
-    print(f"ADX:    {result['adx']:.1f}" if result['adx'] else "ADX: N/A")
-    print(f"Vol Ratio: {result['volume_ratio']:.2f}")
+    print(f"Prezzo:    {result['current_price']:.2f}")
+    print(f"EMA13:     {result['ema13']:.2f}" if result['ema13'] else "EMA13: N/A")
+    print(f"SMA50:     {result['sma50']:.2f}" if result['sma50'] else "SMA50: N/A")
+    print(f"RSI:       {result['rsi']:.1f}" if result['rsi'] else "RSI: N/A")
+    print(f"MACD:      {result['macd']:.4f}" if result['macd'] else "MACD: N/A")
+    print(f"MACD Hist: {result['macd_histogram']:.4f}" if result['macd_histogram'] else "MACD Hist: N/A")
+    print(f"BB Width:  {result['bb_width']:.2f}" if result['bb_width'] else "BB Width: N/A")
+    print(f"BB %B:     {result['bb_pct_b']:.2f}" if result['bb_pct_b'] else "BB %B: N/A")
     print(f"Crossover: {result['crossover']}")
     print(f"\nCondizioni BUY: {result['buy_count']}/5")
     for k, v in result['buy_conditions'].items():

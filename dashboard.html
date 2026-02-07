@@ -39,13 +39,13 @@
         .rsi.low { color: #00B050; }
         .rsi.mid { color: #FFC000; }
         .rsi.high { color: #DC3545; }
-        .adx { font-weight: bold; }
-        .adx.strong { color: #00B050; }
-        .adx.weak { color: #DC3545; }
-        .adx.mid { color: #FFC000; }
-        .vol { font-weight: bold; }
-        .vol.high { color: #00B050; }
-        .vol.normal { color: #aaa; }
+        .macd { font-weight: bold; }
+        .macd.positive { color: #00B050; }
+        .macd.negative { color: #DC3545; }
+        .macd.neutral { color: #FFC000; }
+        .bbw { font-weight: bold; }
+        .bbw.wide { color: #00B050; }
+        .bbw.narrow { color: #aaa; }
         .crossover { font-size: 0.75em; padding: 2px 8px; border-radius: 10px; }
         .crossover.golden { background: #00B050; color: white; }
         .crossover.death { background: #DC3545; color: white; }
@@ -79,25 +79,26 @@
             1. Prezzo &gt; EMA13 &amp; SMA50 per 3+ gg |
             2. EMA13 &gt; SMA50 (Golden Cross) |
             3. RSI 55-65 |
-            4. Volume &gt; 1.5x media 20gg |
-            5. ADX &gt; 25
+            4. MACD positivo e crescente |
+            5. Bollinger Band Width in espansione
+            &nbsp; | &nbsp; <em>Fonte dati: JustETF</em>
         </div>
 
         <div class="category-filters" id="categoryFilters"></div>
 
         <div class="level-section level-1">
             <div class="level-header"><span>LIVELLO 1 - BUY Alert</span><span id="l1Count">0 ETF</span></div>
-            <table class="fund-table"><thead><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>ADX</th><th>Vol</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level1Body"></tbody></table>
+            <table class="fund-table"><thead><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level1Body"></tbody></table>
         </div>
 
         <div class="level-section level-2">
             <div class="level-header"><span>LIVELLO 2 - Watchlist</span><span id="l2Count">0 ETF</span></div>
-            <table class="fund-table"><thead><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>ADX</th><th>Vol</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level2Body"></tbody></table>
+            <table class="fund-table"><thead><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level2Body"></tbody></table>
         </div>
 
         <div class="level-section level-3">
             <div class="level-header"><span>LIVELLO 3 - Universe</span><span id="l3Count">0 ETF</span></div>
-            <table class="fund-table"><thead><tr><th>ETF</th><th>Categoria</th><th>Prezzo</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>ADX</th><th>Vol</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level3Body"></tbody></table>
+            <table class="fund-table"><thead><tr><th>ETF</th><th>Categoria</th><th>Prezzo</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level3Body"></tbody></table>
         </div>
     </div>
 
@@ -155,22 +156,24 @@
 
             tbody.innerHTML = filtered.map(f => {
                 const rsiClass = f.rsi < 30 ? 'low' : f.rsi > 70 ? 'high' : 'mid';
-                const adxClass = f.adx >= 25 ? 'strong' : f.adx < 20 ? 'weak' : 'mid';
-                const volClass = f.volume_ratio >= 1.5 ? 'high' : 'normal';
+                const macdH = f.macd_histogram;
+                const macdClass = macdH > 0 ? 'positive' : macdH < 0 ? 'negative' : 'neutral';
+                const bbwClass = f.bb_width >= 5 ? 'wide' : 'narrow';
                 const signalClass = f.signal ? f.signal.toLowerCase() : 'hold';
                 const crossClass = f.crossover === 'golden_cross' ? 'golden' : f.crossover === 'death_cross' ? 'death' : 'neutral';
                 const crossLabel = f.crossover === 'golden_cross' ? 'Golden' : f.crossover === 'death_cross' ? 'Death' : '-';
                 const secondCol = level === 3 ? f.categoria : f.ticker;
+                const isinTip = f.isin ? f.isin + ' | ' + f.ticker : f.ticker;
 
                 return `<tr>
-                    <td title="${f.ticker}">${f.nome ? f.nome.substring(0,35) : '-'}...</td>
+                    <td title="${isinTip}">${f.nome ? f.nome.substring(0,35) : '-'}...</td>
                     <td>${secondCol || '-'}</td>
                     <td>${f.price ? f.price.toFixed(2) : '-'}</td>
                     <td>${f.ema13 ? f.ema13.toFixed(2) : '-'}</td>
                     <td>${f.sma50 ? f.sma50.toFixed(2) : '-'}</td>
                     <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '-'}</td>
-                    <td class="adx ${adxClass}">${f.adx ? f.adx.toFixed(0) : '-'}</td>
-                    <td class="vol ${volClass}">${f.volume_ratio ? f.volume_ratio.toFixed(1) + 'x' : '-'}</td>
+                    <td class="macd ${macdClass}">${macdH != null ? macdH.toFixed(2) : '-'}</td>
+                    <td class="bbw ${bbwClass}">${f.bb_width ? f.bb_width.toFixed(1) : '-'}</td>
                     <td><span class="crossover ${crossClass}">${crossLabel}</span></td>
                     <td><span class="signal ${signalClass}">${f.signal || 'HOLD'}</span> <span class="buy-count">${f.buy_count || 0}/5</span></td>
                 </tr>`;

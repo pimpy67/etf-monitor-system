@@ -176,25 +176,34 @@ def db_status_endpoint():
 
 @app.route('/api/prices')
 def get_prices():
-    """API per ottenere prezzi OHLCV dal database"""
+    """API per ottenere prezzi dal database (per ticker o ISIN)"""
     ticker = request.args.get('ticker')
+    isin = request.args.get('isin')
     days = int(request.args.get('days', 30))
 
-    if ticker:
-        df = db.get_ohlcv(ticker, days)
-        if not df.empty:
-            prices = []
-            for _, row in df.iterrows():
-                prices.append({
-                    'date': str(row['date']),
-                    'open': float(row['open']),
-                    'high': float(row['high']),
-                    'low': float(row['low']),
-                    'close': float(row['close']),
-                    'volume': int(row['volume'])
-                })
-            return jsonify({'ticker': ticker, 'prices': prices, 'count': len(prices)})
-        return jsonify({'ticker': ticker, 'prices': [], 'count': 0})
+    identifier = isin or ticker
+    if identifier:
+        # Prova prima per ISIN, poi per ticker
+        df = db.get_close_by_isin(identifier, days)
+        if df.empty:
+            df_old = db.get_ohlcv(identifier, days)
+            if not df_old.empty:
+                prices = []
+                for _, row in df_old.iterrows():
+                    prices.append({
+                        'date': str(row['date']),
+                        'close': float(row['close'])
+                    })
+                return jsonify({'identifier': identifier, 'prices': prices, 'count': len(prices)})
+            return jsonify({'identifier': identifier, 'prices': [], 'count': 0})
+
+        prices = []
+        for date_idx, row in df.iterrows():
+            prices.append({
+                'date': str(date_idx),
+                'close': float(row['Close'])
+            })
+        return jsonify({'identifier': identifier, 'prices': prices, 'count': len(prices)})
     else:
         stats = db.get_stats()
         return jsonify(stats)
@@ -247,16 +256,21 @@ def test_etf():
             return jsonify(result)
 
         row = df.iloc[0]
+        isin = str(row.get('ISIN', ''))
         result['test_etf'] = {
             'ticker': str(row['Ticker']),
+            'isin': isin,
             'nome': str(row['Nome ETF']),
             'livello': int(row['Livello'])
         }
-        result['steps'].append(f"ETF selezionato: {row['Nome ETF']}")
+        result['steps'].append(f"ETF selezionato: {row['Nome ETF']} ({isin})")
 
-        ohlcv = monitor.get_etf_history(row['Ticker'])
-        result['history_count'] = len(ohlcv)
-        result['steps'].append(f"Storico: {len(ohlcv)} giorni")
+        if isin:
+            close_df = monitor.get_etf_history(isin)
+        else:
+            close_df = monitor.get_etf_history(row['Ticker'])
+        result['history_count'] = len(close_df)
+        result['steps'].append(f"Storico: {len(close_df)} giorni")
 
         analysis = monitor.analyze_etf(row)
         result['analysis'] = str(analysis.get('analysis', {}))

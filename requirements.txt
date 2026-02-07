@@ -8,6 +8,10 @@ pandas>=2.0.0
 # Market data (OHLCV)
 yfinance>=0.2.30
 
+# JustETF scraping (ISIN resolution, metadata, prezzi)
+justetf-scraping @ git+https://github.com/druzsan/justetf-scraping.git
+beautifulsoup4>=4.0.0
+
 # Web dashboard
 flask>=3.0.0
 gunicorn>=21.0.0

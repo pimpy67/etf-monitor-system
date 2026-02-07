@@ -2,9 +2,9 @@
 monitor.py - Script principale di monitoraggio ETF
 ====================================================
 Orchestrazione del sistema:
-1. Legge file Excel con lista ETF
-2. Recupera dati OHLCV via yfinance
-3. Calcola indicatori tecnici (EMA13, SMA50, RSI, ADX, Volume)
+1. Legge file Excel con lista ETF + mapping ISIN
+2. Recupera dati prezzi Close via JustETF (per ISIN)
+3. Calcola indicatori tecnici (EMA13, SMA50, RSI, MACD, Bollinger)
 4. Genera segnali BUY/SELL/HOLD
 5. Invia alert
 6. Aggiorna Excel e dashboard
@@ -23,7 +23,7 @@ from decimal import Decimal
 from pathlib import Path
 
 # Import moduli locali
-from data_fetcher import ETFDataFetcher
+from justetf_fetcher import JustETFDataFetcher
 from technical_analysis import ETFTechnicalAnalyzer
 from alerts import AlertSystem
 from database import PriceDatabase
@@ -48,13 +48,33 @@ class ETFMonitor:
 
     def __init__(self, excel_path: str = 'etf_monitoraggio.xlsx'):
         self.excel_path = excel_path
-        self.data_fetcher = ETFDataFetcher()
+        self.data_fetcher = JustETFDataFetcher(rate_limit=1.0)
         self.analyzer = ETFTechnicalAnalyzer()
         self.alert_system = AlertSystem()
         self.db = PriceDatabase()
+        self.isin_mapping = self._load_isin_mapping()
 
         # Carica configurazione
         self.config = self._load_config()
+
+    def _load_isin_mapping(self) -> dict:
+        """Carica il mapping ISIN da file JSON"""
+        mapping_path = 'data/isin_mapping.json'
+        try:
+            with open(mapping_path, 'r', encoding='utf-8') as f:
+                mapping_list = json.load(f)
+            # Crea dict per indice Excel -> ISIN
+            mapping = {}
+            for entry in mapping_list:
+                idx = entry.get('excel_index')
+                isin = entry.get('isin', '')
+                if idx is not None and isin:
+                    mapping[idx] = entry
+            add_log(f"Mapping ISIN caricato: {len(mapping)} ETF con ISIN")
+            return mapping
+        except FileNotFoundError:
+            add_log("WARNING: File data/isin_mapping.json non trovato. Esegui isin_resolver.py prima.")
+            return {}
 
     def _load_config(self) -> dict:
         """Carica configurazione dal file Excel"""
@@ -75,92 +95,118 @@ class ETFMonitor:
                 'RSI Period': 14,
                 'RSI Buy Low': 55,
                 'RSI Buy High': 65,
-                'ADX Threshold': 25,
-                'Volume Multiplier': 1.5,
             }
 
     def load_etfs(self) -> pd.DataFrame:
-        """Carica lista ETF dal file Excel"""
+        """Carica lista ETF dal file Excel, arricchita con ISIN"""
         try:
             df = pd.read_excel(self.excel_path, sheet_name='ETF')
             print(f"Caricati {len(df)} ETF dal file Excel")
+
+            # Aggiungi ISIN dal mapping
+            if 'ISIN' not in df.columns:
+                df['ISIN'] = ''
+                for idx in df.index:
+                    if idx in self.isin_mapping:
+                        df.at[idx, 'ISIN'] = self.isin_mapping[idx].get('isin', '')
+
+            # Filtra ETF senza ISIN (non analizzabili)
+            with_isin = df[df['ISIN'] != '']
+            without_isin = df[df['ISIN'] == '']
+            if len(without_isin) > 0:
+                add_log(f"WARNING: {len(without_isin)} ETF senza ISIN (saranno saltati)")
+
             return df
         except Exception as e:
             print(f"Errore caricamento ETF: {e}")
             return pd.DataFrame()
 
-    def get_etf_history(self, ticker: str) -> pd.DataFrame:
+    def get_etf_history(self, isin: str) -> pd.DataFrame:
         """
-        Recupera storico OHLCV per un ETF.
-        Prima prova il database, poi scarica da yfinance se necessario.
+        Recupera storico prezzi Close per un ETF via JustETF.
+        Prima prova il database, poi scarica da JustETF se necessario.
         """
-        # 1. Scarica storico da yfinance (6 mesi)
-        hist_df = self.data_fetcher.get_historical_data(ticker, period='6mo')
+        # 1. Prova a recuperare dal database
+        db_df = self.db.get_close_by_isin(isin, days=200)
+
+        if not db_df.empty and len(db_df) >= 55:
+            return db_df
+
+        # 2. Scarica da JustETF
+        hist_df = self.data_fetcher.get_historical_data(isin, days=200)
 
         if not hist_df.empty:
             # Salva nel database
-            saved = self.db.save_ohlcv_bulk(ticker, hist_df)
+            saved = self.db.save_close_bulk(isin, hist_df, source='justetf')
             if saved > 0:
-                print(f"    Salvati {saved} record in DB per {ticker}")
-
-        # 2. Recupera dal database (piu' affidabile, include storico)
-        db_df = self.db.get_ohlcv(ticker, days=200)
-
-        if not db_df.empty and len(db_df) >= 55:
-            result = pd.DataFrame({
-                'Open': db_df['open'].values,
-                'High': db_df['high'].values,
-                'Low': db_df['low'].values,
-                'Close': db_df['close'].values,
-                'Volume': db_df['volume'].values
-            }, index=db_df['date'])
-            return result
-
-        # 3. Usa direttamente i dati yfinance se DB non disponibile
-        if not hist_df.empty:
+                print(f"    Salvati {saved} record in DB per {isin}")
             return hist_df
+
+        # 3. Usa i dati dal database anche se insufficienti
+        if not db_df.empty:
+            return db_df
 
         return pd.DataFrame()
 
     def analyze_etf(self, row: pd.Series) -> dict:
         """Analizza un singolo ETF"""
         ticker = row['Ticker']
+        isin = row.get('ISIN', '')
         level = int(row['Livello'])
 
         print(f"  Analisi {row['Nome ETF'][:40]}...")
 
-        # Recupera storico OHLCV
-        ohlcv = self.get_etf_history(ticker)
-
-        if ohlcv.empty or len(ohlcv) < 20:
-            print(f"    Storico insufficiente per {ticker} ({len(ohlcv)} giorni)")
+        if not isin:
+            print(f"    ISIN mancante per {ticker} - skip")
             return {
                 'ticker': ticker,
+                'isin': '',
                 'nome': row['Nome ETF'],
                 'categoria': row['Categoria'],
                 'borsa': row.get('Borsa', ''),
                 'livello': level,
                 'analysis': {
                     'current_price': None,
-                    'ema13': None,
-                    'sma50': None,
-                    'rsi': None,
-                    'adx': None,
-                    'volume_ratio': None,
-                    'final_signal': 'HOLD',
-                    'signal_strength': 0,
-                    'suggested_level': level,
-                    'level_change': False,
-                    'level_reason': f'Dati insufficienti: {len(ohlcv)} giorni',
+                    'ema13': None, 'sma50': None, 'rsi': None,
+                    'macd': None, 'macd_histogram': None,
+                    'bb_width': None, 'bb_pct_b': None,
+                    'final_signal': 'HOLD', 'signal_strength': 0,
+                    'suggested_level': level, 'level_change': False,
+                    'level_reason': 'ISIN mancante',
+                    'data_status': 'no_isin'
+                }
+            }
+
+        # Recupera storico Close
+        close_df = self.get_etf_history(isin)
+
+        if close_df.empty or len(close_df) < 20:
+            print(f"    Storico insufficiente per {isin} ({len(close_df)} giorni)")
+            return {
+                'ticker': ticker,
+                'isin': isin,
+                'nome': row['Nome ETF'],
+                'categoria': row['Categoria'],
+                'borsa': row.get('Borsa', ''),
+                'livello': level,
+                'analysis': {
+                    'current_price': None,
+                    'ema13': None, 'sma50': None, 'rsi': None,
+                    'macd': None, 'macd_histogram': None,
+                    'bb_width': None, 'bb_pct_b': None,
+                    'final_signal': 'HOLD', 'signal_strength': 0,
+                    'suggested_level': level, 'level_change': False,
+                    'level_reason': f'Dati insufficienti: {len(close_df)} giorni',
                     'data_status': 'insufficient'
                 }
             }
 
-        # Esegui analisi
-        analysis = self.analyzer.analyze_etf(ohlcv, level=level)
+        # Esegui analisi tecnica (solo Close)
+        analysis = self.analyzer.analyze_etf(close_df, level=level)
 
         return {
             'ticker': ticker,
+            'isin': isin,
             'nome': row['Nome ETF'],
             'categoria': row['Categoria'],
             'borsa': row.get('Borsa', ''),
@@ -180,68 +226,70 @@ class ETFMonitor:
             COL_EMA13 = 8
             COL_SMA50 = 9
             COL_RSI = 10
-            COL_ADX = 11
-            COL_VOL_RATIO = 12
+            COL_MACD = 11       # Era ADX, ora MACD
+            COL_BB_WIDTH = 12   # Era Vol Ratio, ora BB Width
             COL_SEGNALE = 13
             COL_ULTIMA_MODIFICA = 14
 
-            ticker_to_row = {}
-            for row in range(2, ws.max_row + 1):
-                ticker = ws.cell(row=row, column=COL_TICKER).value
-                if ticker:
-                    ticker_to_row[ticker] = row
+            # Usa indice Excel per identificare univocamente le righe
+            # (evita problemi con ticker duplicati)
+            excel_row_map = {}
+            for row_idx in range(2, ws.max_row + 1):
+                # Mappa per indice (riga Excel - 2 = indice DataFrame)
+                excel_row_map[row_idx - 2] = row_idx
 
             level_changes = []
 
-            for result in results:
-                ticker = result['ticker']
+            for i, result in enumerate(results):
                 analysis = result['analysis']
+                row = excel_row_map.get(i)
 
-                if ticker in ticker_to_row:
-                    row = ticker_to_row[ticker]
+                if row is None:
+                    continue
 
-                    current_level = result['livello']
-                    suggested_level = analysis.get('suggested_level', current_level)
-                    level_reason = analysis.get('level_reason', '')
+                current_level = result['livello']
+                suggested_level = analysis.get('suggested_level', current_level)
+                level_reason = analysis.get('level_reason', '')
 
-                    if suggested_level != current_level:
-                        ws.cell(row=row, column=COL_LIVELLO, value=suggested_level)
-                        level_changes.append({
-                            'nome': result['nome'],
-                            'ticker': ticker,
-                            'from': current_level,
-                            'to': suggested_level,
-                            'reason': level_reason
-                        })
-                        level_cell = ws.cell(row=row, column=COL_LIVELLO)
-                        if suggested_level < current_level:
-                            level_cell.fill = PatternFill("solid", fgColor="00B050")
-                            level_cell.font = Font(bold=True, color="FFFFFF")
-                        else:
-                            level_cell.fill = PatternFill("solid", fgColor="FF6600")
-                            level_cell.font = Font(bold=True, color="FFFFFF")
-
-                    ws.cell(row=row, column=COL_PREZZO, value=analysis.get('current_price'))
-                    ws.cell(row=row, column=COL_EMA13, value=analysis.get('ema13'))
-                    ws.cell(row=row, column=COL_SMA50, value=analysis.get('sma50'))
-                    ws.cell(row=row, column=COL_RSI, value=analysis.get('rsi'))
-                    ws.cell(row=row, column=COL_ADX, value=analysis.get('adx'))
-                    ws.cell(row=row, column=COL_VOL_RATIO, value=analysis.get('volume_ratio'))
-
-                    signal = analysis.get('final_signal', 'HOLD')
-                    signal_cell = ws.cell(row=row, column=COL_SEGNALE, value=signal)
-                    if signal == 'BUY':
-                        signal_cell.fill = PatternFill("solid", fgColor="00B050")
-                        signal_cell.font = Font(bold=True, color="FFFFFF")
-                    elif signal == 'SELL':
-                        signal_cell.fill = PatternFill("solid", fgColor="FF0000")
-                        signal_cell.font = Font(bold=True, color="FFFFFF")
+                if suggested_level != current_level:
+                    ws.cell(row=row, column=COL_LIVELLO, value=suggested_level)
+                    level_changes.append({
+                        'nome': result['nome'],
+                        'ticker': result['ticker'],
+                        'isin': result.get('isin', ''),
+                        'from': current_level,
+                        'to': suggested_level,
+                        'reason': level_reason
+                    })
+                    level_cell = ws.cell(row=row, column=COL_LIVELLO)
+                    if suggested_level < current_level:
+                        level_cell.fill = PatternFill("solid", fgColor="00B050")
+                        level_cell.font = Font(bold=True, color="FFFFFF")
                     else:
-                        signal_cell.fill = PatternFill("solid", fgColor="FFC000")
-                        signal_cell.font = Font(bold=True)
+                        level_cell.fill = PatternFill("solid", fgColor="FF6600")
+                        level_cell.font = Font(bold=True, color="FFFFFF")
 
-                    ws.cell(row=row, column=COL_ULTIMA_MODIFICA,
-                            value=datetime.now().strftime('%Y-%m-%d %H:%M'))
+                ws.cell(row=row, column=COL_PREZZO, value=analysis.get('current_price'))
+                ws.cell(row=row, column=COL_EMA13, value=analysis.get('ema13'))
+                ws.cell(row=row, column=COL_SMA50, value=analysis.get('sma50'))
+                ws.cell(row=row, column=COL_RSI, value=analysis.get('rsi'))
+                ws.cell(row=row, column=COL_MACD, value=analysis.get('macd_histogram'))
+                ws.cell(row=row, column=COL_BB_WIDTH, value=analysis.get('bb_width'))
+
+                signal = analysis.get('final_signal', 'HOLD')
+                signal_cell = ws.cell(row=row, column=COL_SEGNALE, value=signal)
+                if signal == 'BUY':
+                    signal_cell.fill = PatternFill("solid", fgColor="00B050")
+                    signal_cell.font = Font(bold=True, color="FFFFFF")
+                elif signal == 'SELL':
+                    signal_cell.fill = PatternFill("solid", fgColor="FF0000")
+                    signal_cell.font = Font(bold=True, color="FFFFFF")
+                else:
+                    signal_cell.fill = PatternFill("solid", fgColor="FFC000")
+                    signal_cell.font = Font(bold=True)
+
+                ws.cell(row=row, column=COL_ULTIMA_MODIFICA,
+                        value=datetime.now().strftime('%Y-%m-%d %H:%M'))
 
             wb.save(self.excel_path)
             add_log(f"File Excel aggiornato")
@@ -262,6 +310,7 @@ class ETFMonitor:
         """Genera dati per la dashboard HTML"""
         dashboard_data = {
             'last_update': datetime.now().isoformat(),
+            'data_source': 'JustETF',
             'summary': {
                 'total_etfs': len(results),
                 'buy_signals': 0,
@@ -295,6 +344,7 @@ class ETFMonitor:
 
             etf_data = {
                 'ticker': r['ticker'],
+                'isin': r.get('isin', ''),
                 'nome': r['nome'],
                 'categoria': category,
                 'borsa': r.get('borsa', ''),
@@ -302,8 +352,10 @@ class ETFMonitor:
                 'ema13': float(ema13) if ema13 is not None else None,
                 'sma50': float(sma50) if sma50 is not None else None,
                 'rsi': r['analysis'].get('rsi'),
-                'adx': r['analysis'].get('adx'),
-                'volume_ratio': r['analysis'].get('volume_ratio'),
+                'macd': r['analysis'].get('macd'),
+                'macd_histogram': r['analysis'].get('macd_histogram'),
+                'bb_width': r['analysis'].get('bb_width'),
+                'bb_pct_b': r['analysis'].get('bb_pct_b'),
                 'signal': signal,
                 'signal_strength': r['analysis'].get('signal_strength', 0),
                 'buy_count': r['analysis'].get('buy_count', 0),
@@ -316,7 +368,7 @@ class ETFMonitor:
             dashboard_data['categories'][category].append(etf_data)
 
         # Salva JSON (converte Decimal e tipi numpy in tipi Python nativi)
-        class DecimalEncoder(json.JSONEncoder):
+        class SafeEncoder(json.JSONEncoder):
             def default(self, obj):
                 if isinstance(obj, Decimal):
                     return float(obj)
@@ -329,7 +381,7 @@ class ETFMonitor:
                 return super().default(obj)
 
         with open('data/dashboard_data.json', 'w') as f:
-            json.dump(dashboard_data, f, indent=2, cls=DecimalEncoder)
+            json.dump(dashboard_data, f, indent=2, cls=SafeEncoder)
 
         return dashboard_data
 
@@ -342,6 +394,7 @@ class ETFMonitor:
 
             etf_info = {
                 'ticker': r['ticker'],
+                'isin': r.get('isin', ''),
                 'nome': r['nome'],
                 'categoria': r['categoria'],
                 'livello': level
@@ -368,6 +421,7 @@ class ETFMonitor:
         import traceback
         add_log("=" * 50)
         add_log(f"ETF MONITOR - Avvio monitoraggio {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        add_log(f"Fonte dati: JustETF (solo Close)")
 
         # 1. Carica ETF
         df_etfs = self.load_etfs()
@@ -386,8 +440,8 @@ class ETFMonitor:
             try:
                 result = self.analyze_etf(row)
                 results.append(result)
-                add_log(f"  OK {row['Ticker']} - {row['Nome ETF'][:30]}")
-                time.sleep(0.5)  # Rate limiting yfinance
+                isin_str = result.get('isin', '')[:14]
+                add_log(f"  OK {isin_str} - {row['Nome ETF'][:30]}")
             except Exception as e:
                 error_detail = traceback.format_exc()
                 errors.append({'ticker': row['Ticker'], 'error': str(e), 'traceback': error_detail})
@@ -418,6 +472,7 @@ class ETFMonitor:
             # Dashboard fallback
             dashboard_data = {
                 'last_update': datetime.now().isoformat(),
+                'data_source': 'JustETF',
                 'summary': {'total_etfs': len(results), 'buy_signals': 0, 'sell_signals': 0, 'hold_signals': 0},
                 'levels': {1: [], 2: [], 3: []},
                 'categories': {}
@@ -425,7 +480,8 @@ class ETFMonitor:
             for r in results:
                 try:
                     etf_data = {
-                        'ticker': r['ticker'], 'nome': r['nome'], 'categoria': r['categoria'],
+                        'ticker': r['ticker'], 'isin': r.get('isin', ''),
+                        'nome': r['nome'], 'categoria': r['categoria'],
                         'borsa': r.get('borsa', ''), 'price': r['analysis'].get('current_price'),
                         'signal': r['analysis'].get('final_signal', 'HOLD'),
                         'signal_strength': r['analysis'].get('signal_strength', 0)
