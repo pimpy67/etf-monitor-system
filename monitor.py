@@ -28,6 +28,20 @@ from alerts import AlertSystem
 from database import PriceDatabase
 
 
+# Log globale degli errori consultabile via /api/monitor-log
+monitor_log = []
+
+
+def add_log(message: str):
+    """Aggiunge un messaggio al log globale"""
+    entry = f"[{datetime.now().strftime('%H:%M:%S')}] {message}"
+    monitor_log.append(entry)
+    # Tieni solo gli ultimi 200 messaggi
+    if len(monitor_log) > 200:
+        monitor_log.pop(0)
+    print(entry)
+
+
 class ETFMonitor:
     """Sistema principale di monitoraggio ETF"""
 
@@ -65,12 +79,7 @@ class ETFMonitor:
             }
 
     def load_etfs(self) -> pd.DataFrame:
-        """
-        Carica lista ETF dal file Excel
-
-        Returns:
-            DataFrame con tutti gli ETF
-        """
+        """Carica lista ETF dal file Excel"""
         try:
             df = pd.read_excel(self.excel_path, sheet_name='ETF')
             print(f"Caricati {len(df)} ETF dal file Excel")
@@ -83,12 +92,6 @@ class ETFMonitor:
         """
         Recupera storico OHLCV per un ETF.
         Prima prova il database, poi scarica da yfinance se necessario.
-
-        Args:
-            ticker: Ticker dell'ETF
-
-        Returns:
-            DataFrame con colonne Open, High, Low, Close, Volume
         """
         # 1. Scarica storico da yfinance (6 mesi)
         hist_df = self.data_fetcher.get_historical_data(ticker, period='6mo')
@@ -103,7 +106,6 @@ class ETFMonitor:
         db_df = self.db.get_ohlcv(ticker, days=200)
 
         if not db_df.empty and len(db_df) >= 55:
-            # Converti in formato con colonne maiuscole per compatibilita'
             result = pd.DataFrame({
                 'Open': db_df['open'].values,
                 'High': db_df['high'].values,
@@ -120,15 +122,7 @@ class ETFMonitor:
         return pd.DataFrame()
 
     def analyze_etf(self, row: pd.Series) -> dict:
-        """
-        Analizza un singolo ETF
-
-        Args:
-            row: Riga del DataFrame con dati ETF
-
-        Returns:
-            Dizionario con risultati analisi
-        """
+        """Analizza un singolo ETF"""
         ticker = row['Ticker']
         level = int(row['Livello'])
 
@@ -174,20 +168,11 @@ class ETFMonitor:
         }
 
     def update_excel(self, results: list):
-        """
-        Aggiorna il file Excel con i risultati dell'analisi
-
-        Args:
-            results: Lista di risultati analisi
-        """
+        """Aggiorna il file Excel con i risultati dell'analisi"""
         try:
             wb = load_workbook(self.excel_path)
             ws = wb['ETF']
 
-            # Mappa colonne Excel:
-            # A(1)=Livello, B(2)=Ticker, C(3)=Nome, D(4)=Categoria, E(5)=Borsa,
-            # F(6)=Valuta, G(7)=Prezzo, H(8)=EMA13, I(9)=SMA50, J(10)=RSI,
-            # K(11)=ADX, L(12)=Vol Ratio, M(13)=Segnale, N(14)=Ultima Modifica
             COL_LIVELLO = 1
             COL_TICKER = 2
             COL_PREZZO = 7
@@ -199,7 +184,6 @@ class ETFMonitor:
             COL_SEGNALE = 13
             COL_ULTIMA_MODIFICA = 14
 
-            # Mappa ticker -> riga
             ticker_to_row = {}
             for row in range(2, ws.max_row + 1):
                 ticker = ws.cell(row=row, column=COL_TICKER).value
@@ -215,7 +199,6 @@ class ETFMonitor:
                 if ticker in ticker_to_row:
                     row = ticker_to_row[ticker]
 
-                    # Livello - aggiornamento automatico
                     current_level = result['livello']
                     suggested_level = analysis.get('suggested_level', current_level)
                     level_reason = analysis.get('level_reason', '')
@@ -237,25 +220,13 @@ class ETFMonitor:
                             level_cell.fill = PatternFill("solid", fgColor="FF6600")
                             level_cell.font = Font(bold=True, color="FFFFFF")
 
-                    # Prezzo
                     ws.cell(row=row, column=COL_PREZZO, value=analysis.get('current_price'))
-
-                    # EMA13
                     ws.cell(row=row, column=COL_EMA13, value=analysis.get('ema13'))
-
-                    # SMA50
                     ws.cell(row=row, column=COL_SMA50, value=analysis.get('sma50'))
-
-                    # RSI
                     ws.cell(row=row, column=COL_RSI, value=analysis.get('rsi'))
-
-                    # ADX
                     ws.cell(row=row, column=COL_ADX, value=analysis.get('adx'))
-
-                    # Volume Ratio
                     ws.cell(row=row, column=COL_VOL_RATIO, value=analysis.get('volume_ratio'))
 
-                    # Segnale
                     signal = analysis.get('final_signal', 'HOLD')
                     signal_cell = ws.cell(row=row, column=COL_SEGNALE, value=signal)
                     if signal == 'BUY':
@@ -268,36 +239,26 @@ class ETFMonitor:
                         signal_cell.fill = PatternFill("solid", fgColor="FFC000")
                         signal_cell.font = Font(bold=True)
 
-                    # Ultima Modifica
                     ws.cell(row=row, column=COL_ULTIMA_MODIFICA,
                             value=datetime.now().strftime('%Y-%m-%d %H:%M'))
 
             wb.save(self.excel_path)
-            print(f"File Excel aggiornato")
+            add_log(f"File Excel aggiornato")
 
             if level_changes:
-                print(f"\nCAMBI DI LIVELLO AUTOMATICI:")
+                add_log(f"CAMBI DI LIVELLO: {len(level_changes)}")
                 for change in level_changes:
                     direction = "UP" if change['to'] < change['from'] else "DOWN"
-                    print(f"  {direction} {change['nome'][:40]}: L{change['from']} -> L{change['to']}")
-                    print(f"     Motivo: {change['reason']}")
+                    add_log(f"  {direction} {change['nome'][:40]}: L{change['from']} -> L{change['to']}")
 
             return level_changes
 
         except Exception as e:
-            print(f"Errore aggiornamento Excel: {e}")
+            add_log(f"Errore aggiornamento Excel: {e}")
             return []
 
     def generate_dashboard_data(self, results: list) -> dict:
-        """
-        Genera dati per la dashboard HTML
-
-        Args:
-            results: Lista risultati analisi
-
-        Returns:
-            Dizionario con dati dashboard
-        """
+        """Genera dati per la dashboard HTML"""
         dashboard_data = {
             'last_update': datetime.now().isoformat(),
             'summary': {
@@ -326,14 +287,19 @@ class ETFMonitor:
             else:
                 dashboard_data['summary']['hold_signals'] += 1
 
+            # Converti Decimal in float per evitare errori di serializzazione
+            price = r['analysis'].get('current_price')
+            ema13 = r['analysis'].get('ema13')
+            sma50 = r['analysis'].get('sma50')
+
             etf_data = {
                 'ticker': r['ticker'],
                 'nome': r['nome'],
                 'categoria': category,
                 'borsa': r.get('borsa', ''),
-                'price': r['analysis'].get('current_price'),
-                'ema13': r['analysis'].get('ema13'),
-                'sma50': r['analysis'].get('sma50'),
+                'price': float(price) if price is not None else None,
+                'ema13': float(ema13) if ema13 is not None else None,
+                'sma50': float(sma50) if sma50 is not None else None,
                 'rsi': r['analysis'].get('rsi'),
                 'adx': r['analysis'].get('adx'),
                 'volume_ratio': r['analysis'].get('volume_ratio'),
@@ -374,80 +340,123 @@ class ETFMonitor:
                 'livello': level
             }
 
-            # L1: Alert sempre su SELL
             if level == 1 and signal == 'SELL':
-                print(f"  ALERT SELL per L1: {r['nome'][:40]}")
+                add_log(f"  ALERT SELL per L1: {r['nome'][:40]}")
                 self.alert_system.send_sell_alert(etf_info, r['analysis'])
 
-            # L2: Alert su BUY forte o SELL
             elif level == 2:
                 if signal == 'BUY' and strength >= 4:
-                    print(f"  ALERT BUY per L2: {r['nome'][:40]}")
+                    add_log(f"  ALERT BUY per L2: {r['nome'][:40]}")
                     self.alert_system.send_buy_alert(etf_info, r['analysis'])
                 elif signal == 'SELL':
-                    print(f"  ALERT SELL per L2: {r['nome'][:40]}")
+                    add_log(f"  ALERT SELL per L2: {r['nome'][:40]}")
                     self.alert_system.send_sell_alert(etf_info, r['analysis'])
 
-            # L3: Alert solo se BUY con tutte le condizioni (5/5)
             elif level == 3 and signal == 'BUY' and strength == 5:
-                print(f"  ALERT BUY per L3: {r['nome'][:40]}")
+                add_log(f"  ALERT BUY per L3: {r['nome'][:40]}")
                 self.alert_system.send_buy_alert(etf_info, r['analysis'])
 
     def run(self, send_daily_report: bool = True):
         """Esegue ciclo completo di monitoraggio"""
-        print("\n" + "=" * 60)
-        print(f"ETF MONITOR - Avvio monitoraggio {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-        print("=" * 60)
+        import traceback
+        add_log("=" * 50)
+        add_log(f"ETF MONITOR - Avvio monitoraggio {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
         # 1. Carica ETF
         df_etfs = self.load_etfs()
         if df_etfs.empty:
-            print("Nessun ETF da monitorare")
+            add_log("ERRORE: Nessun ETF da monitorare (DataFrame vuoto)")
             return
 
+        add_log(f"Caricati {len(df_etfs)} ETF dal file Excel")
+
         # 2. Analizza ogni ETF
-        print(f"\nAnalisi di {len(df_etfs)} ETF...")
+        add_log(f"Inizio analisi di {len(df_etfs)} ETF...")
         results = []
+        errors = []
 
         for idx, row in df_etfs.iterrows():
             try:
                 result = self.analyze_etf(row)
                 results.append(result)
+                add_log(f"  OK {row['Ticker']} - {row['Nome ETF'][:30]}")
                 time.sleep(0.5)  # Rate limiting yfinance
             except Exception as e:
-                print(f"  Errore analisi {row['Ticker']}: {e}")
+                error_detail = traceback.format_exc()
+                errors.append({'ticker': row['Ticker'], 'error': str(e), 'traceback': error_detail})
+                add_log(f"  ERRORE {row['Ticker']}: {e}")
+                add_log(f"  TRACEBACK: {error_detail}")
 
-        print(f"\nAnalisi completata: {len(results)} ETF processati")
+        add_log(f"Analisi completata: {len(results)} OK, {len(errors)} errori")
 
         # 3. Aggiorna Excel
-        print("\nAggiornamento file Excel...")
-        self.update_excel(results)
+        try:
+            add_log("Step 3: Aggiornamento file Excel...")
+            self.update_excel(results)
+            add_log("Step 3: Excel aggiornato OK")
+        except Exception as e:
+            add_log(f"Step 3 ERRORE Excel: {e}")
+            add_log(traceback.format_exc())
 
         # 4. Genera dati dashboard
-        print("\nGenerazione dati dashboard...")
-        os.makedirs('data', exist_ok=True)
-        dashboard_data = self.generate_dashboard_data(results)
+        try:
+            add_log(f"Step 4: Generazione dashboard con {len(results)} risultati...")
+            os.makedirs('data', exist_ok=True)
+            dashboard_data = self.generate_dashboard_data(results)
+            total = dashboard_data.get('summary', {}).get('total_etfs', '?')
+            add_log(f"Step 4: Dashboard generata OK - {total} ETF")
+        except Exception as e:
+            add_log(f"Step 4 ERRORE Dashboard: {e}")
+            add_log(traceback.format_exc())
+            # Dashboard fallback
+            dashboard_data = {
+                'last_update': datetime.now().isoformat(),
+                'summary': {'total_etfs': len(results), 'buy_signals': 0, 'sell_signals': 0, 'hold_signals': 0},
+                'levels': {1: [], 2: [], 3: []},
+                'categories': {}
+            }
+            for r in results:
+                try:
+                    etf_data = {
+                        'ticker': r['ticker'], 'nome': r['nome'], 'categoria': r['categoria'],
+                        'borsa': r.get('borsa', ''), 'price': r['analysis'].get('current_price'),
+                        'signal': r['analysis'].get('final_signal', 'HOLD'),
+                        'signal_strength': r['analysis'].get('signal_strength', 0)
+                    }
+                    dashboard_data['levels'][r['livello']].append(etf_data)
+                except:
+                    pass
+            with open('data/dashboard_data.json', 'w') as f:
+                json.dump(dashboard_data, f, indent=2)
+            add_log(f"Step 4: Dashboard fallback salvata con {len(results)} ETF")
 
         # 5. Invia alert
-        print("\nVerifica e invio alert...")
-        self.send_alerts(results)
+        try:
+            add_log("Step 5: Invio alert...")
+            self.send_alerts(results)
+            add_log("Step 5: Alert OK")
+        except Exception as e:
+            add_log(f"Step 5 ERRORE Alert: {e}")
 
         # 6. Report giornaliero
         if send_daily_report:
-            print("\nInvio report giornaliero...")
-            summary = {
-                'buy_signals': dashboard_data['summary']['buy_signals'],
-                'sell_signals': dashboard_data['summary']['sell_signals'],
-                'hold_signals': dashboard_data['summary']['hold_signals'],
-                'level_1': dashboard_data['levels'][1],
-                'level_2': dashboard_data['levels'][2],
-                'level_3': dashboard_data['levels'][3][:10]
-            }
-            self.alert_system.send_daily_report(summary)
+            try:
+                add_log("Step 6: Invio report giornaliero...")
+                summary = {
+                    'buy_signals': dashboard_data['summary']['buy_signals'],
+                    'sell_signals': dashboard_data['summary']['sell_signals'],
+                    'hold_signals': dashboard_data['summary']['hold_signals'],
+                    'level_1': dashboard_data['levels'].get(1, []),
+                    'level_2': dashboard_data['levels'].get(2, []),
+                    'level_3': dashboard_data['levels'].get(3, [])[:10]
+                }
+                self.alert_system.send_daily_report(summary)
+                add_log("Step 6: Report OK")
+            except Exception as e:
+                add_log(f"Step 6 ERRORE Report: {e}")
 
-        print("\n" + "=" * 60)
-        print(f"Monitoraggio completato - {datetime.now().strftime('%H:%M')}")
-        print("=" * 60 + "\n")
+        add_log(f"Monitoraggio completato - {datetime.now().strftime('%H:%M')}")
+        add_log("=" * 50)
 
 
 def main():

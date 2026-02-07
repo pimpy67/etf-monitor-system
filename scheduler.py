@@ -1,41 +1,90 @@
 """
 scheduler.py - Scheduler per monitoraggio automatico ETF
 =========================================================
-Esegue il monitoraggio ogni giorno alle 18:00
+Esegue il monitoraggio ogni giorno alle 18:00.
+Include fallback: ogni 30 minuti controlla se il monitoraggio
+ha gia' girato oggi, e lo lancia se necessario.
 """
 
 import schedule
 import time
 import os
+import json
 from datetime import datetime
 import threading
 
 from monitor import ETFMonitor
+import monitor_lock
+
+
+def _has_run_today():
+    """Controlla se il monitoraggio ha gia' girato oggi con successo"""
+    try:
+        with open('data/dashboard_data.json', 'r') as f:
+            data = json.load(f)
+        last_update = data.get('last_update')
+        total_etfs = data.get('summary', {}).get('total_etfs', 0)
+
+        # Se ha 0 ETF, non consideriamo che abbia girato
+        if total_etfs == 0:
+            return False
+
+        if last_update:
+            last_dt = datetime.fromisoformat(last_update)
+            return last_dt.date() == datetime.now().date()
+    except:
+        pass
+    return False
 
 
 def run_monitor():
-    """Esegue il monitoraggio"""
-    print(f"\nScheduler: avvio monitoraggio programmato - {datetime.now()}")
+    """Esegue il monitoraggio (con lock condiviso per evitare esecuzioni parallele)"""
+    if not monitor_lock.try_acquire():
+        print(f"Scheduler: monitoraggio gia' in esecuzione, skip")
+        return
+
     try:
+        print(f"\nScheduler: avvio monitoraggio programmato - {datetime.now()}")
         monitor = ETFMonitor()
         monitor.run(send_daily_report=True)
     except Exception as e:
         print(f"Errore durante monitoraggio: {e}")
+    finally:
+        monitor_lock.release()
+
+
+def fallback_check():
+    """Controllo fallback: se il monitoraggio non ha girato oggi, lancialo"""
+    hour = int(os.environ.get('MONITOR_HOUR', 18))
+    now = datetime.now()
+
+    if now.hour >= hour and not _has_run_today() and not monitor_lock.is_running():
+        print(f"\nScheduler FALLBACK: monitoraggio non eseguito oggi, lancio ora...")
+        run_monitor()
 
 
 def run_scheduler():
-    """Avvia lo scheduler"""
+    """Avvia lo scheduler con job principale + fallback"""
     hour = int(os.environ.get('MONITOR_HOUR', 18))
     minute = int(os.environ.get('MONITOR_MINUTE', 0))
 
     schedule_time = f"{hour:02d}:{minute:02d}"
 
     print(f"Scheduler configurato per le {schedule_time} ogni giorno")
+    print(f"Fallback attivo: controllo ogni 30 minuti")
 
+    # Job principale: monitoraggio giornaliero
     schedule.every().day.at(schedule_time).do(run_monitor)
 
+    # Job fallback: ogni 30 minuti controlla se ha girato oggi
+    schedule.every(30).minutes.do(fallback_check)
+
+    # Loop infinito
     while True:
-        schedule.run_pending()
+        try:
+            schedule.run_pending()
+        except Exception as e:
+            print(f"Scheduler errore nel loop: {e}")
         time.sleep(60)
 
 

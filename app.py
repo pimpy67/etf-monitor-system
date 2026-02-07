@@ -3,6 +3,7 @@ app.py - Web server per la dashboard ETF
 ==========================================
 Serve la dashboard HTML e i dati JSON.
 Legge dati direttamente da PostgreSQL (persistente).
+Include auto-recovery: se il monitoraggio non ha girato oggi, lo lancia automaticamente.
 """
 
 from flask import Flask, send_file, send_from_directory, jsonify, request
@@ -12,6 +13,7 @@ import threading
 from datetime import datetime
 
 from database import PriceDatabase
+import monitor_lock
 
 app = Flask(__name__)
 
@@ -29,9 +31,75 @@ def serve_data(filename):
     """Serve i file dati JSON"""
     return send_from_directory('data', filename)
 
+
+def _get_last_update():
+    """Legge la data dell'ultimo aggiornamento dal file JSON"""
+    try:
+        with open('data/dashboard_data.json', 'r') as f:
+            data = json.load(f)
+        return data.get('last_update')
+    except:
+        return None
+
+
+def _should_run_today():
+    """Controlla se il monitoraggio deve girare oggi.
+    Ritorna True se:
+    - Non ha mai girato, oppure
+    - L'ultimo aggiornamento non e' di oggi E siamo dopo l'orario programmato
+    - Il file esiste ma ha 0 ETF (file iniziale vuoto creato al deploy)
+    """
+    now = datetime.now()
+    monitor_hour = int(os.environ.get('MONITOR_HOUR', 18))
+
+    try:
+        with open('data/dashboard_data.json', 'r') as f:
+            data = json.load(f)
+        last_update = data.get('last_update')
+        total_etfs = data.get('summary', {}).get('total_etfs', 0)
+
+        # Se ha 0 ETF, il file e' vuoto (creato al deploy) -> deve girare
+        if total_etfs == 0:
+            return True
+
+        if not last_update:
+            return True
+
+        last_dt = datetime.fromisoformat(last_update)
+        # Se l'ultimo aggiornamento non e' di oggi E siamo dopo l'ora programmata
+        if last_dt.date() < now.date() and now.hour >= monitor_hour:
+            return True
+    except:
+        return True
+
+    return False
+
+
+def _trigger_auto_monitor():
+    """Lancia il monitoraggio in background se non sta gia' girando"""
+    if not monitor_lock.try_acquire():
+        return False
+
+    def run():
+        try:
+            print(f"\nAUTO-RECOVERY: Monitoraggio ETF automatico avviato - {datetime.now()}")
+            from monitor import ETFMonitor
+            monitor = ETFMonitor()
+            monitor.run(send_daily_report=True)
+            print(f"AUTO-RECOVERY: Monitoraggio ETF completato - {datetime.now()}")
+        except Exception as e:
+            print(f"AUTO-RECOVERY: Errore monitoraggio ETF: {e}")
+        finally:
+            monitor_lock.release()
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    return True
+
+
 @app.route('/api/status')
 def status():
-    """Endpoint per verificare lo stato del sistema"""
+    """Endpoint per verificare lo stato del sistema (+ auto-recovery)"""
     json_status = None
     try:
         with open('data/dashboard_data.json', 'r') as f:
@@ -45,11 +113,18 @@ def status():
 
     db_stats = db.get_stats()
 
+    # AUTO-RECOVERY: se il monitoraggio non ha girato oggi, lancialo
+    auto_recovery_triggered = False
+    if _should_run_today() and not monitor_lock.is_running():
+        auto_recovery_triggered = _trigger_auto_monitor()
+
     return jsonify({
         'status': 'ok',
         'json_data': json_status,
         'database': db_stats,
-        'database_url_set': bool(os.environ.get('DATABASE_URL'))
+        'database_url_set': bool(os.environ.get('DATABASE_URL')),
+        'monitor_running': monitor_lock.is_running(),
+        'auto_recovery_triggered': auto_recovery_triggered
     })
 
 @app.route('/api/etfs')
@@ -124,25 +199,74 @@ def get_prices():
         stats = db.get_stats()
         return jsonify(stats)
 
-@app.route('/api/trigger-update', methods=['POST'])
+@app.route('/api/trigger-update', methods=['GET', 'POST'])
 def trigger_update():
-    """Trigger manuale del monitoraggio"""
-    def run_monitor_async():
-        try:
-            from monitor import ETFMonitor
-            monitor = ETFMonitor()
-            monitor.run(send_daily_report=False)
-        except Exception as e:
-            print(f"Errore monitoraggio manuale: {e}")
+    """Trigger manuale del monitoraggio (GET o POST)"""
+    started = _trigger_auto_monitor()
 
-    thread = threading.Thread(target=run_monitor_async)
-    thread.start()
+    if started:
+        return jsonify({
+            'status': 'started',
+            'message': 'Monitoraggio ETF avviato in background',
+            'timestamp': datetime.now().isoformat()
+        })
+    else:
+        return jsonify({
+            'status': 'already_running',
+            'message': 'Monitoraggio gia in esecuzione, attendere il completamento',
+            'timestamp': datetime.now().isoformat()
+        })
 
+@app.route('/api/monitor-log')
+def get_monitor_log():
+    """Mostra il log del monitoraggio"""
+    from monitor import monitor_log
     return jsonify({
-        'status': 'started',
-        'message': 'Monitoraggio ETF avviato in background',
+        'log': monitor_log,
+        'count': len(monitor_log),
+        'monitor_running': monitor_lock.is_running(),
         'timestamp': datetime.now().isoformat()
     })
+
+@app.route('/api/test-etf')
+def test_etf():
+    """Test di debug: prova ad analizzare un singolo ETF"""
+    import traceback
+    result = {'steps': []}
+
+    try:
+        from monitor import ETFMonitor
+        monitor = ETFMonitor()
+        result['steps'].append('ETFMonitor creato OK')
+
+        df = monitor.load_etfs()
+        result['steps'].append(f'Excel caricato: {len(df)} ETF')
+
+        if df.empty:
+            result['error'] = 'DataFrame vuoto'
+            return jsonify(result)
+
+        row = df.iloc[0]
+        result['test_etf'] = {
+            'ticker': str(row['Ticker']),
+            'nome': str(row['Nome ETF']),
+            'livello': int(row['Livello'])
+        }
+        result['steps'].append(f"ETF selezionato: {row['Nome ETF']}")
+
+        ohlcv = monitor.get_etf_history(row['Ticker'])
+        result['history_count'] = len(ohlcv)
+        result['steps'].append(f"Storico: {len(ohlcv)} giorni")
+
+        analysis = monitor.analyze_etf(row)
+        result['analysis'] = str(analysis.get('analysis', {}))
+        result['steps'].append('Analisi completata OK')
+
+    except Exception as e:
+        result['error'] = str(e)
+        result['traceback'] = traceback.format_exc()
+
+    return jsonify(result)
 
 
 if __name__ == '__main__':
