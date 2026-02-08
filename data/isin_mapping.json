@@ -96,18 +96,6 @@
     "excel_name": "Amundi MSCI New Energy UCITS ETF Dist"
   },
   {
-    "isin": "FR0010524777",
-    "justetf_name": "Amundi MSCI New Energy UCITS ETF Dist",
-    "justetf_ticker": "LYM9",
-    "ter": 0.6,
-    "fund_size": 781,
-    "confidence": 0.9,
-    "method": "name_fuzzy",
-    "excel_index": 8,
-    "excel_ticker": "ENER.MI",
-    "excel_name": "Amundi MSCI New Energy UCITS ETF Acc"
-  },
-  {
     "isin": "LU1834988278",
     "justetf_name": "Amundi STOXX Europe 600 Energy ESG Screened UCITS ETF Acc",
     "justetf_ticker": "LOGS",
@@ -115,7 +103,7 @@
     "fund_size": 144,
     "confidence": 0.96,
     "method": "name_fuzzy",
-    "excel_index": 9,
+    "excel_index": 8,
     "excel_ticker": "ENRJ.MI",
     "excel_name": "Amundi STOXX Europe 600 Energy Screened UCITS ETF Acc"
   },
@@ -127,7 +115,7 @@
     "fund_size": 431,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 10,
+    "excel_index": 9,
     "excel_ticker": "CECE.MI",
     "excel_name": "Amundi MSCI Eastern Europe Ex Russia UCITS ETF Acc"
   },
@@ -139,7 +127,7 @@
     "fund_size": 149,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 11,
+    "excel_index": 10,
     "excel_ticker": "TELE.MI",
     "excel_name": "Amundi STOXX Europe 600 Telecom. UCITS ETF Acc"
   },
@@ -151,7 +139,7 @@
     "fund_size": 3493,
     "confidence": 0.95,
     "method": "ticker_exact",
-    "excel_index": 12,
+    "excel_index": 11,
     "excel_ticker": "EMXC.MI",
     "excel_name": "Amundi MSCI Emerging Ex China UCITS ETF Acc"
   },
@@ -163,7 +151,7 @@
     "fund_size": 125,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 13,
+    "excel_index": 12,
     "excel_ticker": "UTIL.MI",
     "excel_name": "Amundi STOXX Europe 600 Utilities UCITS ETF Acc"
   },
@@ -175,7 +163,7 @@
     "fund_size": 2,
     "confidence": 0.89,
     "method": "name_fuzzy",
-    "excel_index": 14,
+    "excel_index": 13,
     "excel_ticker": "TPXH.MI",
     "excel_name": "Amundi Japan TOPIX II UCITS ETF Dis EUR Hdg"
   },
@@ -187,7 +175,7 @@
     "fund_size": 279,
     "confidence": 0.93,
     "method": "name_fuzzy",
-    "excel_index": 15,
+    "excel_index": 14,
     "excel_ticker": "TPXH.MI",
     "excel_name": "Amundi IS Japan TOPIX UCITS ETF Daily Hedged EUR"
   },
@@ -199,7 +187,7 @@
     "fund_size": 94,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 16,
+    "excel_index": 15,
     "excel_ticker": "PAFR.MI",
     "excel_name": "Amundi Pan Africa UCITS ETF Acc"
   },
@@ -211,7 +199,7 @@
     "fund_size": 882,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 17,
+    "excel_index": 16,
     "excel_ticker": "AEEM.MI",
     "excel_name": "Amundi IS Core MSCI Emerging Markets UCITS ETF EUR Dist"
   },
@@ -223,7 +211,7 @@
     "fund_size": 3506,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 18,
+    "excel_index": 17,
     "excel_ticker": "AEEM.MI",
     "excel_name": "Amundi IS Core MSCI Emerging Markets UCITS ETF Acc"
   },
@@ -235,7 +223,7 @@
     "fund_size": 3531,
     "confidence": 0.95,
     "method": "ticker_exact",
-    "excel_index": 19,
+    "excel_index": 18,
     "excel_ticker": "AMEM.MI",
     "excel_name": "Amundi MSCI Emerging Markets Swap II UCITS ETF EUR Acc"
   },
@@ -247,7 +235,7 @@
     "fund_size": 368,
     "confidence": 0.9,
     "method": "name_fuzzy",
-    "excel_index": 20,
+    "excel_index": 19,
     "excel_ticker": "TPXH.MI",
     "excel_name": "Amundi Japan TOPIX II UCITS ETF Dis EUR"
   },
@@ -259,7 +247,7 @@
     "fund_size": 2500,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 21,
+    "excel_index": 20,
     "excel_ticker": "BNK.MI",
     "excel_name": "Amundi STOXX Europe 600 Banks UCITS ETF Acc"
   },
@@ -271,7 +259,7 @@
     "fund_size": 750,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 22,
+    "excel_index": 21,
     "excel_ticker": "EMQA.MI",
     "excel_name": "iShares Emerging Markets Equity Enhanced Active UCITS ETF USD (Acc)"
   },
@@ -283,7 +271,7 @@
     "fund_size": 50,
     "confidence": 0.95,
     "method": "ticker_exact",
-    "excel_index": 23,
+    "excel_index": 22,
     "excel_ticker": "AMEG.MI",
     "excel_name": "Amundi MSCI EM ESG Broad Transition UCITS ETF DR Acc"
   },
@@ -295,7 +283,7 @@
     "fund_size": 330,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 24,
+    "excel_index": 23,
     "excel_ticker": "AMJP.MI",
     "excel_name": "Amundi MSCI Japan ESG Broad Transition UCITS ETF EUR Acc"
   },
@@ -307,7 +295,7 @@
     "fund_size": 638,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 25,
+    "excel_index": 24,
     "excel_ticker": "AASI.MI",
     "excel_name": "Amundi MSCI AC Asia Pacific Ex Japan UCITS ETF Acc"
   },
@@ -319,7 +307,7 @@
     "fund_size": 1302,
     "confidence": 0.77,
     "method": "name_fuzzy",
-    "excel_index": 26,
+    "excel_index": 25,
     "excel_ticker": "CRB.MI",
     "excel_name": "Amundi Bl. Equal-weight Comm. ex-Agr. UCITS ETF"
   },
@@ -331,7 +319,7 @@
     "fund_size": 1206,
     "confidence": 0.76,
     "method": "name_fuzzy",
-    "excel_index": 27,
+    "excel_index": 26,
     "excel_ticker": "AASI.MI",
     "excel_name": "Amundi IS MSCI EM Asia UCITS ETF EUR"
   },
@@ -343,7 +331,7 @@
     "fund_size": 118,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 28,
+    "excel_index": 27,
     "excel_ticker": "AAUS.MI",
     "excel_name": "Amundi Australia S&P/ASX 200 UCITS ETF Dist"
   },
@@ -355,7 +343,7 @@
     "fund_size": 304,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 29,
+    "excel_index": 28,
     "excel_ticker": "VLUE.MI",
     "excel_name": "Amundi IS MSCI Europe Value Factor UCITS ETF EUR"
   },
@@ -367,7 +355,7 @@
     "fund_size": 5138,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 30,
+    "excel_index": 29,
     "excel_ticker": "BNKE.MI",
     "excel_name": "Amundi Euro Stoxx Banks UCITS ETF Acc"
   },
@@ -379,7 +367,7 @@
     "fund_size": 379,
     "confidence": 0.91,
     "method": "name_fuzzy",
-    "excel_index": 31,
+    "excel_index": 30,
     "excel_ticker": "SD3E.MI",
     "excel_name": "Amundi IS Stoxx Europe Select Div. 30 UCITS ETF Dist"
   },
@@ -391,7 +379,7 @@
     "fund_size": 393,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 32,
+    "excel_index": 31,
     "excel_ticker": "AASI.MI",
     "excel_name": "Amundi MSCI AC Asia Ex Japan UCITS ETF Acc"
   },
@@ -403,7 +391,7 @@
     "fund_size": 65,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 33,
+    "excel_index": 32,
     "excel_ticker": "EAEJ.MI",
     "excel_name": "iShares Asia ex Japan Equity Enhanced Active UCITS ETF USD (Acc)"
   },
@@ -415,7 +403,7 @@
     "fund_size": 60,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 34,
+    "excel_index": 33,
     "excel_ticker": "AWAT.MI",
     "excel_name": "Amundi MSCI Water UCITS ETF Acc"
   },
@@ -427,7 +415,7 @@
     "fund_size": 1561,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 35,
+    "excel_index": 34,
     "excel_ticker": "AWAT.MI",
     "excel_name": "Amundi MSCI Water UCITS ETF Dist"
   },
@@ -439,7 +427,7 @@
     "fund_size": 372,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 36,
+    "excel_index": 35,
     "excel_ticker": "CI2.MI",
     "excel_name": "Amundi STOXX Europe 600 Industrials UCITS ETF Acc"
   },
@@ -451,7 +439,7 @@
     "fund_size": 68,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 37,
+    "excel_index": 36,
     "excel_ticker": "FOOD.MI",
     "excel_name": "Amundi STOXX Europe 600 Consumer Staples UCITS ETF Acc"
   },
@@ -463,7 +451,7 @@
     "fund_size": 1559,
     "confidence": 0.88,
     "method": "name_fuzzy",
-    "excel_index": 38,
+    "excel_index": 37,
     "excel_ticker": "EMSR.MI",
     "excel_name": "Amundi MSCI Emerging Markets SRI Climate P. A. UCITS ETF DR Acc"
   },
@@ -475,7 +463,7 @@
     "fund_size": 1361,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 39,
+    "excel_index": 38,
     "excel_ticker": "EMES.MI",
     "excel_name": "Amundi MSCI Emerging Markets ESG Selection UCITS ETF DR Acc"
   },
@@ -487,7 +475,7 @@
     "fund_size": 77,
     "confidence": 0.89,
     "method": "name_fuzzy",
-    "excel_index": 40,
+    "excel_index": 39,
     "excel_ticker": "EPRE.MI",
     "excel_name": "Amundi IS FTSE EPRA Europe Real Est. UCITS ETF EUR"
   },
@@ -499,7 +487,7 @@
     "fund_size": 271,
     "confidence": 0.9,
     "method": "name_fuzzy",
-    "excel_index": 41,
+    "excel_index": 40,
     "excel_ticker": "CN1.MI",
     "excel_name": "Amundi IS MSCI Nordic UCITS ETF EUR"
   },
@@ -511,7 +499,7 @@
     "fund_size": 317,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 42,
+    "excel_index": 41,
     "excel_ticker": "CEM.MI",
     "excel_name": "Amundi MSCI EMU Small Cap ESG Broad Transition UCITS ETF Dist"
   },
@@ -523,7 +511,7 @@
     "fund_size": 234,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 43,
+    "excel_index": 42,
     "excel_ticker": "CV9.MI",
     "excel_name": "Amundi MSCI EMU Value Factor UCITS ETF Dist"
   },
@@ -535,7 +523,7 @@
     "fund_size": 620,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 44,
+    "excel_index": 43,
     "excel_ticker": "CEU.MI",
     "excel_name": "Amundi MSCI Europe UCITS ETF Acc"
   },
@@ -547,7 +535,7 @@
     "fund_size": 3982,
     "confidence": 0.96,
     "method": "name_fuzzy",
-    "excel_index": 45,
+    "excel_index": 44,
     "excel_ticker": "CEU.MI",
     "excel_name": "Amundi IS Core MSCI Europe UCITS ETF Acc"
   },
@@ -559,7 +547,7 @@
     "fund_size": 634,
     "confidence": 0.88,
     "method": "name_fuzzy",
-    "excel_index": 46,
+    "excel_index": 45,
     "excel_ticker": "FMI.MI",
     "excel_name": "Amundi FTSE MIB UCITS ETF Acc"
   },
@@ -571,7 +559,7 @@
     "fund_size": 110,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 47,
+    "excel_index": 46,
     "excel_ticker": "PREU.MI",
     "excel_name": "Amundi IS MSCI Europe Climate Paris Aligned UCITS ETF Acc"
   },
@@ -583,7 +571,7 @@
     "fund_size": 3,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 48,
+    "excel_index": 47,
     "excel_ticker": "EUPA.MI",
     "excel_name": "Amundi MSCI Europe ESG Broad Transition UCITS ETF DR Acc"
   },
@@ -595,21 +583,9 @@
     "fund_size": 695,
     "confidence": 0.95,
     "method": "ticker_exact",
-    "excel_index": 49,
+    "excel_index": 48,
     "excel_ticker": "RS2K.MI",
     "excel_name": "Amundi IS Russell 2000 UCITS ETF EUR"
-  },
-  {
-    "isin": "FR0010010827",
-    "justetf_name": "Amundi FTSE MIB UCITS ETF Dist",
-    "justetf_ticker": "LYMK",
-    "ter": 0.35,
-    "fund_size": 634,
-    "confidence": 0.98,
-    "method": "name_fuzzy",
-    "excel_index": 50,
-    "excel_ticker": "FMI.MI",
-    "excel_name": "Amundi FTSE MIB UCITS ETF Dis"
   },
   {
     "isin": "LU2037748345",
@@ -619,7 +595,7 @@
     "fund_size": 71,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 51,
+    "excel_index": 49,
     "excel_ticker": "SCIT.MI",
     "excel_name": "Amundi MSCI Smart Cities UCITS ETF Acc"
   },
@@ -631,7 +607,7 @@
     "fund_size": 552,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 52,
+    "excel_index": 50,
     "excel_ticker": "EAEU.MI",
     "excel_name": "iShares Europe Equity Enhanced Active UCITS ETF EUR (Acc)"
   },
@@ -643,7 +619,7 @@
     "fund_size": 3,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 53,
+    "excel_index": 51,
     "excel_ticker": "EUPA.MI",
     "excel_name": "Amundi MSCI Europe ESG Selection UCITS ETF EUR Hdg Acc"
   },
@@ -655,7 +631,7 @@
     "fund_size": 3,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 54,
+    "excel_index": 52,
     "excel_ticker": "EUPA.MI",
     "excel_name": "Amundi MSCI Europe ESG Selection UCITS ETF Acc"
   },
@@ -667,7 +643,7 @@
     "fund_size": 938,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 55,
+    "excel_index": 53,
     "excel_ticker": "HLT.MI",
     "excel_name": "Amundi STOXX Europe 600 Healthcare UCITS ETF Acc"
   },
@@ -679,7 +655,7 @@
     "fund_size": 51,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 56,
+    "excel_index": 54,
     "excel_ticker": "UIMU.MI",
     "excel_name": "Amundi IS MSCI EMU ESG Broad Transition UCITS ETF Dist"
   },
@@ -691,7 +667,7 @@
     "fund_size": 261,
     "confidence": 0.93,
     "method": "name_fuzzy",
-    "excel_index": 57,
+    "excel_index": 55,
     "excel_ticker": "QFEU.MI",
     "excel_name": "Amundi IS MSCI Europe Quality Factor UCITS ETF EUR"
   },
@@ -703,7 +679,7 @@
     "fund_size": 1020,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 58,
+    "excel_index": 56,
     "excel_ticker": "CHIP.MI",
     "excel_name": "Amundi MSCI Semiconductors UCITS ETF Acc"
   },
@@ -715,7 +691,7 @@
     "fund_size": 154,
     "confidence": 0.9,
     "method": "name_fuzzy",
-    "excel_index": 59,
+    "excel_index": 57,
     "excel_ticker": "MBES.MI",
     "excel_name": "Amundi IS Italy MIB ESG UCITS ETF Acc"
   },
@@ -727,7 +703,7 @@
     "fund_size": 1997,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 60,
+    "excel_index": 58,
     "excel_ticker": "WSRE.MI",
     "excel_name": "Amundi S&P 500 Equal Weight ESG UCITS ETF Acc"
   },
@@ -739,7 +715,7 @@
     "fund_size": 3994,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 61,
+    "excel_index": 59,
     "excel_ticker": "MSE.MI",
     "excel_name": "Amundi EURO STOXX 50 II UCITS ETF Acc"
   },
@@ -751,7 +727,7 @@
     "fund_size": 2633,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 62,
+    "excel_index": 60,
     "excel_ticker": "PAZE.MI",
     "excel_name": "Amundi S&P Eurozone Climate Paris Aligned UCITS ETF Acc"
   },
@@ -763,7 +739,7 @@
     "fund_size": 447,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 63,
+    "excel_index": 61,
     "excel_ticker": "MEMU.MI",
     "excel_name": "Amundi MSCI EMU ESG Selection UCITS ETF DR Acc"
   },
@@ -775,7 +751,7 @@
     "fund_size": 334,
     "confidence": 0.92,
     "method": "name_fuzzy",
-    "excel_index": 64,
+    "excel_index": 62,
     "excel_ticker": "CD9.MI",
     "excel_name": "Amundi DJ Industrial Average UCITS ETF Dist"
   },
@@ -787,7 +763,7 @@
     "fund_size": 138,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 65,
+    "excel_index": 63,
     "excel_ticker": "EMUP.MI",
     "excel_name": "Amundi MSCI EMU SRI Climate Paris Aligned UCITS ETF DR Acc"
   },
@@ -799,7 +775,7 @@
     "fund_size": 179,
     "confidence": 0.95,
     "method": "ticker_exact",
-    "excel_index": 66,
+    "excel_index": 64,
     "excel_ticker": "WINC.MI",
     "excel_name": "iShares World Equity High Income Active UCITS ETF USD (Acc)"
   },
@@ -811,7 +787,7 @@
     "fund_size": 80,
     "confidence": 0.96,
     "method": "name_fuzzy",
-    "excel_index": 67,
+    "excel_index": 65,
     "excel_ticker": "CG9.MI",
     "excel_name": "Amundi IS MSCI Europe Growth UCITS ETF Dist"
   },
@@ -823,7 +799,7 @@
     "fund_size": 180,
     "confidence": 0.95,
     "method": "name_fuzzy",
-    "excel_index": 68,
+    "excel_index": 66,
     "excel_ticker": "ITAP.MI",
     "excel_name": "Amundi FTSE Italia PMI PIR 2020 UCITS ETF"
   },
@@ -835,7 +811,7 @@
     "fund_size": 56,
     "confidence": 0.91,
     "method": "name_fuzzy",
-    "excel_index": 69,
+    "excel_index": 67,
     "excel_ticker": "ABCK.MI",
     "excel_name": "Amundi IS S&P 500 Buyback UCITS ETF EUR"
   },
@@ -847,7 +823,7 @@
     "fund_size": 3,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 70,
+    "excel_index": 68,
     "excel_ticker": "EUPA.MI",
     "excel_name": "Amundi MSCI Europe SRI Climate Paris Aligned UCITS ETF DR Acc"
   },
@@ -859,7 +835,7 @@
     "fund_size": 68,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 71,
+    "excel_index": 69,
     "excel_ticker": "EPRA.MI",
     "excel_name": "Amundi IS FTSE EPRA NAREIT Global II UCITS ETF Dist"
   },
@@ -871,7 +847,7 @@
     "fund_size": 140,
     "confidence": 0.94,
     "method": "name_fuzzy",
-    "excel_index": 72,
+    "excel_index": 70,
     "excel_ticker": "CC1.MI",
     "excel_name": "Amundi MSCI China A UCITS ETF"
   },
@@ -883,7 +859,7 @@
     "fund_size": 3,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 73,
+    "excel_index": 71,
     "excel_ticker": "EUPA.MI",
     "excel_name": "Amundi MSCI Europe SRI Climate Paris Aligned UCITS ETF DR Dist"
   },
@@ -895,7 +871,7 @@
     "fund_size": 1947,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 74,
+    "excel_index": 72,
     "excel_ticker": "ACWE.MI",
     "excel_name": "Amundi MSCI All Country World UCITS ETF EUR Acc"
   },
@@ -907,7 +883,7 @@
     "fund_size": 34,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 75,
+    "excel_index": 73,
     "excel_ticker": "EXMU.MI",
     "excel_name": "Amundi MSCI USA Ex Mega Cap UCITS ETF Acc"
   },
@@ -919,7 +895,7 @@
     "fund_size": 218,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 76,
+    "excel_index": 74,
     "excel_ticker": "EMI.MI",
     "excel_name": "Amundi Euro Government IL Bond UCITS ETF Acc"
   },
@@ -931,7 +907,7 @@
     "fund_size": 41,
     "confidence": 0.9,
     "method": "name_fuzzy",
-    "excel_index": 77,
+    "excel_index": 75,
     "excel_ticker": "D50E.MI",
     "excel_name": "Amundi IS DAX 50 ESG UCITS ETF DR"
   },
@@ -943,7 +919,7 @@
     "fund_size": 65,
     "confidence": 0.92,
     "method": "name_fuzzy",
-    "excel_index": 78,
+    "excel_index": 76,
     "excel_ticker": "ECEA.MI",
     "excel_name": "iShares EUR Corp Bond Enhanced Active UCITS ETF EUR (Acc)"
   },
@@ -955,7 +931,7 @@
     "fund_size": 2,
     "confidence": 0.94,
     "method": "name_fuzzy",
-    "excel_index": 79,
+    "excel_index": 77,
     "excel_ticker": "UINC.MI",
     "excel_name": "iShares U.S. Equity High Income Active UCITS ETF USD (Acc)"
   },
@@ -967,7 +943,7 @@
     "fund_size": 867,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 80,
+    "excel_index": 78,
     "excel_ticker": "BTP10.MI",
     "excel_name": "Amundi IS Italy BTP Government Bond 10Y UCITS ETF Acc"
   },
@@ -979,7 +955,7 @@
     "fund_size": 1261,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 81,
+    "excel_index": 79,
     "excel_ticker": "WENA.MI",
     "excel_name": "iShares World Equity Enhanced Active UCITS ETF USD (Acc)"
   },
@@ -991,7 +967,7 @@
     "fund_size": 153,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 82,
+    "excel_index": 80,
     "excel_ticker": "0E4Q.MI",
     "excel_name": "Amundi S&P 500 VIX Futures Enhanced Roll UCITS ETF Acc"
   },
@@ -1003,7 +979,7 @@
     "fund_size": 776,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 83,
+    "excel_index": 81,
     "excel_ticker": "WHEA.MI",
     "excel_name": "Amundi MSCI World Health Care UCITS ETF EUR Acc"
   },
@@ -1015,7 +991,7 @@
     "fund_size": 952,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 84,
+    "excel_index": 82,
     "excel_ticker": "X15E.MI",
     "excel_name": "Amundi Euro Government Bond 10-15Y UCITS ETF Acc"
   },
@@ -1027,7 +1003,7 @@
     "fund_size": 189,
     "confidence": 0.95,
     "method": "ticker_exact",
-    "excel_index": 85,
+    "excel_index": 83,
     "excel_ticker": "IFLX.MI",
     "excel_name": "iShares EUR Flexible Income Bond Active UCITS ETF EUR (Dist)"
   },
@@ -1039,7 +1015,7 @@
     "fund_size": 110236,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 86,
+    "excel_index": 84,
     "excel_ticker": "SWDA.MI",
     "excel_name": "iShares Core MSCI World UCITS ETF USD (Acc)"
   },
@@ -1051,7 +1027,7 @@
     "fund_size": 1306,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 87,
+    "excel_index": 85,
     "excel_ticker": "ECRP.MI",
     "excel_name": "Amundi IS EUR Corporate Bond ESG UCITS ETF 2 DR Acc"
   },
@@ -1063,7 +1039,7 @@
     "fund_size": 514,
     "confidence": 0.95,
     "method": "name_fuzzy",
-    "excel_index": 88,
+    "excel_index": 86,
     "excel_ticker": "EXEM.MI",
     "excel_name": "Amundi MSCI World Ex EMU UCITS ETF Acc"
   },
@@ -1075,7 +1051,7 @@
     "fund_size": 613,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 89,
+    "excel_index": 87,
     "excel_ticker": "CW8.MI",
     "excel_name": "Amundi MSCI World Swap II UCITS ETF EUR Hdg Dist"
   },
@@ -1087,7 +1063,7 @@
     "fund_size": 1306,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 90,
+    "excel_index": 88,
     "excel_ticker": "ECRP.MI",
     "excel_name": "Amundi IS EUR Corporate Bond ESG UCITS ETF DR Acc"
   },
@@ -1099,7 +1075,7 @@
     "fund_size": 141,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 91,
+    "excel_index": 89,
     "excel_ticker": "CC1.MI",
     "excel_name": "Amundi MSCI China Tech UCITS ETF EUR Acc"
   },
@@ -1111,7 +1087,7 @@
     "fund_size": 1088,
     "confidence": 0.95,
     "method": "ticker_exact",
-    "excel_index": 92,
+    "excel_index": 90,
     "excel_ticker": "X710.MI",
     "excel_name": "Amundi Euro Government Bond 7-10Y UCITS ETF Acc"
   },
@@ -1123,7 +1099,7 @@
     "fund_size": 4,
     "confidence": 0.9,
     "method": "name_fuzzy",
-    "excel_index": 93,
+    "excel_index": 91,
     "excel_ticker": "EMUP.MI",
     "excel_name": "Amundi MSCI World Ex EMU SRI Climate P. A. UCITS ETF Acc"
   },
@@ -1135,7 +1111,7 @@
     "fund_size": 1264,
     "confidence": 0.94,
     "method": "name_fuzzy",
-    "excel_index": 94,
+    "excel_index": 92,
     "excel_ticker": "X1G.MI",
     "excel_name": "Amundi IS Euro Lowest Rated IG Government Bond UCITS ETF Acc"
   },
@@ -1147,7 +1123,7 @@
     "fund_size": 995,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 95,
+    "excel_index": 93,
     "excel_ticker": "ECRP.MI",
     "excel_name": "Amundi EUR Corporate Bond Climate Paris Aligned UCITS ETF Acc"
   },
@@ -1159,7 +1135,7 @@
     "fund_size": 1171,
     "confidence": 0.82,
     "method": "name_fuzzy",
-    "excel_index": 96,
+    "excel_index": 94,
     "excel_ticker": "EAEG.MI",
     "excel_name": "Amundi IS Euro Aggregate Bond ESG UCITS ETF DR Acc"
   },
@@ -1171,7 +1147,7 @@
     "fund_size": 1037,
     "confidence": 0.95,
     "method": "ticker_exact",
-    "excel_index": 97,
+    "excel_index": 95,
     "excel_ticker": "X57E.MI",
     "excel_name": "Amundi Euro Government Bond 5-7Y UCITS ETF Acc"
   },
@@ -1183,7 +1159,7 @@
     "fund_size": 5513,
     "confidence": 0.96,
     "method": "name_fuzzy",
-    "excel_index": 98,
+    "excel_index": 96,
     "excel_ticker": "CW8.MI",
     "excel_name": "Amundi IS MSCI World Swap UCITS ETF EUR Acc"
   },
@@ -1195,7 +1171,7 @@
     "fund_size": 7848,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 99,
+    "excel_index": 97,
     "excel_ticker": "CW8.MI",
     "excel_name": "Amundi MSCI World Swap II UCITS ETF Dist"
   },
@@ -1207,7 +1183,7 @@
     "fund_size": 407,
     "confidence": 0.78,
     "method": "name_fuzzy",
-    "excel_index": 100,
+    "excel_index": 98,
     "excel_ticker": "AFHY.MI",
     "excel_name": "Amundi IS Euro HY Bd ESG DR UCITS ETF EUR"
   },
@@ -1219,7 +1195,7 @@
     "fund_size": 38,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 101,
+    "excel_index": 99,
     "excel_ticker": "GOVA.MI",
     "excel_name": "Amundi IS Core Euro Government Bond UCITS ETF Dist"
   },
@@ -1231,7 +1207,7 @@
     "fund_size": 218,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 102,
+    "excel_index": 100,
     "excel_ticker": "GGOV.MI",
     "excel_name": "Amundi Euro Government Green Bond UCITS ETF Acc"
   },
@@ -1243,7 +1219,7 @@
     "fund_size": 465,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 103,
+    "excel_index": 101,
     "excel_ticker": "CW8.MI",
     "excel_name": "Amundi MSCI World Swap II UCITS ETF Acc"
   },
@@ -1255,21 +1231,9 @@
     "fund_size": 2929,
     "confidence": 0.9,
     "method": "name_fuzzy",
-    "excel_index": 104,
+    "excel_index": 102,
     "excel_ticker": "GGRN.MI",
     "excel_name": "Amundi IS Euro Gov. Tilted Green Bond UCITS ETF Acc"
-  },
-  {
-    "isin": "LU1681040496",
-    "justetf_name": "Amundi Euro High Yield Bond ESG UCITS ETF EUR (C)",
-    "justetf_ticker": "AHYE",
-    "ter": 0.35,
-    "fund_size": 407,
-    "confidence": 0.78,
-    "method": "name_fuzzy",
-    "excel_index": 105,
-    "excel_ticker": "AFHY.MI",
-    "excel_name": "Amundi IS Euro HY Bd ESG DR UCITS ETF EUR D"
   },
   {
     "isin": "LU1563454310",
@@ -1279,7 +1243,7 @@
     "fund_size": 233,
     "confidence": 0.86,
     "method": "name_fuzzy",
-    "excel_index": 106,
+    "excel_index": 103,
     "excel_ticker": "GAGG.MI",
     "excel_name": "Amundi Global Aggr. Green Bond UCITS ETF Dist"
   },
@@ -1291,7 +1255,7 @@
     "fund_size": 1306,
     "confidence": 0.94,
     "method": "name_fuzzy",
-    "excel_index": 107,
+    "excel_index": 104,
     "excel_ticker": "CORP.MI",
     "excel_name": "Amundi IS EUR Corporate Bond 1-5Y ESG UCITS ETF"
   },
@@ -1303,7 +1267,7 @@
     "fund_size": 70,
     "confidence": 0.95,
     "method": "name_fuzzy",
-    "excel_index": 108,
+    "excel_index": 105,
     "excel_ticker": "ECBX.MI",
     "excel_name": "Amundi EUR Corp. Bond ex-Financials ESG UCITS ETF Acc"
   },
@@ -1315,7 +1279,7 @@
     "fund_size": 39,
     "confidence": 0.81,
     "method": "name_fuzzy",
-    "excel_index": 109,
+    "excel_index": 106,
     "excel_ticker": "GHYA.MI",
     "excel_name": "Amundi IS Global HY Corp. Bond ESG UCITS ETF Acc"
   },
@@ -1327,7 +1291,7 @@
     "fund_size": 186,
     "confidence": 0.95,
     "method": "ticker_exact",
-    "excel_index": 110,
+    "excel_index": 107,
     "excel_ticker": "ELCR.MI",
     "excel_name": "Amundi MSCI Smart Mobility UCITS ETF Acc"
   },
@@ -1339,7 +1303,7 @@
     "fund_size": 3366,
     "confidence": 0.9,
     "method": "name_fuzzy",
-    "excel_index": 111,
+    "excel_index": 108,
     "excel_ticker": "500H.MI",
     "excel_name": "Amundi S&P 500 Screened UCITS ETF EUR Hdg Acc"
   },
@@ -1351,7 +1315,7 @@
     "fund_size": 1258,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 112,
+    "excel_index": 109,
     "excel_ticker": "GOVA.MI",
     "excel_name": "Amundi IS Core Euro Government Bond UCITS ETF Acc"
   },
@@ -1363,7 +1327,7 @@
     "fund_size": 273,
     "confidence": 0.84,
     "method": "name_fuzzy",
-    "excel_index": 113,
+    "excel_index": 110,
     "excel_ticker": "X1GA.MI",
     "excel_name": "Amundi Euro Highest Rated MW Gov. Bond UCITS ETF Acc"
   },
@@ -1375,7 +1339,7 @@
     "fund_size": 1895,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 114,
+    "excel_index": 111,
     "excel_ticker": "X35E.MI",
     "excel_name": "Amundi Euro Government Bond 3-5Y UCITS ETF Acc"
   },
@@ -1387,7 +1351,7 @@
     "fund_size": 189,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 115,
+    "excel_index": 112,
     "excel_ticker": "WENA.MI",
     "excel_name": "iShares World Equity Enhanced Active UCITS ETF EUR Hedged (Acc)"
   },
@@ -1399,7 +1363,7 @@
     "fund_size": 253,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 116,
+    "excel_index": 113,
     "excel_ticker": "X15E.MI",
     "excel_name": "Amundi Euro Government Bond 15+Y UCITS ETF Acc"
   },
@@ -1411,7 +1375,7 @@
     "fund_size": 158,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 117,
+    "excel_index": 114,
     "excel_ticker": "BTP1.MI",
     "excel_name": "Amundi IS Italy BTP Government Bond 1-3Y UCITS ETF Dist"
   },
@@ -1423,7 +1387,7 @@
     "fund_size": 50,
     "confidence": 0.81,
     "method": "name_fuzzy",
-    "excel_index": 118,
+    "excel_index": 115,
     "excel_ticker": "X1GA.MI",
     "excel_name": "Amundi Euro Highest Rated MW Gov. Bond 3-5Y UCITS ETF"
   },
@@ -1435,7 +1399,7 @@
     "fund_size": 128,
     "confidence": 0.85,
     "method": "name_fuzzy",
-    "excel_index": 119,
+    "excel_index": 116,
     "excel_ticker": "X1GA.MI",
     "excel_name": "Amundi IS Euro Government Bond Highest Rated IG UCITS ETF Acc"
   },
@@ -1447,21 +1411,9 @@
     "fund_size": 1341,
     "confidence": 0.74,
     "method": "name_fuzzy",
-    "excel_index": 120,
+    "excel_index": 117,
     "excel_ticker": "UFRH.MI",
     "excel_name": "Amundi IS USD Float. Rate Corp. Bd ESG UCITS ETF EUR H"
-  },
-  {
-    "isin": "IE000KXCEXR3",
-    "justetf_name": "Amundi S&P 500 Screened UCITS ETF Acc",
-    "justetf_ticker": "F500",
-    "ter": 0.12,
-    "fund_size": 3366,
-    "confidence": 0.95,
-    "method": "name_fuzzy",
-    "excel_index": 121,
-    "excel_ticker": "500H.MI",
-    "excel_name": "Amundi S&P 500 Screened UCITS ETF EUR Acc"
   },
   {
     "isin": "IE00BF5GB717",
@@ -1471,7 +1423,7 @@
     "fund_size": 874,
     "confidence": 0.95,
     "method": "ticker_exact",
-    "excel_index": 122,
+    "excel_index": 118,
     "excel_ticker": "EFRN.MI",
     "excel_name": "Amundi IS EUR Float. Rate Corp. Bd ESG UCITS ETF"
   },
@@ -1483,7 +1435,7 @@
     "fund_size": 75,
     "confidence": 0.83,
     "method": "name_fuzzy",
-    "excel_index": 123,
+    "excel_index": 119,
     "excel_ticker": "USYH.MI",
     "excel_name": "Amundi IS USD HY Corp. Bond ESG UCITS ETF EUR Hdg Dist"
   },
@@ -1495,7 +1447,7 @@
     "fund_size": 67,
     "confidence": 0.95,
     "method": "name_fuzzy",
-    "excel_index": 124,
+    "excel_index": 120,
     "excel_ticker": "X1G.MI",
     "excel_name": "Amundi IS Euro Lowest Rated IG Government Bond 1-3Y UCITS ETF Acc"
   },
@@ -1507,7 +1459,7 @@
     "fund_size": 571,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 125,
+    "excel_index": 121,
     "excel_ticker": "MWRD.MI",
     "excel_name": "Amundi DJ Global Titans 50 UCITS ETF Dist"
   },
@@ -1519,21 +1471,9 @@
     "fund_size": 2142,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 126,
+    "excel_index": 122,
     "excel_ticker": "X13E.MI",
     "excel_name": "Amundi Euro Government Bond 1-3Y UCITS ETF Acc"
-  },
-  {
-    "isin": "LU1563454310",
-    "justetf_name": "Amundi Global Aggregate Green Bond UCITS ETF Acc",
-    "justetf_ticker": "KLMT",
-    "ter": 0.25,
-    "fund_size": 233,
-    "confidence": 0.93,
-    "method": "name_fuzzy",
-    "excel_index": 127,
-    "excel_ticker": "GAGG.MI",
-    "excel_name": "Amundi Global Aggr. Green Bond UCITS ETF Acc"
   },
   {
     "isin": "LU1829219556",
@@ -1543,7 +1483,7 @@
     "fund_size": 280,
     "confidence": 0.81,
     "method": "name_fuzzy",
-    "excel_index": 128,
+    "excel_index": 123,
     "excel_ticker": "X1GA.MI",
     "excel_name": "Amundi Euro Highest Rated MW Gov. Bond 1-3Y UCITS ETF"
   },
@@ -1555,7 +1495,7 @@
     "fund_size": 231,
     "confidence": 0.87,
     "method": "name_fuzzy",
-    "excel_index": 129,
+    "excel_index": 124,
     "excel_ticker": "STHY.MI",
     "excel_name": "Amundi IS EUR ST HY Corporate Bond ESG UCITS ETF Dist"
   },
@@ -1567,21 +1507,9 @@
     "fund_size": 1306,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 130,
+    "excel_index": 125,
     "excel_ticker": "ECRP.MI",
     "excel_name": "Amundi IS EUR Corporate Bond 0-3Y ESG UCITS ETF DR Acc"
-  },
-  {
-    "isin": "LU2099295466",
-    "justetf_name": "Amundi Global High Yield Corporate Bond ESG UCITS ETF USD Acc",
-    "justetf_ticker": "B8TD",
-    "ter": 0.25,
-    "fund_size": 39,
-    "confidence": 0.79,
-    "method": "name_fuzzy",
-    "excel_index": 131,
-    "excel_ticker": "GHYA.MI",
-    "excel_name": "Amundi IS Global HY Corp. Bond ESG UCITS ETF MH EUR Acc"
   },
   {
     "isin": "LU1435356149",
@@ -1591,7 +1519,7 @@
     "fund_size": 47,
     "confidence": 0.83,
     "method": "name_fuzzy",
-    "excel_index": 132,
+    "excel_index": 126,
     "excel_ticker": "USYH.MI",
     "excel_name": "Amundi IS USD HY Corp. Bond ESG UCITS ETF Dist"
   },
@@ -1603,7 +1531,7 @@
     "fund_size": 145,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 133,
+    "excel_index": 127,
     "excel_ticker": "LFIN.MI",
     "excel_name": "Amundi MSCI World Financials UCITS ETF EUR Acc"
   },
@@ -1615,7 +1543,7 @@
     "fund_size": 7,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 134,
+    "excel_index": 128,
     "excel_ticker": "CPBD.MI",
     "excel_name": "Amundi Corporate Proceeds Bond UCITS ETF Acc"
   },
@@ -1627,7 +1555,7 @@
     "fund_size": 877,
     "confidence": 0.89,
     "method": "name_fuzzy",
-    "excel_index": 135,
+    "excel_index": 129,
     "excel_ticker": "C40.MI",
     "excel_name": "Amundi IS CAC 40 ESG UCITS ETF Acc"
   },
@@ -1639,7 +1567,7 @@
     "fund_size": 926,
     "confidence": 0.95,
     "method": "ticker_exact",
-    "excel_index": 136,
+    "excel_index": 130,
     "excel_ticker": "LWCR.MI",
     "excel_name": "Amundi MSCI World ESG Broad Transition UCITS ETF Acc"
   },
@@ -1651,7 +1579,7 @@
     "fund_size": 462,
     "confidence": 0.69,
     "method": "name_fuzzy",
-    "excel_index": 137,
+    "excel_index": 131,
     "excel_ticker": "UFRH.MI",
     "excel_name": "Amundi IS USD Float. Rate Corp. Bd ESG UCITS ETF"
   },
@@ -1663,7 +1591,7 @@
     "fund_size": 883,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 138,
+    "excel_index": 132,
     "excel_ticker": "ERNA.MI",
     "excel_name": "iShares EUR Cash UCITS ETF EUR (Acc)"
   },
@@ -1675,7 +1603,7 @@
     "fund_size": 4707,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 139,
+    "excel_index": 133,
     "excel_ticker": "SMRT.MI",
     "excel_name": "Amundi Smart Overnight Return UCITS ETF Acc"
   },
@@ -1687,7 +1615,7 @@
     "fund_size": 806,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 140,
+    "excel_index": 134,
     "excel_ticker": "X006.MI",
     "excel_name": "Amundi Euro Government Bond 0-6 M UCITS ETF Acc"
   },
@@ -1699,7 +1627,7 @@
     "fund_size": 2675,
     "confidence": 0.95,
     "method": "name_fuzzy",
-    "excel_index": 141,
+    "excel_index": 135,
     "excel_ticker": "EONA.MI",
     "excel_name": "Amundi EUR Overnight Return UCITS ETF"
   },
@@ -1711,7 +1639,7 @@
     "fund_size": 83,
     "confidence": 0.95,
     "method": "ticker_exact",
-    "excel_index": 142,
+    "excel_index": 136,
     "excel_ticker": "IUSB.MI",
     "excel_name": "iShares US Large Cap Deep Buffer UCITS ETF USD (Acc)"
   },
@@ -1723,7 +1651,7 @@
     "fund_size": 473,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 143,
+    "excel_index": 137,
     "excel_ticker": "AGGH.MI",
     "excel_name": "Amundi IS Core Global Aggregate Bond UCITS ETF Acc"
   },
@@ -1735,7 +1663,7 @@
     "fund_size": 1306,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 144,
+    "excel_index": 138,
     "excel_ticker": "CORP.MI",
     "excel_name": "Amundi IS Global Corporate Bond 1-5Y ESG UCITS ETF DR Acc"
   },
@@ -1747,7 +1675,7 @@
     "fund_size": 1312,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 145,
+    "excel_index": 139,
     "excel_ticker": "DAXE.MI",
     "excel_name": "Amundi DAX II UCITS ETF Acc"
   },
@@ -1759,7 +1687,7 @@
     "fund_size": 31,
     "confidence": 0.91,
     "method": "name_fuzzy",
-    "excel_index": 146,
+    "excel_index": 140,
     "excel_ticker": "EPRE.MI",
     "excel_name": "Amundi IS FTSE EPRA Europe Real Est. UCITS ETF D"
   },
@@ -1771,7 +1699,7 @@
     "fund_size": 109,
     "confidence": 0.76,
     "method": "name_fuzzy",
-    "excel_index": 147,
+    "excel_index": 141,
     "excel_ticker": "CRB.MI",
     "excel_name": "Amundi Bl. Equal-weight Comm. ex-Agr. UCITS ETF EUR H"
   },
@@ -1783,7 +1711,7 @@
     "fund_size": 32,
     "confidence": 0.83,
     "method": "name_fuzzy",
-    "excel_index": 148,
+    "excel_index": 142,
     "excel_ticker": "USYH.MI",
     "excel_name": "Amundi IS USD HY Corp. Bond ESG UCITS ETF Acc"
   },
@@ -1795,7 +1723,7 @@
     "fund_size": 43,
     "confidence": 0.96,
     "method": "name_fuzzy",
-    "excel_index": 149,
+    "excel_index": 143,
     "excel_ticker": "EMGB.MI",
     "excel_name": "Amundi IS USD Emerging Markets Government Bond UCITS ETF EUR Hdg Dist"
   },
@@ -1807,7 +1735,7 @@
     "fund_size": 144,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 150,
+    "excel_index": 144,
     "excel_ticker": "EMGB.MI",
     "excel_name": "Amundi IS USD Emerging Markets Government Bond UCITS ETF Acc"
   },
@@ -1819,7 +1747,7 @@
     "fund_size": 8,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 151,
+    "excel_index": 145,
     "excel_ticker": "USEA.MI",
     "excel_name": "iShares US Equity Enhanced Active UCITS ETF EUR Hedged (Acc)"
   },
@@ -1831,7 +1759,7 @@
     "fund_size": 2903,
     "confidence": 0.95,
     "method": "ticker_exact",
-    "excel_index": 152,
+    "excel_index": 146,
     "excel_ticker": "IUSM.MI",
     "excel_name": "iShares US Large Cap Max Buffer Sep UCITS ETF USD (Acc)"
   },
@@ -1843,7 +1771,7 @@
     "fund_size": 760,
     "confidence": 0.93,
     "method": "name_fuzzy",
-    "excel_index": 153,
+    "excel_index": 147,
     "excel_ticker": "500H.MI",
     "excel_name": "Amundi IS S&P 500 Swap UCITS ETF EUR Hdg Acc"
   },
@@ -1855,7 +1783,7 @@
     "fund_size": 56,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 154,
+    "excel_index": 148,
     "excel_ticker": "EMGB.MI",
     "excel_name": "Amundi IS USD Emerging Markets Government Bond UCITS ETF Dist"
   },
@@ -1867,7 +1795,7 @@
     "fund_size": 2343,
     "confidence": 0.96,
     "method": "name_fuzzy",
-    "excel_index": 155,
+    "excel_index": 149,
     "excel_ticker": "500H.MI",
     "excel_name": "Amundi IS S&P 500 Swap UCITS ETF EUR Acc"
   },
@@ -1879,7 +1807,7 @@
     "fund_size": 19,
     "confidence": 0.98,
     "method": "name_fuzzy",
-    "excel_index": 156,
+    "excel_index": 150,
     "excel_ticker": "UCBP.MI",
     "excel_name": "Amundi USD Corporate Bond Climate Paris Aligned UCITS ETF EUR Hdg Dist"
   },
@@ -1891,7 +1819,7 @@
     "fund_size": 80,
     "confidence": 0.86,
     "method": "name_fuzzy",
-    "excel_index": 157,
+    "excel_index": 151,
     "excel_ticker": "UCBE.MI",
     "excel_name": "Amundi IS USD Corporate Bond ESG UCITS ETF DR Acc"
   },
@@ -1903,7 +1831,7 @@
     "fund_size": 1128,
     "confidence": 0.95,
     "method": "name_fuzzy",
-    "excel_index": 158,
+    "excel_index": 152,
     "excel_ticker": "GGOV.MI",
     "excel_name": "Amundi IS Core Global Government Bond UCITS ETF EUR Hdg Acc"
   },
@@ -1915,7 +1843,7 @@
     "fund_size": 93,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 159,
+    "excel_index": 153,
     "excel_ticker": "UCBP.MI",
     "excel_name": "Amundi USD Corporate Bond Climate Paris Aligned UCITS ETF Dist"
   },
@@ -1927,7 +1855,7 @@
     "fund_size": 298,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 160,
+    "excel_index": 154,
     "excel_ticker": "GGOV.MI",
     "excel_name": "Amundi IS Core Global Government Bond UCITS ETF Acc"
   },
@@ -1939,7 +1867,7 @@
     "fund_size": 15,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 161,
+    "excel_index": 155,
     "excel_ticker": "UCBP.MI",
     "excel_name": "Amundi USD Corporate Bond Climate Paris Aligned UCITS ETF Acc"
   },
@@ -1951,7 +1879,7 @@
     "fund_size": 846,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 162,
+    "excel_index": 156,
     "excel_ticker": "USCP.MI",
     "excel_name": "Amundi MSCI USA SRI Climate Paris Aligned UCITS ETF EUR Hdg Acc"
   },
@@ -1963,7 +1891,7 @@
     "fund_size": 846,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 163,
+    "excel_index": 157,
     "excel_ticker": "USCP.MI",
     "excel_name": "Amundi MSCI USA SRI Climate Paris Aligned UCITS ETF EUR Acc"
   },
@@ -1975,7 +1903,7 @@
     "fund_size": 149,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 164,
+    "excel_index": 158,
     "excel_ticker": "TNO.MI",
     "excel_name": "Amundi STOXX Europe 600 Technology UCITS ETF Acc"
   },
@@ -1987,7 +1915,7 @@
     "fund_size": 145,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 165,
+    "excel_index": 159,
     "excel_ticker": "CC1.MI",
     "excel_name": "Amundi MSCI China ESG Selection Extra UCITS ETF Dist"
   },
@@ -1999,7 +1927,7 @@
     "fund_size": 512,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 166,
+    "excel_index": 160,
     "excel_ticker": "CC1.MI",
     "excel_name": "Amundi MSCI China ESG Selection Extra UCITS ETF Acc"
   },
@@ -2011,7 +1939,7 @@
     "fund_size": 145,
     "confidence": 1.0,
     "method": "manual_fix",
-    "excel_index": 167,
+    "excel_index": 161,
     "excel_ticker": "USEX.MI",
     "excel_name": "Amundi MSCI USA ESG Selection Extra UCITS ETF DR Dist"
   },
@@ -2023,7 +1951,7 @@
     "fund_size": 893,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 168,
+    "excel_index": 162,
     "excel_ticker": "USEA.MI",
     "excel_name": "iShares US Equity Enhanced Active UCITS ETF USD (Acc)"
   },
@@ -2035,7 +1963,7 @@
     "fund_size": 447,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 169,
+    "excel_index": 163,
     "excel_ticker": "USES.MI",
     "excel_name": "Amundi MSCI USA ESG Selection UCITS ETF Acc"
   },
@@ -2047,7 +1975,7 @@
     "fund_size": 1010,
     "confidence": 0.79,
     "method": "name_fuzzy",
-    "excel_index": 170,
+    "excel_index": 164,
     "excel_ticker": "CATH.MI",
     "excel_name": "Amundi MSCI World Catholic Principles UCITS ETF Acc"
   },
@@ -2059,7 +1987,7 @@
     "fund_size": 1045,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 171,
+    "excel_index": 165,
     "excel_ticker": "INDI.MI",
     "excel_name": "Amundi MSCI India Swap UCITS ETF EUR Acc"
   },
@@ -2071,7 +1999,7 @@
     "fund_size": 133,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 172,
+    "excel_index": 166,
     "excel_ticker": "INS.MI",
     "excel_name": "Amundi STOXX Europe 600 Insurance UCITS ETF Acc"
   },
@@ -2083,7 +2011,7 @@
     "fund_size": 168,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 173,
+    "excel_index": 167,
     "excel_ticker": "INDI.MI",
     "excel_name": "Amundi IS MSCI India Swap II UCITS ETF EUR Acc"
   },
@@ -2095,7 +2023,7 @@
     "fund_size": 383,
     "confidence": 0.95,
     "method": "ticker_exact",
-    "excel_index": 174,
+    "excel_index": 168,
     "excel_ticker": "GLUX.MI",
     "excel_name": "Amundi IS Global Luxury UCITS ETF EUR Acc"
   },
@@ -2107,7 +2035,7 @@
     "fund_size": 768,
     "confidence": 0.94,
     "method": "name_fuzzy",
-    "excel_index": 175,
+    "excel_index": 169,
     "excel_ticker": "UST.MI",
     "excel_name": "Amundi IS Nasdaq-100 Swap UCITS ETF EUR Hdg Acc"
   },
@@ -2119,7 +2047,7 @@
     "fund_size": 168,
     "confidence": 0.97,
     "method": "name_fuzzy",
-    "excel_index": 176,
+    "excel_index": 170,
     "excel_ticker": "UST.MI",
     "excel_name": "Amundi Core Nasdaq-100 Swap UCITS ETF EUR Hdg Acc"
   },
@@ -2131,7 +2059,7 @@
     "fund_size": 126,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 177,
+    "excel_index": 171,
     "excel_ticker": "DTEC.MI",
     "excel_name": "Amundi MSCI Disruptive Technology UCITS ETF Acc"
   },
@@ -2143,7 +2071,7 @@
     "fund_size": 4451,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 178,
+    "excel_index": 172,
     "excel_ticker": "UST.MI",
     "excel_name": "Amundi Core Nasdaq-100 Swap UCITS ETF Acc"
   },
@@ -2155,7 +2083,7 @@
     "fund_size": 1349,
     "confidence": 0.96,
     "method": "name_fuzzy",
-    "excel_index": 179,
+    "excel_index": 173,
     "excel_ticker": "UST.MI",
     "excel_name": "Amundi IS Nasdaq-100 Swap UCITS ETF EUR Acc"
   },
@@ -2167,7 +2095,7 @@
     "fund_size": 104,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 180,
+    "excel_index": 174,
     "excel_ticker": "AIIA.MI",
     "excel_name": "iShares AI Innovation Active UCITS ETF USD (Acc)"
   },
@@ -2179,7 +2107,7 @@
     "fund_size": 103,
     "confidence": 0.92,
     "method": "name_fuzzy",
-    "excel_index": 181,
+    "excel_index": 175,
     "excel_ticker": "FOOD.MI",
     "excel_name": "Amundi STOXX Europe 600 Consumer Discr. UCITS ETF Acc"
   },
@@ -2191,7 +2119,7 @@
     "fund_size": 28,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 182,
+    "excel_index": 176,
     "excel_ticker": "MILS.MI",
     "excel_name": "Amundi MSCI Millennials UCITS ETF Acc"
   },
@@ -2203,7 +2131,7 @@
     "fund_size": 945,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 183,
+    "excel_index": 177,
     "excel_ticker": "ROAI.MI",
     "excel_name": "Amundi MSCI Robotics & AI UCITS ETF Acc"
   },
@@ -2215,7 +2143,7 @@
     "fund_size": 91,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 184,
+    "excel_index": 178,
     "excel_ticker": "INDO.MI",
     "excel_name": "Amundi MSCI Indonesia UCITS ETF Acc"
   },
@@ -2227,7 +2155,7 @@
     "fund_size": 2187,
     "confidence": 0.94,
     "method": "name_fuzzy",
-    "excel_index": 185,
+    "excel_index": 179,
     "excel_ticker": "WTEC.MI",
     "excel_name": "Amundi MSCI World Information Tech. UCITS ETF EUR Acc"
   },
@@ -2239,7 +2167,7 @@
     "fund_size": 122,
     "confidence": 1.0,
     "method": "name_fuzzy",
-    "excel_index": 186,
+    "excel_index": 180,
     "excel_ticker": "DIGE.MI",
     "excel_name": "Amundi MSCI Digital Economy UCITS ETF Acc"
   },
@@ -2251,7 +2179,7 @@
     "fund_size": 377,
     "confidence": 0.96,
     "method": "name_fuzzy",
-    "excel_index": 187,
+    "excel_index": 181,
     "excel_ticker": "DFNS.MI",
     "excel_name": "Amundi IS Stoxx Europe Defense UCITS ETF Acc"
   }
