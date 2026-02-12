@@ -7,21 +7,19 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #1a1a2e, #16213e); min-height: 100vh; color: #fff; }
-        .header { background: rgba(255,255,255,0.1); padding: 20px; text-align: center; }
-        .header h1 { font-size: 1.8em; }
-        .last-update { color: #aaa; font-size: 0.9em; }
-        .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
-        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px; }
-        .summary-card { background: rgba(255,255,255,0.1); border-radius: 12px; padding: 20px; text-align: center; }
-        .summary-card.buy { border-left: 4px solid #00B050; }
-        .summary-card.sell { border-left: 4px solid #DC3545; }
-        .summary-card.hold { border-left: 4px solid #FFC000; }
-        .summary-card.total { border-left: 4px solid #4472C4; }
-        .summary-card .number { font-size: 2.5em; font-weight: bold; }
-        .summary-card.buy .number { color: #00B050; }
-        .summary-card.sell .number { color: #DC3545; }
-        .summary-card.hold .number { color: #FFC000; }
-        .summary-card.total .number { color: #4472C4; }
+        .header { position: sticky; top: 0; z-index: 100; background: rgba(22,33,62,0.95); backdrop-filter: blur(8px); padding: 8px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .header h1 { font-size: 1.1em; white-space: nowrap; }
+        .last-update { color: #aaa; font-size: 0.75em; }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .summary-bar { display: flex; gap: 12px; align-items: center; }
+        .summary-item { display: flex; align-items: center; gap: 4px; font-size: 0.85em; }
+        .summary-item .number { font-weight: bold; font-size: 1.1em; }
+        .summary-item.buy .number { color: #00B050; }
+        .summary-item.sell .number { color: #DC3545; }
+        .summary-item.hold .number { color: #FFC000; }
+        .summary-item.total .number { color: #4472C4; }
+        .summary-item .label { color: #aaa; font-size: 0.8em; }
+        .container { max-width: 1600px; margin: 0 auto; padding: 15px 20px; }
         .level-section { background: rgba(255,255,255,0.05); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
         .level-header { padding: 12px 20px; font-weight: bold; display: flex; justify-content: space-between; }
         .level-1 .level-header { background: linear-gradient(90deg, #00B050, #00D060); }
@@ -60,24 +58,26 @@
         .category-filters { margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap; }
         .cat-btn { padding: 6px 14px; border: none; border-radius: 15px; background: rgba(255,255,255,0.15); color: #fff; cursor: pointer; }
         .cat-btn:hover, .cat-btn.active { background: #4472C4; }
-        .legend { margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.85em; color: #aaa; }
+        .legend { margin-bottom: 12px; padding: 8px 12px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.78em; color: #aaa; }
         .legend strong { color: #fff; }
-        @media (max-width: 768px) { .fund-table { font-size: 0.75em; } .fund-table th, .fund-table td { padding: 6px 8px; } }
+        @media (max-width: 768px) { .header { flex-wrap: wrap; gap: 4px; } .fund-table { font-size: 0.75em; } .fund-table th, .fund-table td { padding: 6px 8px; } }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>ETF Monitor Dashboard</h1>
+        <div class="header-left">
+            <h1>ETF Monitor</h1>
+            <div class="summary-bar">
+                <div class="summary-item total"><span class="number" id="totalETFs">-</span><span class="label">Totali</span></div>
+                <div class="summary-item buy"><span class="number" id="buySignals">-</span><span class="label">BUY</span></div>
+                <div class="summary-item hold"><span class="number" id="holdSignals">-</span><span class="label">HOLD</span></div>
+                <div class="summary-item sell"><span class="number" id="sellSignals">-</span><span class="label">SELL</span></div>
+            </div>
+        </div>
         <div class="last-update" id="lastUpdate">Caricamento...</div>
     </div>
 
     <div class="container">
-        <div class="summary-grid">
-            <div class="summary-card total"><div class="number" id="totalETFs">-</div><div>ETF Totali</div></div>
-            <div class="summary-card buy"><div class="number" id="buySignals">-</div><div>Segnali BUY</div></div>
-            <div class="summary-card hold"><div class="number" id="holdSignals">-</div><div>Segnali HOLD</div></div>
-            <div class="summary-card sell"><div class="number" id="sellSignals">-</div><div>Segnali SELL</div></div>
-        </div>
 
         <div class="legend">
             <strong>Condizioni BUY (5/5 richieste):</strong>
