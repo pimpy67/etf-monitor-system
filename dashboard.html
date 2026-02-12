@@ -50,6 +50,10 @@
         .crossover.golden { background: #00B050; color: white; }
         .crossover.death { background: #DC3545; color: white; }
         .crossover.neutral { background: rgba(255,255,255,0.15); color: #aaa; }
+        .pct { font-weight: bold; }
+        .pct.pos { color: #00B050; }
+        .pct.neg { color: #DC3545; }
+        .pct.zero { color: #aaa; }
         .buy-count { font-size: 0.8em; color: #aaa; }
         .etf-name { max-width: 350px; word-wrap: break-word; line-height: 1.3; }
         .empty-msg { padding: 30px; text-align: center; color: #888; }
@@ -89,17 +93,17 @@
 
         <div class="level-section level-1">
             <div class="level-header"><span>LIVELLO 1 - BUY Alert</span><span id="l1Count">0 ETF</span></div>
-            <table class="fund-table"><thead><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level1Body"></tbody></table>
+            <table class="fund-table"><thead><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level1Body"></tbody></table>
         </div>
 
         <div class="level-section level-2">
             <div class="level-header"><span>LIVELLO 2 - Watchlist</span><span id="l2Count">0 ETF</span></div>
-            <table class="fund-table"><thead><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level2Body"></tbody></table>
+            <table class="fund-table"><thead><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level2Body"></tbody></table>
         </div>
 
         <div class="level-section level-3">
             <div class="level-header"><span>LIVELLO 3 - Universe</span><span id="l3Count">0 ETF</span></div>
-            <table class="fund-table"><thead><tr><th>ETF</th><th>Categoria</th><th>Prezzo</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level3Body"></tbody></table>
+            <table class="fund-table"><thead><tr><th>ETF</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level3Body"></tbody></table>
         </div>
     </div>
 
@@ -151,7 +155,7 @@
             document.getElementById(`l${level}Count`).textContent = `${filtered.length} ETF`;
 
             if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="10" class="empty-msg">Nessun ETF in questo livello</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="13" class="empty-msg">Nessun ETF in questo livello</td></tr>`;
                 return;
             }
 
@@ -165,11 +169,20 @@
                 const crossLabel = f.crossover === 'golden_cross' ? 'Golden' : f.crossover === 'death_cross' ? 'Death' : '-';
                 const secondCol = level === 3 ? f.categoria : f.ticker;
                 const isinTip = f.isin ? f.isin + ' | ' + f.ticker : f.ticker;
+                const fmtPct = v => {
+                    if (v == null) return '<td class="pct zero">-</td>';
+                    const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+                    const sign = v > 0 ? '+' : '';
+                    return `<td class="pct ${cls}">${sign}${v.toFixed(2)}%</td>`;
+                };
 
                 return `<tr>
                     <td class="etf-name" title="${isinTip}">${f.nome || '-'}</td>
                     <td>${secondCol || '-'}</td>
                     <td>${f.price ? f.price.toFixed(2) : '-'}</td>
+                    ${fmtPct(f.pct_1d)}
+                    ${fmtPct(f.pct_1w)}
+                    ${fmtPct(f.pct_1m)}
                     <td>${f.ema13 ? f.ema13.toFixed(2) : '-'}</td>
                     <td>${f.sma50 ? f.sma50.toFixed(2) : '-'}</td>
                     <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '-'}</td>

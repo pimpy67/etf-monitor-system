@@ -228,11 +228,19 @@ class ETFTechnicalAnalyzer:
                 'suggested_level': level,
                 'level_change': False,
                 'level_reason': f'Dati insufficienti: {len(close_df)}/{min_data} giorni',
+                'pct_change_1d': None,
+                'pct_change_1w': None,
+                'pct_change_1m': None,
                 'data_status': 'insufficient'
             }
 
         close = close_df['Close'].astype(float)
         current_price = float(close.iloc[-1])
+
+        # === VARIAZIONI PERCENTUALI ===
+        pct_1d = round((close.iloc[-1] - close.iloc[-2]) / close.iloc[-2] * 100, 2) if len(close) >= 2 else None
+        pct_1w = round((close.iloc[-1] - close.iloc[-6]) / close.iloc[-6] * 100, 2) if len(close) >= 6 else None
+        pct_1m = round((close.iloc[-1] - close.iloc[-22]) / close.iloc[-22] * 100, 2) if len(close) >= 22 else None
 
         # === CALCOLO INDICATORI ===
         ema13 = self.calculate_ema(close, self.ema_fast_period)
@@ -361,6 +369,9 @@ class ETFTechnicalAnalyzer:
             'suggested_level': level_suggestion['suggested_level'],
             'level_change': level_suggestion['level_change'],
             'level_reason': level_suggestion['reason'],
+            'pct_change_1d': pct_1d,
+            'pct_change_1w': pct_1w,
+            'pct_change_1m': pct_1m,
             'data_status': 'ok',
             'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M')
         }
