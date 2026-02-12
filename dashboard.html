@@ -26,7 +26,10 @@
         .level-2 .level-header { background: linear-gradient(90deg, #FFC000, #FFD000); color: #333; }
         .level-3 .level-header { background: linear-gradient(90deg, #4472C4, #5A8FD4); }
         .fund-table { width: 100%; border-collapse: collapse; }
-        .fund-table th { background: rgba(0,0,0,0.3); padding: 10px 12px; text-align: left; font-size: 0.85em; }
+        .column-header { position: sticky; top: 38px; z-index: 99; background: rgba(10,15,30,0.97); backdrop-filter: blur(8px); border-bottom: 2px solid rgba(255,255,255,0.15); }
+        .column-header table { width: 100%; max-width: 1600px; margin: 0 auto; border-collapse: collapse; }
+        .column-header th { padding: 8px 12px; text-align: left; font-size: 0.8em; font-weight: bold; color: #aaa; }
+        .fund-table thead { display: none; }
         .fund-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.9em; }
         .fund-table tr:hover { background: rgba(255,255,255,0.05); }
         .signal { display: inline-block; padding: 4px 12px; border-radius: 15px; font-weight: bold; font-size: 0.8em; }
@@ -75,6 +78,10 @@
             </div>
         </div>
         <div class="last-update" id="lastUpdate">Caricamento...</div>
+    </div>
+
+    <div class="column-header">
+        <table><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>Cross</th><th>Segnale</th></tr></table>
     </div>
 
     <div class="container">
