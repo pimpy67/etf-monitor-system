@@ -314,6 +314,7 @@ class ETFMonitor:
             'summary': {
                 'total_etfs': len(results),
                 'buy_signals': 0,
+                'pullback_signals': 0,
                 'sell_signals': 0,
                 'hold_signals': 0
             },
@@ -332,6 +333,8 @@ class ETFMonitor:
 
             if signal == 'BUY':
                 dashboard_data['summary']['buy_signals'] += 1
+            elif signal == 'PULLBACK':
+                dashboard_data['summary']['pullback_signals'] += 1
             elif signal == 'SELL':
                 dashboard_data['summary']['sell_signals'] += 1
             else:
@@ -362,7 +365,10 @@ class ETFMonitor:
                 'crossover': r['analysis'].get('crossover', 'neutral'),
                 'pct_1d': r['analysis'].get('pct_change_1d'),
                 'pct_1w': r['analysis'].get('pct_change_1w'),
-                'pct_1m': r['analysis'].get('pct_change_1m')
+                'pct_1m': r['analysis'].get('pct_change_1m'),
+                'distance_from_ema': r['analysis'].get('distance_from_ema'),
+                'pullback_active': r['analysis'].get('pullback_active', False),
+                'limit_order_price': r['analysis'].get('limit_order_price')
             }
             dashboard_data['levels'][level].append(etf_data)
 

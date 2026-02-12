@@ -56,6 +56,10 @@ class ETFTechnicalAnalyzer:
         # Giorni sopra MA per conferma
         self.days_above_ma = self.config.get('days_above_ma', 3)
 
+        # Filtro Pullback: distanza max da EMA13 per BUY diretto
+        self.pullback_max_distance = self.config.get('pullback_max_distance', 5.0)  # 5%
+        self.pullback_limit_offset = self.config.get('pullback_limit_offset', 2.0)  # EMA13 + 2%
+
     def calculate_ema(self, prices: pd.Series, period: int) -> pd.Series:
         """Calcola Exponential Moving Average"""
         return prices.ewm(span=period, adjust=False).mean()
@@ -325,10 +329,24 @@ class ETFTechnicalAnalyzer:
         }
         sell_count = sum(sell_conditions.values())
 
+        # === FILTRO PULLBACK ===
+        # Distanza % del prezzo dalla EMA13
+        distance_from_ema = ((current_price - ema13_current) / ema13_current * 100) if ema13_current and ema13_current > 0 else 0.0
+        pullback_active = False
+        limit_order_price = None
+
         # === SEGNALE FINALE ===
         if buy_count == 5:
-            final_signal = 'BUY'
-            signal_strength = 5
+            if distance_from_ema > self.pullback_max_distance:
+                # Pullback: prezzo troppo lontano da EMA13, segnale sospeso
+                final_signal = 'PULLBACK'
+                signal_strength = 5
+                pullback_active = True
+                # Prezzo limit order suggerito: EMA13 + 2%
+                limit_order_price = round(ema13_current * (1 + self.pullback_limit_offset / 100), 4) if ema13_current else None
+            else:
+                final_signal = 'BUY'
+                signal_strength = 5
         elif sell_count >= 2:
             final_signal = 'SELL'
             signal_strength = sell_count
@@ -342,7 +360,7 @@ class ETFTechnicalAnalyzer:
         # === LIVELLO SUGGERITO ===
         level_suggestion = self._suggest_level(
             buy_conditions, sell_conditions, buy_count,
-            crossover, rsi_current, level
+            crossover, rsi_current, level, pullback_active
         )
 
         return {
@@ -372,23 +390,30 @@ class ETFTechnicalAnalyzer:
             'pct_change_1d': pct_1d,
             'pct_change_1w': pct_1w,
             'pct_change_1m': pct_1m,
+            'distance_from_ema': round(distance_from_ema, 2),
+            'pullback_active': pullback_active,
+            'limit_order_price': limit_order_price,
             'data_status': 'ok',
             'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M')
         }
 
     def _suggest_level(self, buy_conditions: dict, sell_conditions: dict,
                        buy_count: int, crossover: str, rsi: float,
-                       current_level: int) -> Dict:
+                       current_level: int, pullback_active: bool = False) -> Dict:
         """
         Suggerisce il livello appropriato per un ETF.
 
-        - L1 (BUY Alert): Tutte e 5 le condizioni BUY soddisfatte
+        - L1 (BUY Alert): 5/5 condizioni + distanza EMA13 < 5%
+        - L1 (PULLBACK): 5/5 condizioni ma distanza EMA13 > 5%
         - L2 (Watchlist): EMA13 > SMA50 oppure RSI > 50
         - L3 (Universe): Monitoraggio passivo
         """
         if buy_count == 5:
             suggested = 1
-            reason = 'BUY ALERT: Tutte le 5 condizioni soddisfatte'
+            if pullback_active:
+                reason = 'PULLBACK: 5/5 condizioni OK ma prezzo troppo distante da EMA13 (>5%). Attendere ritracciamento.'
+            else:
+                reason = 'BUY ALERT: Tutte le 5 condizioni soddisfatte, prezzo vicino a EMA13'
         elif crossover == 'golden_cross' or (rsi is not None and rsi > 50):
             suggested = 2
             parts = []

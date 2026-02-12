@@ -52,6 +52,10 @@
         .pct.neg { color: #DC3545; }
         .pct.zero { color: #aaa; }
         .buy-count { font-weight: bold; font-size: 0.85em; }
+        .buy-count.pullback { color: #FF8C00; }
+        .buy-count.full-buy { color: #00B050; }
+        .pullback-tag { display: inline-block; font-size: 0.68em; padding: 1px 5px; border-radius: 3px; background: #FF8C00; color: #fff; margin-left: 4px; vertical-align: middle; }
+        .limit-price { display: block; font-size: 0.68em; color: #FF8C00; font-style: italic; }
         .etf-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
         .empty-msg { padding: 30px; text-align: center; color: #888; }
         .category-filters { margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap; }
@@ -69,6 +73,7 @@
             <div class="summary-bar">
                 <div class="summary-item total"><span class="number" id="totalETFs">-</span><span class="label">Totali</span></div>
                 <div class="summary-item buy"><span class="number" id="buySignals">-</span><span class="label">BUY</span></div>
+                <div class="summary-item" style="color:#FF8C00"><span class="number" id="pullbackSignals" style="color:#FF8C00">-</span><span class="label">PULLBACK</span></div>
                 <div class="summary-item hold"><span class="number" id="holdSignals">-</span><span class="label">HOLD</span></div>
                 <div class="summary-item sell"><span class="number" id="sellSignals">-</span><span class="label">SELL</span></div>
             </div>
@@ -92,6 +97,7 @@
             3. RSI 55-65 |
             4. MACD positivo e crescente |
             5. Bollinger Band Width in espansione
+            <br><strong style="color:#FF8C00">Filtro Pullback:</strong> Se 5/5 ma Prezzo &gt; 5% da EMA13 &rarr; BUY sospeso. Limit Order suggerito: EMA13 + 2%
             &nbsp; | &nbsp; <em>Fonte dati: JustETF</em>
         </div>
 
@@ -147,9 +153,10 @@
             document.getElementById('lastUpdate').textContent = `Ultimo aggiornamento: ${dt.toLocaleString('it-IT')}`;
 
             document.getElementById('totalETFs').textContent = allData.summary.total_etfs || 0;
-            document.getElementById('buySignals').textContent = allData.summary.buy_signals;
-            document.getElementById('holdSignals').textContent = allData.summary.hold_signals;
-            document.getElementById('sellSignals').textContent = allData.summary.sell_signals;
+            document.getElementById('buySignals').textContent = allData.summary.buy_signals || 0;
+            document.getElementById('pullbackSignals').textContent = allData.summary.pullback_signals || 0;
+            document.getElementById('holdSignals').textContent = allData.summary.hold_signals || 0;
+            document.getElementById('sellSignals').textContent = allData.summary.sell_signals || 0;
 
             // Category filters
             const categories = Object.keys(allData.categories || {});
@@ -184,12 +191,24 @@
                 const bbwClass = f.bb_width >= 5 ? 'wide' : 'narrow';
                 const secondCol = level === 3 ? f.categoria : f.ticker;
                 const isinTip = f.isin ? f.isin + ' | ' + f.ticker : f.ticker;
+                const distTip = f.distance_from_ema != null ? `Dist. EMA13: ${f.distance_from_ema.toFixed(1)}%` : '';
                 const fmtPct = v => {
                     if (v == null) return '<td class="pct zero">-</td>';
                     const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
                     const sign = v > 0 ? '+' : '';
                     return `<td class="pct ${cls}">${sign}${v.toFixed(2)}%</td>`;
                 };
+
+                // Colonna BUY con filtro pullback
+                let buyCell;
+                if (f.pullback_active) {
+                    const limitTxt = f.limit_order_price ? `Limit: ${f.limit_order_price.toFixed(2)}` : '';
+                    buyCell = `<td class="buy-count pullback" title="${distTip}">${f.buy_count}/5<span class="pullback-tag">PB</span><span class="limit-price">${limitTxt}</span></td>`;
+                } else if (f.buy_count === 5) {
+                    buyCell = `<td class="buy-count full-buy" title="${distTip}">${f.buy_count}/5</td>`;
+                } else {
+                    buyCell = `<td class="buy-count" title="${distTip}">${f.buy_count || 0}/5</td>`;
+                }
 
                 return `<tr>
                     <td class="etf-name" title="${isinTip}">${f.nome || '-'}</td>
@@ -203,7 +222,7 @@
                     <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '-'}</td>
                     <td class="macd ${macdClass}">${macdH != null ? macdH.toFixed(2) : '-'}</td>
                     <td class="bbw ${bbwClass}">${f.bb_width ? f.bb_width.toFixed(1) : '-'}</td>
-                    <td class="buy-count">${f.buy_count || 0}/5</td>
+                    ${buyCell}
                 </tr>`;
             }).join('');
         }
