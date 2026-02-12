@@ -25,17 +25,17 @@
         .level-1 .level-header { background: linear-gradient(90deg, #00B050, #00D060); }
         .level-2 .level-header { background: linear-gradient(90deg, #FFC000, #FFD000); color: #333; }
         .level-3 .level-header { background: linear-gradient(90deg, #4472C4, #5A8FD4); }
-        .fund-table { width: 100%; border-collapse: collapse; }
-        .column-header { position: sticky; top: 38px; z-index: 99; background: rgba(10,15,30,0.97); backdrop-filter: blur(8px); border-bottom: 2px solid rgba(255,255,255,0.15); }
-        .column-header table { width: 100%; max-width: 1600px; margin: 0 auto; border-collapse: collapse; }
-        .column-header th { padding: 8px 12px; text-align: left; font-size: 0.8em; font-weight: bold; color: #aaa; }
+        /* Column widths shared between header and tables */
+        .col-etf { width: 22%; } .col-ticker { width: 8%; } .col-prezzo { width: 7%; }
+        .col-pct { width: 6%; } .col-ema { width: 7%; } .col-sma { width: 7%; }
+        .col-rsi { width: 5%; } .col-macd { width: 6%; } .col-bbw { width: 5%; } .col-buy { width: 5%; }
+        .column-header { position: sticky; top: 38px; z-index: 99; background: rgba(10,15,30,0.97); backdrop-filter: blur(8px); border-bottom: 2px solid rgba(255,255,255,0.15); padding: 0 20px; }
+        .column-header table { width: 100%; max-width: 1560px; margin: 0 auto; border-collapse: collapse; table-layout: fixed; }
+        .column-header th { padding: 8px 8px; text-align: left; font-size: 0.8em; font-weight: bold; color: #aaa; overflow: hidden; }
+        .fund-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         .fund-table thead { display: none; }
-        .fund-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.9em; }
+        .fund-table td { padding: 8px 8px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.85em; overflow: hidden; text-overflow: ellipsis; }
         .fund-table tr:hover { background: rgba(255,255,255,0.05); }
-        .signal { display: inline-block; padding: 4px 12px; border-radius: 15px; font-weight: bold; font-size: 0.8em; }
-        .signal.buy { background: #00B050; }
-        .signal.sell { background: #DC3545; }
-        .signal.hold { background: #FFC000; color: #333; }
         .rsi { font-weight: bold; }
         .rsi.low { color: #00B050; }
         .rsi.mid { color: #FFC000; }
@@ -47,23 +47,19 @@
         .bbw { font-weight: bold; }
         .bbw.wide { color: #00B050; }
         .bbw.narrow { color: #aaa; }
-        .crossover { font-size: 0.75em; padding: 2px 8px; border-radius: 10px; }
-        .crossover.golden { background: #00B050; color: white; }
-        .crossover.death { background: #DC3545; color: white; }
-        .crossover.neutral { background: rgba(255,255,255,0.15); color: #aaa; }
         .pct { font-weight: bold; }
         .pct.pos { color: #00B050; }
         .pct.neg { color: #DC3545; }
         .pct.zero { color: #aaa; }
-        .buy-count { font-size: 0.8em; color: #aaa; }
-        .etf-name { max-width: 350px; word-wrap: break-word; line-height: 1.3; }
+        .buy-count { font-weight: bold; font-size: 0.85em; }
+        .etf-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
         .empty-msg { padding: 30px; text-align: center; color: #888; }
         .category-filters { margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap; }
         .cat-btn { padding: 6px 14px; border: none; border-radius: 15px; background: rgba(255,255,255,0.15); color: #fff; cursor: pointer; }
         .cat-btn:hover, .cat-btn.active { background: #4472C4; }
         .legend { margin-bottom: 12px; padding: 8px 12px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.78em; color: #aaa; }
         .legend strong { color: #fff; }
-        @media (max-width: 768px) { .header { flex-wrap: wrap; gap: 4px; } .fund-table { font-size: 0.75em; } .fund-table th, .fund-table td { padding: 6px 8px; } }
+        @media (max-width: 768px) { .header { flex-wrap: wrap; gap: 4px; } .fund-table td, .column-header th { padding: 6px 4px; font-size: 0.72em; } }
     </style>
 </head>
 <body>
@@ -81,7 +77,10 @@
     </div>
 
     <div class="column-header">
-        <table><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>Cross</th><th>Segnale</th></tr></table>
+        <table>
+            <colgroup><col class="col-etf"><col class="col-ticker"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ema"><col class="col-sma"><col class="col-rsi"><col class="col-macd"><col class="col-bbw"><col class="col-buy"></colgroup>
+            <tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>BUY</th></tr>
+        </table>
     </div>
 
     <div class="container">
@@ -100,17 +99,29 @@
 
         <div class="level-section level-1">
             <div class="level-header"><span>LIVELLO 1 - BUY Alert</span><span id="l1Count">0 ETF</span></div>
-            <table class="fund-table"><thead><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level1Body"></tbody></table>
+            <table class="fund-table">
+                <colgroup><col class="col-etf"><col class="col-ticker"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ema"><col class="col-sma"><col class="col-rsi"><col class="col-macd"><col class="col-bbw"><col class="col-buy"></colgroup>
+                <thead><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>BUY</th></tr></thead>
+                <tbody id="level1Body"></tbody>
+            </table>
         </div>
 
         <div class="level-section level-2">
             <div class="level-header"><span>LIVELLO 2 - Watchlist</span><span id="l2Count">0 ETF</span></div>
-            <table class="fund-table"><thead><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level2Body"></tbody></table>
+            <table class="fund-table">
+                <colgroup><col class="col-etf"><col class="col-ticker"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ema"><col class="col-sma"><col class="col-rsi"><col class="col-macd"><col class="col-bbw"><col class="col-buy"></colgroup>
+                <thead><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>BUY</th></tr></thead>
+                <tbody id="level2Body"></tbody>
+            </table>
         </div>
 
         <div class="level-section level-3">
             <div class="level-header"><span>LIVELLO 3 - Universe</span><span id="l3Count">0 ETF</span></div>
-            <table class="fund-table"><thead><tr><th>ETF</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>Cross</th><th>Segnale</th></tr></thead><tbody id="level3Body"></tbody></table>
+            <table class="fund-table">
+                <colgroup><col class="col-etf"><col class="col-ticker"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ema"><col class="col-sma"><col class="col-rsi"><col class="col-macd"><col class="col-bbw"><col class="col-buy"></colgroup>
+                <thead><tr><th>ETF</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>BUY</th></tr></thead>
+                <tbody id="level3Body"></tbody>
+            </table>
         </div>
     </div>
 
@@ -162,7 +173,7 @@
             document.getElementById(`l${level}Count`).textContent = `${filtered.length} ETF`;
 
             if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="13" class="empty-msg">Nessun ETF in questo livello</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" class="empty-msg">Nessun ETF in questo livello</td></tr>`;
                 return;
             }
 
@@ -171,9 +182,6 @@
                 const macdH = f.macd_histogram;
                 const macdClass = macdH > 0 ? 'positive' : macdH < 0 ? 'negative' : 'neutral';
                 const bbwClass = f.bb_width >= 5 ? 'wide' : 'narrow';
-                const signalClass = f.signal ? f.signal.toLowerCase() : 'hold';
-                const crossClass = f.crossover === 'golden_cross' ? 'golden' : f.crossover === 'death_cross' ? 'death' : 'neutral';
-                const crossLabel = f.crossover === 'golden_cross' ? 'Golden' : f.crossover === 'death_cross' ? 'Death' : '-';
                 const secondCol = level === 3 ? f.categoria : f.ticker;
                 const isinTip = f.isin ? f.isin + ' | ' + f.ticker : f.ticker;
                 const fmtPct = v => {
@@ -195,8 +203,7 @@
                     <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '-'}</td>
                     <td class="macd ${macdClass}">${macdH != null ? macdH.toFixed(2) : '-'}</td>
                     <td class="bbw ${bbwClass}">${f.bb_width ? f.bb_width.toFixed(1) : '-'}</td>
-                    <td><span class="crossover ${crossClass}">${crossLabel}</span></td>
-                    <td><span class="signal ${signalClass}">${f.signal || 'HOLD'}</span> <span class="buy-count">${f.buy_count || 0}/5</span></td>
+                    <td class="buy-count">${f.buy_count || 0}/5</td>
                 </tr>`;
             }).join('');
         }
