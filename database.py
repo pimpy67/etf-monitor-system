@@ -161,8 +161,27 @@ class PriceDatabase:
                     WHERE isin IS NOT NULL
                 """)
 
+                # Tabella per tracciare l'ingresso degli ETF in Livello 1
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS etf_l1_tracking (
+                        isin VARCHAR(20) PRIMARY KEY,
+                        entry_date DATE NOT NULL,
+                        entry_price DECIMAL(12, 4) NOT NULL
+                    )
+                """)
+
+                # Tabella per tracciare l'ingresso degli ETF in Livello 0 (Deep Recovery)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS etf_l0_tracking (
+                        isin VARCHAR(20) PRIMARY KEY,
+                        entry_date DATE NOT NULL,
+                        entry_price DECIMAL(12, 4) NOT NULL,
+                        panic_low DECIMAL(12, 4)
+                    )
+                """)
+
                 conn.commit()
-                print("Tabella etf_price_history pronta (con supporto ISIN)")
+                print("Tabelle ETF pronte (price_history, l1_tracking, l0_tracking)")
         except Exception as e:
             logging.error(f"Errore creazione tabella: {e}")
         finally:
@@ -458,6 +477,142 @@ class PriceDatabase:
         except Exception as e:
             logging.error(f"Errore conteggio prezzi: {e}")
             return 0
+        finally:
+            conn.close()
+
+
+    # ── L1 Tracking ──────────────────────────────────────────────────────────
+
+    def get_all_l1_entries(self) -> Dict[str, Dict]:
+        """
+        Restituisce tutti gli ETF attualmente tracciati in L1.
+
+        Returns:
+            Dict {isin: {entry_date: date, entry_price: float}}
+        """
+        conn = self._get_connection()
+        if not conn:
+            return {}
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT isin, entry_date, entry_price FROM etf_l1_tracking")
+                rows = cur.fetchall()
+                return {
+                    r['isin']: {
+                        'entry_date': r['entry_date'],
+                        'entry_price': float(r['entry_price'])
+                    }
+                    for r in rows
+                }
+        except Exception as e:
+            logging.error(f"Errore get_all_l1_entries: {e}")
+            return {}
+        finally:
+            conn.close()
+
+    def set_l1_entry(self, isin: str, entry_date: str, entry_price: float) -> bool:
+        """
+        Registra l'ingresso di un ETF in L1 (INSERT, non sovrascrive se già presente).
+
+        Args:
+            isin: Codice ISIN
+            entry_date: Data ingresso 'YYYY-MM-DD'
+            entry_price: Prezzo al momento dell'ingresso
+        """
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO etf_l1_tracking (isin, entry_date, entry_price)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (isin) DO NOTHING
+                """, (isin, entry_date, float(entry_price)))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore set_l1_entry {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def remove_l1_entry(self, isin: str) -> bool:
+        """Rimuove un ETF dal tracking L1 (uscita da L1)."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM etf_l1_tracking WHERE isin = %s", (isin,))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore remove_l1_entry {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    # ── L0 Tracking ──────────────────────────────────────────────────────────
+
+    def get_all_l0_entries(self) -> Dict[str, Dict]:
+        """Restituisce tutti gli ETF attualmente in L0."""
+        conn = self._get_connection()
+        if not conn:
+            return {}
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT isin, entry_date, entry_price, panic_low FROM etf_l0_tracking")
+                rows = cur.fetchall()
+                return {
+                    r['isin']: {
+                        'entry_date':  r['entry_date'],
+                        'entry_price': float(r['entry_price']),
+                        'panic_low':   float(r['panic_low']) if r['panic_low'] else None,
+                    }
+                    for r in rows
+                }
+        except Exception as e:
+            logging.error(f"Errore get_all_l0_entries: {e}")
+            return {}
+        finally:
+            conn.close()
+
+    def set_l0_entry(self, isin: str, entry_date: str, entry_price: float,
+                     panic_low: float = None) -> bool:
+        """Registra l'ingresso di un ETF in L0 (INSERT, non sovrascrive se presente)."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO etf_l0_tracking (isin, entry_date, entry_price, panic_low)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (isin) DO NOTHING
+                """, (isin, entry_date, float(entry_price),
+                      float(panic_low) if panic_low else None))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore set_l0_entry {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def remove_l0_entry(self, isin: str) -> bool:
+        """Rimuove un ETF dal tracking L0."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM etf_l0_tracking WHERE isin = %s", (isin,))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore remove_l0_entry {isin}: {e}")
+            return False
         finally:
             conn.close()
 

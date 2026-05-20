@@ -1,234 +1,584 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ETF Monitor Dashboard</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #1a1a2e, #16213e); min-height: 100vh; color: #fff; }
-        .header { position: sticky; top: 0; z-index: 100; background: rgba(22,33,62,0.95); backdrop-filter: blur(8px); padding: 8px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .header h1 { font-size: 1.1em; white-space: nowrap; }
-        .last-update { color: #aaa; font-size: 0.75em; }
-        .header-left { display: flex; align-items: center; gap: 15px; }
-        .summary-bar { display: flex; gap: 12px; align-items: center; }
-        .summary-item { display: flex; align-items: center; gap: 4px; font-size: 0.85em; }
-        .summary-item .number { font-weight: bold; font-size: 1.1em; }
-        .summary-item.buy .number { color: #00B050; }
-        .summary-item.sell .number { color: #DC3545; }
-        .summary-item.hold .number { color: #FFC000; }
-        .summary-item.total .number { color: #4472C4; }
-        .summary-item .label { color: #aaa; font-size: 0.8em; }
-        .container { max-width: 1600px; margin: 0 auto; padding: 15px 20px; }
-        .level-section { background: rgba(255,255,255,0.05); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
-        .level-header { padding: 12px 20px; font-weight: bold; display: flex; justify-content: space-between; }
-        .level-1 .level-header { background: linear-gradient(90deg, #00B050, #00D060); }
-        .level-2 .level-header { background: linear-gradient(90deg, #FFC000, #FFD000); color: #333; }
-        .level-3 .level-header { background: linear-gradient(90deg, #4472C4, #5A8FD4); }
-        /* Column widths shared between header and tables */
-        .col-etf { width: 22%; } .col-ticker { width: 8%; } .col-prezzo { width: 7%; }
-        .col-pct { width: 6%; } .col-ema { width: 7%; } .col-sma { width: 7%; }
-        .col-rsi { width: 5%; } .col-macd { width: 6%; } .col-bbw { width: 5%; } .col-buy { width: 5%; }
-        .column-header { position: sticky; top: 38px; z-index: 99; background: rgba(10,15,30,0.97); backdrop-filter: blur(8px); border-bottom: 2px solid rgba(255,255,255,0.15); padding: 0 20px; }
-        .column-header table { width: 100%; max-width: 1560px; margin: 0 auto; border-collapse: collapse; table-layout: fixed; }
-        .column-header th { padding: 8px 8px; text-align: left; font-size: 0.8em; font-weight: bold; color: #aaa; overflow: hidden; }
-        .fund-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        .fund-table thead { display: none; }
-        .fund-table td { padding: 8px 8px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.85em; overflow: hidden; text-overflow: ellipsis; }
-        .fund-table tr:hover { background: rgba(255,255,255,0.05); }
-        .rsi { font-weight: bold; }
-        .rsi.low { color: #00B050; }
-        .rsi.mid { color: #FFC000; }
-        .rsi.high { color: #DC3545; }
-        .macd { font-weight: bold; }
-        .macd.positive { color: #00B050; }
-        .macd.negative { color: #DC3545; }
-        .macd.neutral { color: #FFC000; }
-        .bbw { font-weight: bold; }
-        .bbw.wide { color: #00B050; }
-        .bbw.narrow { color: #aaa; }
-        .pct { font-weight: bold; }
-        .pct.pos { color: #00B050; }
-        .pct.neg { color: #DC3545; }
-        .pct.zero { color: #aaa; }
-        .buy-count { font-weight: bold; font-size: 0.85em; }
-        .buy-count.pullback { color: #FF8C00; }
-        .buy-count.full-buy { color: #00B050; }
-        .pullback-tag { display: inline-block; font-size: 0.68em; padding: 1px 5px; border-radius: 3px; background: #FF8C00; color: #fff; margin-left: 4px; vertical-align: middle; }
-        .limit-price { display: block; font-size: 0.68em; color: #FF8C00; font-style: italic; }
-        .etf-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
-        .empty-msg { padding: 30px; text-align: center; color: #888; }
-        .category-filters { margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap; }
-        .cat-btn { padding: 6px 14px; border: none; border-radius: 15px; background: rgba(255,255,255,0.15); color: #fff; cursor: pointer; }
-        .cat-btn:hover, .cat-btn.active { background: #4472C4; }
-        .legend { margin-bottom: 12px; padding: 8px 12px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.78em; color: #aaa; }
-        .legend strong { color: #fff; }
-        @media (max-width: 768px) { .header { flex-wrap: wrap; gap: 4px; } .fund-table td, .column-header th { padding: 6px 4px; font-size: 0.72em; } }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETF Monitor</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1117,#161b22); min-height:100vh; color:#e6edf3; }
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.header { position:sticky; top:0; z-index:200; background:rgba(13,17,23,0.97); backdrop-filter:blur(10px); padding:8px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.08); }
+.header h1 { font-size:1.05em; font-weight:700; color:#58a6ff; white-space:nowrap; }
+.header-left { display:flex; align-items:center; gap:18px; }
+.summary-bar { display:flex; gap:14px; align-items:center; }
+.sitem { display:flex; flex-direction:column; align-items:center; font-size:0.72em; }
+.sitem .num { font-weight:700; font-size:1.4em; line-height:1; }
+.sitem .lbl { color:#8b949e; margin-top:1px; }
+.sitem.l0 .num { color:#ff8c00; }
+.sitem.l1 .num { color:#3fb950; }
+.sitem.l2 .num { color:#d29922; }
+.sitem.l3 .num { color:#58a6ff; }
+.sitem.tot .num { color:#e6edf3; }
+.last-update { color:#8b949e; font-size:0.72em; }
+
+/* ── Column header (sticky below main header) ─────────────────────────── */
+.col-header { position:sticky; top:42px; z-index:199; background:rgba(13,17,23,0.97); backdrop-filter:blur(10px); border-bottom:2px solid rgba(255,255,255,0.12); padding:0 20px; }
+.col-header table { width:100%; max-width:1600px; margin:0 auto; border-collapse:collapse; table-layout:fixed; }
+.col-header th { padding:7px 8px; text-align:left; font-size:0.75em; font-weight:600; color:#8b949e; text-transform:uppercase; letter-spacing:.03em; overflow:hidden; }
+
+/* Column widths */
+.col-nome   { width:22%; } .col-ticker { width:7%; }
+.col-prezzo { width:7%; }  .col-pct    { width:5%; }
+.col-ema20  { width:7%; }  .col-sma50  { width:7%; } .col-sma200 { width:7%; }
+.col-rsi    { width:5%; }  .col-adx    { width:5%; }
+.col-buy    { width:6%; }  .col-ragione { width:17%; }
+
+/* ── Container ───────────────────────────────────────────────────────────── */
+.container { max-width:1640px; margin:0 auto; padding:14px 20px; }
+
+/* ── Level sections ─────────────────────────────────────────────────────── */
+.level-section { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:10px; margin-bottom:16px; overflow:hidden; }
+.level-header { padding:10px 18px; font-weight:700; font-size:0.9em; display:flex; justify-content:space-between; align-items:center; }
+.level-header .count { font-size:0.75em; font-weight:400; opacity:.8; margin-left:6px; }
+.level-0 .level-header { background:linear-gradient(90deg,#7c3c00,#a35200); }
+.level-1 .level-header { background:linear-gradient(90deg,#145a23,#1a7a30); }
+.level-2 .level-header { background:linear-gradient(90deg,#7c5a00,#a37800); color:#fff; }
+.level-3 .level-header { background:linear-gradient(90deg,#1c2e4a,#243d63); }
+
+/* ── Table ───────────────────────────────────────────────────────────────── */
+.etf-table { width:100%; border-collapse:collapse; table-layout:fixed; }
+.etf-table thead { display:none; }
+.etf-table td { padding:8px 8px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.83em; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; cursor:pointer; }
+.etf-table tr:hover { background:rgba(88,166,255,0.06); }
+.etf-table colgroup col { overflow:hidden; }
+
+/* ── Value colors ─────────────────────────────────────────────────────────── */
+.pct { font-weight:600; }
+.pct.pos { color:#3fb950; }
+.pct.neg { color:#f85149; }
+.pct.zero { color:#8b949e; }
+
+.rsi-val { font-weight:700; }
+.rsi-val.oversold { color:#58a6ff; }
+.rsi-val.optimal  { color:#3fb950; }
+.rsi-val.mid      { color:#d29922; }
+.rsi-val.overbought { color:#f85149; }
+
+.adx-val { font-weight:600; }
+.adx-val.strong { color:#3fb950; }
+.adx-val.weak   { color:#f85149; }
+.adx-val.mid    { color:#d29922; }
+
+.regime-bull { color:#3fb950; font-size:0.75em; font-weight:600; }
+.regime-bear { color:#f85149; font-size:0.75em; font-weight:600; }
+.regime-na   { color:#8b949e; font-size:0.75em; }
+
+/* Buy count badge */
+.buy-badge { display:inline-flex; align-items:center; gap:4px; }
+.buy-dots  { display:flex; gap:2px; }
+.buy-dot   { width:7px; height:7px; border-radius:50%; background:#30363d; }
+.buy-dot.on { background:#3fb950; }
+.buy-dot.on.adx { background:#58a6ff; }
+.buy-count-num { font-size:0.8em; font-weight:700; color:#8b949e; }
+.buy-count-num.all { color:#3fb950; }
+
+/* Drawdown pill (L0) */
+.dd-pill { display:inline-block; padding:2px 7px; border-radius:10px; font-size:0.75em; font-weight:700; background:#7c3c0044; color:#ff8c00; border:1px solid #7c3c00; }
+
+/* Level badge */
+.lv-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:0.72em; font-weight:700; }
+.lv0 { background:#7c3c0066; color:#ff8c00; }
+.lv1 { background:#14532d66; color:#3fb950; }
+.lv2 { background:#7c5a0066; color:#d29922; }
+.lv3 { background:#1c2e4a66; color:#58a6ff; }
+
+.etf-nome { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.etf-type-tag { display:inline-block; font-size:0.65em; padding:0 5px; border-radius:3px; background:rgba(255,255,255,0.08); color:#8b949e; margin-left:4px; vertical-align:middle; }
+
+.empty-msg { padding:28px; text-align:center; color:#8b949e; }
+
+/* ── Modal ───────────────────────────────────────────────────────────────── */
+.modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; overflow-y:auto; }
+.modal-overlay.open { display:flex; align-items:flex-start; justify-content:center; padding:30px 16px; }
+.modal { background:#161b22; border:1px solid rgba(255,255,255,0.12); border-radius:14px; width:100%; max-width:760px; padding:24px 28px; position:relative; }
+.modal-close { position:absolute; top:16px; right:18px; background:none; border:none; color:#8b949e; font-size:1.4em; cursor:pointer; line-height:1; }
+.modal-close:hover { color:#e6edf3; }
+.modal-title { font-size:1.1em; font-weight:700; margin-bottom:4px; }
+.modal-sub   { font-size:0.8em; color:#8b949e; margin-bottom:18px; }
+
+/* KPI grid */
+.kpi-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px; margin-bottom:18px; }
+.kpi-card { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:10px 12px; }
+.kpi-card .kpi-label { font-size:0.7em; color:#8b949e; text-transform:uppercase; margin-bottom:3px; }
+.kpi-card .kpi-value { font-size:1.05em; font-weight:700; }
+
+/* Conditions checklist */
+.cond-section { margin-bottom:18px; }
+.cond-title { font-size:0.8em; font-weight:700; color:#8b949e; text-transform:uppercase; margin-bottom:10px; }
+.cond-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.cond-item { display:flex; align-items:center; gap:8px; font-size:0.82em; }
+.cond-dot  { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.cond-dot.ok { background:#3fb950; }
+.cond-dot.no { background:#f85149; }
+.cond-dot.na { background:#30363d; }
+
+/* Regime bar */
+.regime-bar { padding:8px 12px; border-radius:8px; font-size:0.82em; margin-bottom:14px; }
+.regime-bar.bull { background:#145a2322; border:1px solid #145a23; color:#3fb950; }
+.regime-bar.bear { background:#3c000022; border:1px solid #5c0000; color:#f85149; }
+
+/* L0 section */
+.l0-section { background:rgba(122,58,0,0.12); border:1px solid rgba(122,58,0,0.3); border-radius:8px; padding:12px 14px; margin-bottom:14px; }
+.l0-section h4 { color:#ff8c00; font-size:0.85em; margin-bottom:8px; }
+.l0-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; font-size:0.78em; }
+.l0-kpi { text-align:center; }
+.l0-kpi .lk  { color:#8b949e; }
+.l0-kpi .lv  { font-weight:700; color:#ff8c00; }
+
+/* Reason text */
+.reason-box { background:rgba(255,255,255,0.04); border-left:3px solid #58a6ff; padding:8px 12px; border-radius:4px; font-size:0.8em; color:#e6edf3; margin-bottom:14px; }
+
+/* Loader */
+.loader { text-align:center; padding:60px; color:#8b949e; }
+
+/* Category filters */
+.cat-filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.cat-btn { padding:5px 14px; border:1px solid rgba(255,255,255,0.12); border-radius:14px; background:transparent; color:#8b949e; cursor:pointer; font-size:0.78em; transition:all .15s; }
+.cat-btn:hover,.cat-btn.active { background:#58a6ff22; border-color:#58a6ff; color:#58a6ff; }
+
+@media(max-width:900px){ .col-ragione,.col-sma200 { display:none; } }
+@media(max-width:600px){ .etf-table td,.col-header th { font-size:0.72em; padding:6px 5px; } }
+</style>
 </head>
 <body>
-    <div class="header">
-        <div class="header-left">
-            <h1>ETF Monitor</h1>
-            <div class="summary-bar">
-                <div class="summary-item total"><span class="number" id="totalETFs">-</span><span class="label">Totali</span></div>
-                <div class="summary-item buy"><span class="number" id="buySignals">-</span><span class="label">BUY</span></div>
-                <div class="summary-item" style="color:#FF8C00"><span class="number" id="pullbackSignals" style="color:#FF8C00">-</span><span class="label">PULLBACK</span></div>
-                <div class="summary-item hold"><span class="number" id="holdSignals">-</span><span class="label">HOLD</span></div>
-                <div class="summary-item sell"><span class="number" id="sellSignals">-</span><span class="label">SELL</span></div>
-            </div>
-        </div>
-        <div class="last-update" id="lastUpdate">Caricamento...</div>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<div class="header">
+  <div class="header-left">
+    <h1>ETF Monitor</h1>
+    <div class="summary-bar">
+      <div class="sitem tot"><span class="num" id="totCount">–</span><span class="lbl">Totali</span></div>
+      <div class="sitem l0"><span class="num" id="l0Count">–</span><span class="lbl">L0</span></div>
+      <div class="sitem l1"><span class="num" id="l1Count">–</span><span class="lbl">L1</span></div>
+      <div class="sitem l2"><span class="num" id="l2Count">–</span><span class="lbl">L2</span></div>
+      <div class="sitem l3"><span class="num" id="l3Count">–</span><span class="lbl">L3</span></div>
+    </div>
+  </div>
+  <div class="last-update" id="lastUpdate">Caricamento...</div>
+</div>
+
+<!-- ── Column header ──────────────────────────────────────────────────────── -->
+<div class="col-header">
+  <table>
+    <colgroup>
+      <col class="col-nome"><col class="col-ticker"><col class="col-prezzo">
+      <col class="col-pct"><col class="col-pct"><col class="col-pct">
+      <col class="col-ema20"><col class="col-sma50"><col class="col-sma200">
+      <col class="col-rsi"><col class="col-adx">
+      <col class="col-buy"><col class="col-ragione">
+    </colgroup>
+    <tr>
+      <th>ETF</th><th>Ticker</th><th>Prezzo</th>
+      <th>%1G</th><th>%1W</th><th>%1M</th>
+      <th>EMA20</th><th>SMA50</th><th>SMA200</th>
+      <th>RSI</th><th>ADX</th>
+      <th>Cond.</th><th>Segnale</th>
+    </tr>
+  </table>
+</div>
+
+<!-- ── Main content ───────────────────────────────────────────────────────── -->
+<div class="container">
+  <div id="catFilters" class="cat-filters" style="display:none"></div>
+  <div id="mainContent"><div class="loader">Caricamento dati...</div></div>
+</div>
+
+<!-- ── Modal ─────────────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+  <div class="modal" id="modalContent">
+    <button class="modal-close" onclick="closeModal()">&#x2715;</button>
+    <div id="modalBody"><div class="loader">Caricamento...</div></div>
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+let allData = null;
+let activeCat = 'all';
+
+// ── Init ──────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => { loadDashboard(); });
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
+
+async function loadDashboard() {
+  try {
+    const res = await fetch('/data/dashboard_data.json');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    allData = await res.json();
+    renderDashboard(allData);
+  } catch(e) {
+    document.getElementById('mainContent').innerHTML =
+      `<div class="loader" style="color:#f85149">Errore: ${e.message} — <a href="/api/trigger-update" style="color:#58a6ff">Aggiorna</a></div>`;
+  }
+}
+
+function renderDashboard(data) {
+  // Summary
+  const s = data.summary || {};
+  document.getElementById('totCount').textContent = s.total_etfs || 0;
+  document.getElementById('l0Count').textContent  = s.l0_count || 0;
+  document.getElementById('l1Count').textContent  = s.l1_count || 0;
+  document.getElementById('l2Count').textContent  = s.l2_count || 0;
+  document.getElementById('l3Count').textContent  = s.l3_count || 0;
+
+  // Last update
+  if (data.last_update) {
+    const d = new Date(data.last_update);
+    document.getElementById('lastUpdate').textContent =
+      `Aggiornato: ${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`;
+  }
+
+  // Category filters
+  const cats = Object.keys(data.categories || {});
+  const cf = document.getElementById('catFilters');
+  if (cats.length > 1) {
+    cf.style.display = 'flex';
+    cf.innerHTML = `<button class="cat-btn active" onclick="filterCat('all',this)">Tutte</button>` +
+      cats.map(c => `<button class="cat-btn" onclick="filterCat('${c}',this)">${c}</button>`).join('');
+  }
+
+  // Level sections
+  const levels = data.levels || {};
+  const html = [];
+  for (const [lvl, label, cls] of [
+    ['0','L0 — Deep Recovery','level-0'],
+    ['1','L1 — Trend Sicuro','level-1'],
+    ['2','L2 — Watchlist','level-2'],
+    ['3','L3 — Universo','level-3'],
+  ]) {
+    const list = (levels[lvl] || levels[parseInt(lvl)] || []);
+    html.push(renderLevelSection(parseInt(lvl), label, cls, list));
+  }
+  document.getElementById('mainContent').innerHTML = html.join('');
+}
+
+function filterCat(cat, btn) {
+  activeCat = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  if (!allData) return;
+  const levels = allData.levels || {};
+  for (const lvl of [0,1,2,3]) {
+    const tbody = document.getElementById(`tbody-${lvl}`);
+    if (!tbody) continue;
+    const list = levels[lvl] || levels[String(lvl)] || [];
+    const filtered = cat==='all' ? list : list.filter(e => e.categoria===cat);
+    tbody.innerHTML = filtered.length
+      ? filtered.map(e => renderETFRow(e, lvl)).join('')
+      : `<tr><td colspan="13" class="empty-msg">Nessun ETF</td></tr>`;
+  }
+}
+
+function renderLevelSection(lvl, label, cls, list) {
+  const count = list.length;
+  return `
+  <div class="level-section ${cls}">
+    <div class="level-header">
+      <span>${label} <span class="count">(${count} ETF)</span></span>
+    </div>
+    <table class="etf-table">
+      <colgroup>
+        <col class="col-nome"><col class="col-ticker"><col class="col-prezzo">
+        <col class="col-pct"><col class="col-pct"><col class="col-pct">
+        <col class="col-ema20"><col class="col-sma50"><col class="col-sma200">
+        <col class="col-rsi"><col class="col-adx">
+        <col class="col-buy"><col class="col-ragione">
+      </colgroup>
+      <tbody id="tbody-${lvl}">
+        ${count ? list.map(e => renderETFRow(e, lvl)).join('') : '<tr><td colspan="13" class="empty-msg">Nessun ETF</td></tr>'}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function renderETFRow(e, lvl) {
+  const ticker = e.ticker || '';
+  const isin   = e.isin   || '';
+  const key    = encodeURIComponent(ticker || isin);
+
+  // Price
+  const price  = e.price != null ? fmtNum(e.price, 4) : '—';
+
+  // % changes
+  const pct1g  = fmtPct(e.pct_1d);
+  const pct1w  = fmtPct(e.pct_1w);
+  const pct1m  = fmtPct(e.pct_1m);
+
+  // MAs
+  const ema20  = e.ema20  != null ? fmtNum(e.ema20, 4)  : '—';
+  const sma50  = e.sma50  != null ? fmtNum(e.sma50, 4)  : '—';
+
+  // SMA200 regime indicator
+  let sma200Html = '—';
+  if (e.sma200 != null) {
+    const isBull = e.price != null && e.price > e.sma200;
+    sma200Html = `<span class="regime-${isBull?'bull':'bear'}">${isBull?'▲ Bull':'▼ Bear'}</span>`;
+  }
+
+  // RSI
+  const rsiHtml = fmtRsi(e.rsi);
+
+  // ADX
+  const adxHtml = fmtAdx(e.adx);
+
+  // Buy count badge
+  const bc   = e.buy_count || 0;
+  const dots = [0,1,2,3,4].map(i =>
+    `<div class="buy-dot ${i < bc ? 'on' : ''}"></div>`
+  ).join('');
+  const buyHtml = `<div class="buy-badge"><div class="buy-dots">${dots}</div><span class="buy-count-num ${bc>=5?'all':''}">${bc}/5</span></div>`;
+
+  // L0: show drawdown instead of buy count
+  let extraCell = buyHtml;
+  if (lvl === 0 && e.drawdown_from_peak != null) {
+    extraCell = `<span class="dd-pill">-${fmtNum(e.drawdown_from_peak,1)}%</span>`;
+  }
+
+  // Reason (truncated)
+  const reason = (e.level_reason || '').substring(0, 60);
+  const nome   = e.nome || ticker;
+  const typeTag= e.etf_type ? `<span class="etf-type-tag">${e.etf_type.replace('equity_','').replace('_',' ')}</span>` : '';
+
+  return `<tr onclick="openETFDetail('${key}','${ticker}','${isin}')">
+    <td class="col-nome"><div class="etf-nome">${nome}${typeTag}</div></td>
+    <td class="col-ticker" style="color:#8b949e">${ticker}</td>
+    <td class="col-prezzo" style="font-weight:600">${price}</td>
+    <td class="col-pct">${pct1g}</td>
+    <td class="col-pct">${pct1w}</td>
+    <td class="col-pct">${pct1m}</td>
+    <td class="col-ema20" style="color:#58a6ff">${ema20}</td>
+    <td class="col-sma50" style="color:#a5d6ff">${sma50}</td>
+    <td class="col-sma200">${sma200Html}</td>
+    <td class="col-rsi">${rsiHtml}</td>
+    <td class="col-adx">${adxHtml}</td>
+    <td class="col-buy">${extraCell}</td>
+    <td class="col-ragione" style="color:#8b949e;font-size:0.78em">${reason}</td>
+  </tr>`;
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────
+async function openETFDetail(key, ticker, isin) {
+  const overlay = document.getElementById('modalOverlay');
+  document.getElementById('modalBody').innerHTML = '<div class="loader">Caricamento dettaglio...</div>';
+  overlay.classList.add('open');
+
+  try {
+    const params = ticker ? `ticker=${encodeURIComponent(ticker)}` : `isin=${encodeURIComponent(isin)}`;
+    const res  = await fetch(`/api/etf-detail?${params}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderModal(data);
+  } catch(e) {
+    // Fallback: search in allData
+    let etfData = null;
+    if (allData) {
+      for (const list of Object.values(allData.levels || {})) {
+        etfData = list.find(x => x.ticker===ticker || x.isin===isin);
+        if (etfData) break;
+      }
+    }
+    if (etfData) renderModal(etfData);
+    else document.getElementById('modalBody').innerHTML =
+      `<div class="loader" style="color:#f85149">Errore: ${e.message}</div>`;
+  }
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+}
+
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+}
+
+function renderModal(e) {
+  const lvl = e.suggested_level != null ? e.suggested_level
+            : (e.conditions && e.conditions.suggested_level != null ? e.conditions.suggested_level : '—');
+  const lvlBadge = `<span class="lv-badge lv${lvl}">L${lvl}</span>`;
+
+  const etf_type = e.etf_type || 'equity_developed';
+
+  // Regime
+  let regimeHtml = '';
+  if (e.sma200 != null) {
+    const bull = e.price != null && e.price > e.sma200;
+    regimeHtml = `<div class="regime-bar ${bull?'bull':'bear'}">
+      ${bull ? '▲ Bull Market — Prezzo sopra SMA200' : '▼ Bear Market — Prezzo sotto SMA200 (ingressi L1 bloccati)'}
+      &nbsp;(SMA200: ${fmtNum(e.sma200,4)})
+    </div>`;
+  }
+
+  // KPI cards
+  const kpis = [
+    ['Prezzo',      e.price  != null ? fmtNum(e.price,4)  : '—', ''],
+    ['EMA20',       e.ema20  != null ? fmtNum(e.ema20,4)  : '—', 'color:#58a6ff'],
+    ['SMA50',       e.sma50  != null ? fmtNum(e.sma50,4)  : '—', 'color:#a5d6ff'],
+    ['SMA200',      e.sma200 != null ? fmtNum(e.sma200,4) : '—', e.price>e.sma200?'color:#3fb950':'color:#f85149'],
+    ['RSI14',       e.rsi    != null ? e.rsi.toFixed(1)   : '—', rsiColor(e.rsi)],
+    ['ADX14',       e.adx    != null ? e.adx.toFixed(1)   : '—', adxColor(e.adx)],
+    ['MACD Hist',   e.macd_histogram != null ? fmtNum(e.macd_histogram,4) : '—', e.macd_histogram>0?'color:#3fb950':'color:#f85149'],
+    ['Dist EMA20',  e.dist_ema20 != null ? `${e.dist_ema20.toFixed(2)}%` : '—', ''],
+    ['%1G',         fmtPctRaw(e.pct_1d), pctColor(e.pct_1d)],
+    ['%1W',         fmtPctRaw(e.pct_1w), pctColor(e.pct_1w)],
+    ['%1M',         fmtPctRaw(e.pct_1m), pctColor(e.pct_1m)],
+    ['Drawdown',    e.drawdown_from_peak != null ? `-${e.drawdown_from_peak.toFixed(2)}%` : '—', e.drawdown_from_peak>10?'color:#f85149':'color:#8b949e'],
+  ];
+  const kpiHtml = kpis.map(([l,v,s]) =>
+    `<div class="kpi-card"><div class="kpi-label">${l}</div><div class="kpi-value" style="${s}">${v}</div></div>`
+  ).join('');
+
+  // Conditions
+  const cond = e.conditions || {};
+  const condMap = [
+    ['allineamento_ok', 'Allineamento: Prezzo>EMA20>SMA50'],
+    ['persistenza_ok',  'Persistenza: ≥3gg sopra EMA20 + slope↑'],
+    ['rsi_ok',          `RSI nel range target (${cond.rsi!=null?cond.rsi.toFixed(0):'—'})`],
+    ['distance_ok',     `Distanza EMA20 ≤ max (${cond.dist_ema20!=null?cond.dist_ema20.toFixed(1)+'%':'—'})`],
+    ['adx_ok',          `ADX ≥ soglia (${cond.adx!=null?cond.adx.toFixed(0):'—'})`],
+  ];
+  const condHtml = condMap.map(([k, label]) => {
+    const ok = cond[k];
+    const dotClass = ok===true?'ok':ok===false?'no':'na';
+    return `<div class="cond-item"><div class="cond-dot ${dotClass}"></div><span>${label}</span></div>`;
+  }).join('');
+
+  // L0 section (if in L0 or has drawdown info)
+  let l0Html = '';
+  if ((e.l0_entry || lvl===0) && e.drawdown_from_peak != null) {
+    const l0d = e.l0_data || {};
+    l0Html = `<div class="l0-section">
+      <h4>Deep Recovery (L0)</h4>
+      <div class="l0-grid">
+        <div class="l0-kpi"><div class="lk">Drawdown</div><div class="lv">-${fmtNum(e.drawdown_from_peak,1)}%</div></div>
+        <div class="l0-kpi"><div class="lk">Picco</div><div class="lv">${e.peak_price!=null?fmtNum(e.peak_price,4):'—'}</div></div>
+        <div class="l0-kpi"><div class="lk">RSI</div><div class="lv">${cond.rsi!=null?cond.rsi.toFixed(1):'—'}</div></div>
+        <div class="l0-kpi"><div class="lk">Divergenza</div><div class="lv">${l0d.divergence?'Sì':'No'}</div></div>
+      </div>
+    </div>`;
+  }
+
+  // Exit rule
+  let exitHtml = '';
+  if (cond.exit_rule) {
+    exitHtml = `<div class="reason-box" style="border-left-color:#f85149">Uscita: ${cond.exit_rule}</div>`;
+  }
+
+  document.getElementById('modalBody').innerHTML = `
+    <div class="modal-title">${e.nome || e.ticker}</div>
+    <div class="modal-sub">
+      ${lvlBadge}&nbsp;
+      <span style="color:#8b949e">${e.ticker || ''}</span>
+      ${e.isin?`&nbsp;·&nbsp;<span style="color:#8b949e">${e.isin}</span>`:''}
+      &nbsp;·&nbsp;<span style="color:#8b949e">${e.etf_type||''}</span>
     </div>
 
-    <div class="column-header">
-        <table>
-            <colgroup><col class="col-etf"><col class="col-ticker"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ema"><col class="col-sma"><col class="col-rsi"><col class="col-macd"><col class="col-bbw"><col class="col-buy"></colgroup>
-            <tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>BUY</th></tr>
-        </table>
+    ${regimeHtml}
+    ${exitHtml}
+    ${l0Html}
+
+    <div class="kpi-grid">${kpiHtml}</div>
+
+    <div class="cond-section">
+      <div class="cond-title">Condizioni L1 Trend Sicuro (${e.buy_count||0}/5)</div>
+      <div class="cond-grid">${condHtml}</div>
     </div>
 
-    <div class="container">
+    <div class="reason-box">${e.level_reason || e.conditions?.level_reason || 'N/D'}</div>
 
-        <div class="legend">
-            <strong>Condizioni BUY (5/5 richieste):</strong>
-            1. Prezzo &gt; EMA13 &amp; SMA50 per 3+ gg |
-            2. EMA13 &gt; SMA50 (Golden Cross) |
-            3. RSI 55-65 |
-            4. MACD positivo e crescente |
-            5. Bollinger Band Width in espansione
-            <br><strong style="color:#FF8C00">Filtro Pullback:</strong> Se 5/5 ma Prezzo &gt; 5% da EMA13 &rarr; BUY sospeso. Limit Order suggerito: EMA13 + 2%
-            &nbsp; | &nbsp; <em>Fonte dati: JustETF</em>
-        </div>
+    ${renderPriceHistory(e.price_history)}
+  `;
+}
 
-        <div class="category-filters" id="categoryFilters"></div>
+function renderPriceHistory(hist) {
+  if (!hist || hist.length < 5) return '';
+  const prices = hist.map(p => p.close);
+  const dates  = hist.map(p => p.date);
+  const min    = Math.min(...prices);
+  const max    = Math.max(...prices);
+  const range  = max - min || 1;
+  const W = 680, H = 90, pad = 10;
+  const pts = prices.map((p, i) => {
+    const x = pad + (i / (prices.length - 1)) * (W - pad * 2);
+    const y = H - pad - ((p - min) / range) * (H - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const lastP = prices[prices.length - 1];
+  const firstP = prices[0];
+  const trend  = lastP >= firstP ? '#3fb950' : '#f85149';
+  return `
+  <div style="margin-top:14px">
+    <div class="cond-title">Andamento (${hist.length} gg)</div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px;background:rgba(255,255,255,0.02);border-radius:6px;margin-top:6px">
+      <polyline points="${pts}" fill="none" stroke="${trend}" stroke-width="1.5" stroke-linejoin="round"/>
+    </svg>
+  </div>`;
+}
 
-        <div class="level-section level-1">
-            <div class="level-header"><span>LIVELLO 1 - BUY Alert</span><span id="l1Count">0 ETF</span></div>
-            <table class="fund-table">
-                <colgroup><col class="col-etf"><col class="col-ticker"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ema"><col class="col-sma"><col class="col-rsi"><col class="col-macd"><col class="col-bbw"><col class="col-buy"></colgroup>
-                <thead><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>BUY</th></tr></thead>
-                <tbody id="level1Body"></tbody>
-            </table>
-        </div>
+// ── Formatters ────────────────────────────────────────────────────────────
+function fmtNum(v, dec=2) {
+  if (v == null || isNaN(v)) return '—';
+  return parseFloat(v).toFixed(dec);
+}
 
-        <div class="level-section level-2">
-            <div class="level-header"><span>LIVELLO 2 - Watchlist</span><span id="l2Count">0 ETF</span></div>
-            <table class="fund-table">
-                <colgroup><col class="col-etf"><col class="col-ticker"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ema"><col class="col-sma"><col class="col-rsi"><col class="col-macd"><col class="col-bbw"><col class="col-buy"></colgroup>
-                <thead><tr><th>ETF</th><th>Ticker</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>BUY</th></tr></thead>
-                <tbody id="level2Body"></tbody>
-            </table>
-        </div>
+function fmtPct(v) {
+  if (v == null || isNaN(v)) return '<span class="pct zero">—</span>';
+  const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+  const sign = v > 0 ? '+' : '';
+  return `<span class="pct ${cls}">${sign}${parseFloat(v).toFixed(2)}%</span>`;
+}
 
-        <div class="level-section level-3">
-            <div class="level-header"><span>LIVELLO 3 - Universe</span><span id="l3Count">0 ETF</span></div>
-            <table class="fund-table">
-                <colgroup><col class="col-etf"><col class="col-ticker"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ema"><col class="col-sma"><col class="col-rsi"><col class="col-macd"><col class="col-bbw"><col class="col-buy"></colgroup>
-                <thead><tr><th>ETF</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>EMA13</th><th>SMA50</th><th>RSI</th><th>MACD</th><th>BB W</th><th>BUY</th></tr></thead>
-                <tbody id="level3Body"></tbody>
-            </table>
-        </div>
-    </div>
+function fmtPctRaw(v) {
+  if (v == null || isNaN(v)) return '—';
+  const sign = v > 0 ? '+' : '';
+  return `${sign}${parseFloat(v).toFixed(2)}%`;
+}
 
-    <script>
-        let allData = null;
-        let activeCategory = 'all';
+function pctColor(v) {
+  if (v == null) return '';
+  return v > 0 ? 'color:#3fb950' : v < 0 ? 'color:#f85149' : 'color:#8b949e';
+}
 
-        async function loadData() {
-            try {
-                const response = await fetch('data/dashboard_data.json');
-                allData = await response.json();
-                renderDashboard();
-            } catch (e) {
-                document.getElementById('lastUpdate').textContent = 'Errore caricamento dati';
-                console.error(e);
-            }
-        }
+function fmtRsi(v) {
+  if (v == null) return '—';
+  let cls = 'mid';
+  if (v < 35)       cls = 'oversold';
+  else if (v <= 65) cls = 'optimal';
+  else if (v <= 75) cls = 'mid';
+  else              cls = 'overbought';
+  return `<span class="rsi-val ${cls}">${parseFloat(v).toFixed(1)}</span>`;
+}
 
-        function renderDashboard() {
-            if (!allData) return;
+function rsiColor(v) {
+  if (v == null) return '';
+  if (v < 35)       return 'color:#58a6ff';
+  if (v <= 65)      return 'color:#3fb950';
+  if (v <= 75)      return 'color:#d29922';
+  return 'color:#f85149';
+}
 
-            const dt = new Date(allData.last_update);
-            document.getElementById('lastUpdate').textContent = `Ultimo aggiornamento: ${dt.toLocaleString('it-IT')}`;
+function fmtAdx(v) {
+  if (v == null) return '—';
+  let cls = v >= 20 ? 'strong' : v >= 15 ? 'mid' : 'weak';
+  return `<span class="adx-val ${cls}">${parseFloat(v).toFixed(1)}</span>`;
+}
 
-            document.getElementById('totalETFs').textContent = allData.summary.total_etfs || 0;
-            document.getElementById('buySignals').textContent = allData.summary.buy_signals || 0;
-            document.getElementById('pullbackSignals').textContent = allData.summary.pullback_signals || 0;
-            document.getElementById('holdSignals').textContent = allData.summary.hold_signals || 0;
-            document.getElementById('sellSignals').textContent = allData.summary.sell_signals || 0;
-
-            // Category filters
-            const categories = Object.keys(allData.categories || {});
-            const filterHtml = `<button class="cat-btn ${activeCategory==='all'?'active':''}" onclick="filterCategory('all')">Tutti</button>` +
-                categories.map(c => `<button class="cat-btn ${activeCategory===c?'active':''}" onclick="filterCategory('${c}')">${c}</button>`).join('');
-            document.getElementById('categoryFilters').innerHTML = filterHtml;
-
-            renderLevel(1, allData.levels['1'] || []);
-            renderLevel(2, allData.levels['2'] || []);
-            renderLevel(3, allData.levels['3'] || []);
-        }
-
-        function filterCategory(cat) {
-            activeCategory = cat;
-            renderDashboard();
-        }
-
-        function renderLevel(level, etfs) {
-            const filtered = activeCategory === 'all' ? etfs : etfs.filter(f => f.categoria === activeCategory);
-            const tbody = document.getElementById(`level${level}Body`);
-            document.getElementById(`l${level}Count`).textContent = `${filtered.length} ETF`;
-
-            if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="12" class="empty-msg">Nessun ETF in questo livello</td></tr>`;
-                return;
-            }
-
-            tbody.innerHTML = filtered.map(f => {
-                const rsiClass = f.rsi < 30 ? 'low' : f.rsi > 70 ? 'high' : 'mid';
-                const macdH = f.macd_histogram;
-                const macdClass = macdH > 0 ? 'positive' : macdH < 0 ? 'negative' : 'neutral';
-                const bbwClass = f.bb_width >= 5 ? 'wide' : 'narrow';
-                const secondCol = level === 3 ? f.categoria : f.ticker;
-                const isinTip = f.isin ? f.isin + ' | ' + f.ticker : f.ticker;
-                const distTip = f.distance_from_ema != null ? `Dist. EMA13: ${f.distance_from_ema.toFixed(1)}%` : '';
-                const fmtPct = v => {
-                    if (v == null) return '<td class="pct zero">-</td>';
-                    const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
-                    const sign = v > 0 ? '+' : '';
-                    return `<td class="pct ${cls}">${sign}${v.toFixed(2)}%</td>`;
-                };
-
-                // Colonna BUY con filtro pullback
-                let buyCell;
-                if (f.pullback_active) {
-                    const limitTxt = f.limit_order_price ? `Limit: ${f.limit_order_price.toFixed(2)}` : '';
-                    buyCell = `<td class="buy-count pullback" title="${distTip}">${f.buy_count}/5<span class="pullback-tag">PB</span><span class="limit-price">${limitTxt}</span></td>`;
-                } else if (f.buy_count === 5) {
-                    buyCell = `<td class="buy-count full-buy" title="${distTip}">${f.buy_count}/5</td>`;
-                } else {
-                    buyCell = `<td class="buy-count" title="${distTip}">${f.buy_count || 0}/5</td>`;
-                }
-
-                return `<tr>
-                    <td class="etf-name" title="${isinTip}">${f.nome || '-'}</td>
-                    <td>${secondCol || '-'}</td>
-                    <td>${f.price ? f.price.toFixed(2) : '-'}</td>
-                    ${fmtPct(f.pct_1d)}
-                    ${fmtPct(f.pct_1w)}
-                    ${fmtPct(f.pct_1m)}
-                    <td>${f.ema13 ? f.ema13.toFixed(2) : '-'}</td>
-                    <td>${f.sma50 ? f.sma50.toFixed(2) : '-'}</td>
-                    <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '-'}</td>
-                    <td class="macd ${macdClass}">${macdH != null ? macdH.toFixed(2) : '-'}</td>
-                    <td class="bbw ${bbwClass}">${f.bb_width ? f.bb_width.toFixed(1) : '-'}</td>
-                    ${buyCell}
-                </tr>`;
-            }).join('');
-        }
-
-        loadData();
-        setInterval(loadData, 60000);
-    </script>
+function adxColor(v) {
+  if (v == null) return '';
+  return v >= 20 ? 'color:#3fb950' : v >= 15 ? 'color:#d29922' : 'color:#f85149';
+}
+</script>
 </body>
 </html>

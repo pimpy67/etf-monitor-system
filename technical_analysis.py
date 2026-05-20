@@ -1,471 +1,630 @@
 """
-technical_analysis.py - Analisi tecnica per ETF (solo Close)
-=============================================================
-Indicatori basati solo sul prezzo di chiusura (Close):
-- EMA 13 (Exponential Moving Average veloce)
-- SMA 50 (Simple Moving Average lenta)
-- RSI 14 (Relative Strength Index)
-- MACD (Moving Average Convergence Divergence - conferma momentum)
-- Bollinger Band Width (misura volatilita'/forza trend)
+technical_analysis.py - Analisi tecnica ETF
+=============================================
+Schema: EMA20 (fast) + SMA50 (medium) + SMA200 (regime filter)
+ADX14 reale (da OHLCV) + RSI14
 
-Logica BUY (tutte e 5 le condizioni):
-1. Prezzo > EMA13 e Prezzo > SMA50 per 3+ giorni
-2. EMA13 > SMA50 (golden cross)
-3. RSI tra 55 e 65
-4. MACD positivo e crescente (conferma momentum)
-5. Bollinger Band Width in espansione (trend forte)
-
-Logica SELL:
-1. Prezzo < EMA13 e Prezzo < SMA50 per 3+ giorni
-2. EMA13 < SMA50 (death cross)
-3. RSI > 75 o RSI < 25
+L0 Deep Recovery: ETF in drawdown profondo con segnali di rimbalzo
+L1 Trend Sicuro: 5 condizioni (allineamento, persistenza+slope, RSI, distanza, ADX)
+L2 Watchlist: allineamento parziale
+L3 Universo: monitoraggio passivo
 """
 
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List, Optional
 
 
 class ETFTechnicalAnalyzer:
-    """Analisi tecnica per ETF basata solo su prezzi Close"""
+    """Analisi tecnica ETF con EMA20 + SMA50 + SMA200 + ADX + RSI"""
 
-    def __init__(self, config: dict = None):
-        self.config = config or {}
+    # Profili parametri per tipo ETF
+    PROFILES = {
+        'equity_developed': {
+            'rsi_entry_low': 50, 'rsi_entry_high': 65,
+            'rsi_exit_min': 40,  'rsi_overbought': 78,
+            'ema_dist_max': 4.0, 'adx_entry': 20,
+            'l0_drawdown': 15.0, 'l0_rsi_max': 35,
+            'days_above_ema': 3, 'mm200_filter': True,
+        },
+        'equity_sector': {
+            'rsi_entry_low': 50, 'rsi_entry_high': 68,
+            'rsi_exit_min': 38,  'rsi_overbought': 80,
+            'ema_dist_max': 5.0, 'adx_entry': 22,
+            'l0_drawdown': 18.0, 'l0_rsi_max': 38,
+            'days_above_ema': 3, 'mm200_filter': True,
+        },
+        'equity_emerging': {
+            'rsi_entry_low': 50, 'rsi_entry_high': 65,
+            'rsi_exit_min': 38,  'rsi_overbought': 76,
+            'ema_dist_max': 5.0, 'adx_entry': 20,
+            'l0_drawdown': 20.0, 'l0_rsi_max': 38,
+            'days_above_ema': 3, 'mm200_filter': True,
+        },
+        'commodity': {
+            'rsi_entry_low': 48, 'rsi_entry_high': 65,
+            'rsi_exit_min': 38,  'rsi_overbought': 75,
+            'ema_dist_max': 5.0, 'adx_entry': 22,
+            'l0_drawdown': 20.0, 'l0_rsi_max': 40,
+            'days_above_ema': 3, 'mm200_filter': False,
+        },
+        'bond': {
+            'rsi_entry_low': 48, 'rsi_entry_high': 62,
+            'rsi_exit_min': 42,  'rsi_overbought': 70,
+            'ema_dist_max': 2.0, 'adx_entry': 15,
+            'l0_drawdown': 8.0,  'l0_rsi_max': 38,
+            'days_above_ema': 3, 'mm200_filter': False,
+        },
+        'thematic': {
+            'rsi_entry_low': 50, 'rsi_entry_high': 68,
+            'rsi_exit_min': 38,  'rsi_overbought': 80,
+            'ema_dist_max': 6.0, 'adx_entry': 22,
+            'l0_drawdown': 20.0, 'l0_rsi_max': 40,
+            'days_above_ema': 3, 'mm200_filter': True,
+        },
+    }
+    PROFILES['equity'] = PROFILES['equity_developed']  # alias
 
-        # Medie mobili
-        self.ema_fast_period = self.config.get('ema_fast_period', 13)
-        self.sma_slow_period = self.config.get('sma_slow_period', 50)
+    EQUITY_FAMILY = frozenset({'equity_developed', 'equity_sector', 'equity_emerging', 'thematic', 'equity'})
 
-        # RSI
-        self.rsi_period = self.config.get('rsi_period', 14)
-        self.rsi_buy_low = self.config.get('rsi_buy_low', 55)
-        self.rsi_buy_high = self.config.get('rsi_buy_high', 65)
-        self.rsi_overbought = self.config.get('rsi_overbought', 75)
-        self.rsi_oversold = self.config.get('rsi_oversold', 25)
+    def __init__(self, etf_type: str = 'equity_developed'):
+        self.etf_type = etf_type if etf_type in self.PROFILES else 'equity_developed'
+        self.p = self.PROFILES[self.etf_type]
 
-        # MACD
-        self.macd_fast = self.config.get('macd_fast', 12)
-        self.macd_slow = self.config.get('macd_slow', 26)
-        self.macd_signal = self.config.get('macd_signal', 9)
+        self.ema20_period  = 20
+        self.sma50_period  = 50
+        self.sma200_period = 200
+        self.rsi_period    = 14
+        self.adx_period    = 14
+        self.macd_fast     = 12
+        self.macd_slow     = 26
+        self.macd_signal_p = 9
 
-        # Bollinger Bands
-        self.bb_period = self.config.get('bb_period', 20)
-        self.bb_std = self.config.get('bb_std', 2)
+    # ── Indicator helpers ──────────────────────────────────────────────────────
 
-        # Giorni sopra MA per conferma
-        self.days_above_ma = self.config.get('days_above_ma', 3)
+    def _ema(self, s: pd.Series, period: int) -> pd.Series:
+        return s.ewm(span=period, adjust=False).mean()
 
-        # Filtro Pullback: distanza max da EMA13 per BUY diretto
-        self.pullback_max_distance = self.config.get('pullback_max_distance', 5.0)  # 5%
-        self.pullback_limit_offset = self.config.get('pullback_limit_offset', 2.0)  # EMA13 + 2%
+    def _sma(self, s: pd.Series, period: int) -> pd.Series:
+        return s.rolling(window=period).mean()
 
-    def calculate_ema(self, prices: pd.Series, period: int) -> pd.Series:
-        """Calcola Exponential Moving Average"""
-        return prices.ewm(span=period, adjust=False).mean()
+    def _rsi(self, s: pd.Series) -> pd.Series:
+        delta  = s.diff()
+        gains  = delta.where(delta > 0, 0.0)
+        losses = (-delta).where(delta < 0, 0.0)
+        ag = gains.ewm(com=self.rsi_period - 1, min_periods=self.rsi_period).mean()
+        al = losses.ewm(com=self.rsi_period - 1, min_periods=self.rsi_period).mean()
+        rs = ag / al.replace(0, np.nan)
+        return 100 - (100 / (1 + rs))
 
-    def calculate_sma(self, prices: pd.Series, period: int) -> pd.Series:
-        """Calcola Simple Moving Average"""
-        return prices.rolling(window=period).mean()
+    def _adx(self, high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
+        """ADX14 vero da dati OHLC."""
+        period = self.adx_period
+        tr = pd.concat([
+            high - low,
+            (high - close.shift(1)).abs(),
+            (low  - close.shift(1)).abs()
+        ], axis=1).max(axis=1)
+        dm_plus  = high.diff()
+        dm_minus = -low.diff()
+        dm_plus  = dm_plus.where((dm_plus > dm_minus) & (dm_plus > 0), 0.0)
+        dm_minus = dm_minus.where((dm_minus > dm_plus) & (dm_minus > 0), 0.0)
+        atr  = tr.ewm(com=period - 1, min_periods=period).mean()
+        safe = atr.replace(0, np.nan)
+        di_p = 100 * dm_plus.ewm(com=period - 1, min_periods=period).mean() / safe
+        di_m = 100 * dm_minus.ewm(com=period - 1, min_periods=period).mean() / safe
+        dx   = 100 * (di_p - di_m).abs() / (di_p + di_m).replace(0, np.nan)
+        return dx.ewm(com=period - 1, min_periods=period).mean()
 
-    def calculate_rsi(self, prices: pd.Series, period: int = None) -> pd.Series:
-        """Calcola Relative Strength Index (0-100)"""
-        period = period or self.rsi_period
-        delta = prices.diff()
+    def _adx_close_only(self, close: pd.Series) -> pd.Series:
+        """ADX approssimato solo da Close (fallback se no OHLC)."""
+        period = self.adx_period
+        delta    = close.diff()
+        plus_dm  = delta.clip(lower=0)
+        minus_dm = (-delta).clip(lower=0)
+        tr       = delta.abs()
+        alpha    = 1.0 / period
+        atr      = tr.ewm(alpha=alpha, adjust=False).mean()
+        safe     = atr.replace(0, np.nan)
+        di_p     = 100 * (plus_dm.ewm(alpha=alpha, adjust=False).mean() / safe)
+        di_m     = 100 * (minus_dm.ewm(alpha=alpha, adjust=False).mean() / safe)
+        dx       = 100 * (di_p - di_m).abs() / (di_p + di_m).replace(0, np.nan)
+        return dx.ewm(alpha=alpha, adjust=False).mean()
 
-        gains = delta.where(delta > 0, 0)
-        losses = (-delta).where(delta < 0, 0)
+    def _macd(self, s: pd.Series) -> Dict:
+        fast   = s.ewm(span=self.macd_fast, adjust=False).mean()
+        slow   = s.ewm(span=self.macd_slow, adjust=False).mean()
+        line   = fast - slow
+        signal = line.ewm(span=self.macd_signal_p, adjust=False).mean()
+        return {'line': line, 'signal': signal, 'histogram': line - signal}
 
-        avg_gain = gains.ewm(com=period - 1, min_periods=period).mean()
-        avg_loss = losses.ewm(com=period - 1, min_periods=period).mean()
+    def _slope(self, s: pd.Series, window: int = 5) -> float:
+        vals = s.dropna().tail(window).values
+        if len(vals) < 2:
+            return 0.0
+        x = np.arange(len(vals))
+        return float(np.polyfit(x, vals, 1)[0])
 
-        rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
-
-    def calculate_macd(self, prices: pd.Series) -> Dict:
-        """
-        Calcola MACD (Moving Average Convergence Divergence).
-
-        Returns:
-            Dict con 'macd_line', 'signal_line', 'histogram' (pd.Series)
-        """
-        ema_fast = prices.ewm(span=self.macd_fast, adjust=False).mean()
-        ema_slow = prices.ewm(span=self.macd_slow, adjust=False).mean()
-
-        macd_line = ema_fast - ema_slow
-        signal_line = macd_line.ewm(span=self.macd_signal, adjust=False).mean()
-        histogram = macd_line - signal_line
-
-        return {
-            'macd_line': macd_line,
-            'signal_line': signal_line,
-            'histogram': histogram
-        }
-
-    def calculate_bollinger_bands(self, prices: pd.Series) -> Dict:
-        """
-        Calcola Bollinger Bands e Band Width.
-
-        Returns:
-            Dict con 'upper', 'middle', 'lower', 'width', 'pct_b' (pd.Series)
-        """
-        middle = prices.rolling(window=self.bb_period).mean()
-        std = prices.rolling(window=self.bb_period).std()
-
-        upper = middle + (std * self.bb_std)
-        lower = middle - (std * self.bb_std)
-
-        # Band Width: (upper - lower) / middle * 100
-        width = pd.Series(0.0, index=prices.index)
-        mask = middle > 0
-        width[mask] = (upper[mask] - lower[mask]) / middle[mask] * 100
-
-        # %B: posizione del prezzo rispetto alle bande (0=lower, 1=upper)
-        band_range = upper - lower
-        pct_b = pd.Series(0.5, index=prices.index)
-        mask = band_range > 0
-        pct_b[mask] = (prices[mask] - lower[mask]) / band_range[mask]
-
-        return {
-            'upper': upper,
-            'middle': middle,
-            'lower': lower,
-            'width': width,
-            'pct_b': pct_b
-        }
-
-    def count_days_above(self, prices: pd.Series, ma: pd.Series, max_days: int = 10) -> int:
-        """Conta giorni consecutivi con prezzo sopra la media mobile"""
-        if len(prices) < 2 or len(ma) < 2:
-            return 0
-
+    def _days_above(self, price: pd.Series, ma: pd.Series, max_check: int = 10) -> int:
         count = 0
-        for i in range(1, min(max_days + 1, len(prices))):
-            idx = -i
-            if len(prices) >= abs(idx) and len(ma) >= abs(idx):
-                price = prices.iloc[idx]
-                ma_val = ma.iloc[idx]
-                if pd.notna(ma_val) and price > ma_val:
-                    count += 1
-                else:
-                    break
+        for i in range(1, min(max_check + 1, len(price))):
+            p, m = price.iloc[-i], ma.iloc[-i]
+            if pd.notna(m) and p > m:
+                count += 1
             else:
                 break
         return count
 
-    def count_days_below(self, prices: pd.Series, ma: pd.Series, max_days: int = 10) -> int:
-        """Conta giorni consecutivi con prezzo sotto la media mobile"""
-        if len(prices) < 2 or len(ma) < 2:
-            return 0
-
+    def _days_below(self, price: pd.Series, ma: pd.Series, max_check: int = 10) -> int:
         count = 0
-        for i in range(1, min(max_days + 1, len(prices))):
-            idx = -i
-            if len(prices) >= abs(idx) and len(ma) >= abs(idx):
-                price = prices.iloc[idx]
-                ma_val = ma.iloc[idx]
-                if pd.notna(ma_val) and price < ma_val:
-                    count += 1
-                else:
-                    break
+        for i in range(1, min(max_check + 1, len(price))):
+            p, m = price.iloc[-i], ma.iloc[-i]
+            if pd.notna(m) and p < m:
+                count += 1
             else:
                 break
         return count
 
-    def detect_crossover(self, ema_fast: pd.Series, sma_slow: pd.Series) -> str:
+    def _fval(self, s: pd.Series) -> Optional[float]:
+        v = s.iloc[-1] if len(s) > 0 else None
+        return float(v) if v is not None and pd.notna(v) else None
+
+    # ── Divergenza / recupero (copiato da fund system) ─────────────────────────
+
+    def _detect_positive_divergence(self, prices: pd.Series, rsi: pd.Series,
+                                     window: int = 30, recent: int = 10) -> bool:
+        rsi_c = rsi.dropna()
+        if len(prices) < window or len(rsi_c) < window:
+            return False
+        pw = prices.tail(window)
+        rw = rsi_c.tail(window)
+        rp = pw.tail(recent)
+        rr = rw.tail(recent)
+        if len(rp) < 3:
+            return False
+        ri  = int(rp.values.argmin())
+        r_p = float(rp.iloc[ri]);  r_r = float(rr.iloc[ri])
+        op  = pw.iloc[:-recent];   or_ = rw.iloc[:-recent]
+        if len(op) < 5:
+            return False
+        oi  = int(op.values.argmin())
+        o_p = float(op.iloc[oi]);  o_r = float(or_.iloc[oi])
+        return (r_p < o_p) and (r_r > o_r)
+
+    def _detect_rsi_recovery(self, rsi: pd.Series, oversold: float = 30.0,
+                              recovery: float = 32.0, lookback: int = 10) -> bool:
+        rc = rsi.dropna()
+        if len(rc) < 3:
+            return False
+        recent = rc.tail(lookback)
+        return (any(v < oversold for v in recent.iloc[:-1]) and
+                float(recent.iloc[-1]) > recovery)
+
+    def _detect_micro_breakout(self, prices: pd.Series, lookback: int = 5,
+                                min_pct: float = 0.3) -> bool:
+        if len(prices) < lookback + 2:
+            return False
+        recent_high = float(prices.iloc[-(lookback + 1):-1].max())
+        current     = float(prices.iloc[-1])
+        return recent_high > 0 and current > recent_high * (1 + min_pct / 100)
+
+    # ── L0 Deep Recovery ──────────────────────────────────────────────────────
+
+    def suggest_level_0(self, prices: pd.Series, current_level: int) -> Dict:
         """
-        Rileva incrocio tra EMA veloce e SMA lenta.
+        Valuta le condizioni L0 'Deep Recovery'.
 
-        Returns:
-            'golden_cross', 'death_cross' o 'neutral'
+        Entrata (tutte e 4 obbligatorie):
+          1. Prezzo almeno l0_drawdown% sotto il picco
+          2. RSI < l0_rsi_max (ipervenduto)
+          3. Divergenza rialzista
+          4. Segnale di recupero: RSI risalito > 32 OPPURE micro-breakout
+
+        Uscita (se gia' in L0, basta 1):
+          α: prezzo < panic_low (stop assoluto)    [gestito in monitor.py]
+          β: RSI < 25 dopo ingresso (trappola)
+          γ: prezzo > EMA20 (take profit → promuovi a L2)
+          ε: 30gg senza recupero                   [gestito in monitor.py]
         """
-        if len(ema_fast) < 2 or len(sma_slow) < 2:
-            return 'neutral'
+        result = {
+            'l0_entry': False, 'l0_exit_rule': None, 'l0_exit_trigger': None,
+            'peak_price': None, 'peak_days': None, 'distance_from_peak': None,
+            'rsi_oversold': False, 'divergence': False,
+            'rsi_recovery': False, 'micro_breakout': False,
+            'reason_codes': [],
+        }
 
-        ema_current = ema_fast.iloc[-1]
-        sma_current = sma_slow.iloc[-1]
+        if len(prices) < 20:
+            result['reason_codes'] = ['INSUFFICIENT_DATA']
+            return result
 
-        if pd.isna(ema_current) or pd.isna(sma_current):
-            return 'neutral'
+        rsi     = self._rsi(prices)
+        rsi_val = float(rsi.dropna().iloc[-1]) if len(rsi.dropna()) > 0 else 50.0
+        ema20   = self._ema(prices, self.ema20_period)
+        ema20_v = self._fval(ema20)
+        current = float(prices.iloc[-1])
 
-        if ema_current > sma_current:
-            return 'golden_cross'
-        elif ema_current < sma_current:
-            return 'death_cross'
-        return 'neutral'
+        result['rsi']           = round(rsi_val, 1)
+        result['ema20_current'] = round(ema20_v, 4) if ema20_v else None
+        result['current_price'] = round(current, 4)
 
-    def analyze_etf(self, close_df: pd.DataFrame, level: int = 3) -> Dict:
+        # Kill switch: crollo giornaliero >= 3%
+        kill_switch = False
+        if len(prices) >= 2 and float(prices.iloc[-2]) != 0:
+            daily_chg = (float(prices.iloc[-1]) - float(prices.iloc[-2])) / float(prices.iloc[-2]) * 100
+            kill_switch = daily_chg <= -3.0
+            result['daily_change_pct'] = round(daily_chg, 2)
+        result['kill_switch'] = kill_switch
+
+        n_panic = min(30, len(prices))
+        result['panic_low'] = float(prices.iloc[-n_panic:].min())
+
+        l0_rsi_thr = self.p['l0_rsi_max']
+
+        # ── Uscita (se gia' in L0) ────────────────────────────────────────────
+        if current_level == 0:
+            if ema20_v and current > ema20_v:
+                result['l0_exit_rule']    = 'gamma'
+                result['l0_exit_trigger'] = (
+                    f'Prezzo {current:.4f} > EMA20 {ema20_v:.4f} — take profit, promuovi a L2'
+                )
+                result['reason_codes'] = ['L0_EXIT_GAMMA']
+            elif rsi_val < 25:
+                result['l0_exit_rule']    = 'beta'
+                result['l0_exit_trigger'] = (
+                    f'RSI={rsi_val:.0f} < 25 dopo ingresso — trappola ribassista, esci'
+                )
+                result['reason_codes'] = ['L0_EXIT_BETA']
+            else:
+                result['reason_codes'] = ['L0_HOLD']
+            return result
+
+        # ── Entrata ───────────────────────────────────────────────────────────
+        peak_price         = float(prices.max())
+        result['peak_price']  = round(peak_price, 4)
+        result['peak_days']   = len(prices)
+        dist_peak              = (current - peak_price) / peak_price * 100
+        result['distance_from_peak'] = round(dist_peak, 2)
+
+        cond1 = dist_peak <= -self.p['l0_drawdown']
+        cond2 = rsi_val < l0_rsi_thr
+        result['rsi_oversold'] = cond2
+        cond3 = self._detect_positive_divergence(prices, rsi)
+        result['divergence'] = cond3
+        rsi_rec    = self._detect_rsi_recovery(rsi, oversold=l0_rsi_thr, recovery=32.0)
+        micro_brk  = self._detect_micro_breakout(prices)
+        cond4      = rsi_rec or micro_brk
+        result['rsi_recovery']   = rsi_rec
+        result['micro_breakout'] = micro_brk
+
+        entry_ok = cond1 and cond2 and cond3 and cond4
+        if entry_ok and kill_switch:
+            result['l0_entry']      = False
+            result['reason_codes']  = ['KILL_SWITCH', 'L0_ENTRY_BLOCKED']
+        elif entry_ok:
+            result['l0_entry']      = True
+            result['reason_codes']  = ['L0_ENTRY']
+        else:
+            missing = []
+            if not cond1: missing.append('L0_COND_DRAWDOWN')
+            if not cond2: missing.append('L0_COND_RSI')
+            if not cond3: missing.append('L0_COND_DIVERGENCE')
+            if not cond4: missing.append('L0_COND_RECOVERY')
+            result['reason_codes'] = missing or ['L0_WAIT']
+
+        return result
+
+    # ── L1 Trend Sicuro (5 condizioni) ────────────────────────────────────────
+
+    def suggest_level(self, prices: pd.Series, current_level: int = 3,
+                      high: pd.Series = None, low: pd.Series = None) -> Dict:
+        """
+        Suggerisce L1/L2/L3.
+
+        5 condizioni L1:
+          1. Allineamento: price > EMA20 > SMA50 (+ price > SMA200 se disponibile)
+          2. Persistenza: >= 3gg sopra EMA20 + slope EMA20 positivo
+          3. RSI: nel range target per l'asset class
+          4. Distanza da EMA20: <= ema_dist_max
+          5. ADX: >= adx_entry
+
+        Exit L1 (6 regole):
+          A: price < EMA20 (stop loss)
+          B: EMA20 < SMA50 (death cross)
+          C: RSI < rsi_exit_min (momentum perso)
+          D: RSI > rsi_overbought (take profit)
+          E: ADX < 15 (trend esaurito)
+          F: crollo giornaliero >= 3% (kill switch)
+        """
+        p = self.p
+
+        if len(prices) < self.ema20_period:
+            return {
+                'suggested_level': current_level,
+                'level_change': False,
+                'reason': f'Dati insufficienti ({len(prices)} giorni)',
+                'reason_codes': ['INSUFFICIENT_DATA'],
+                'conditions': {}
+            }
+
+        # Kill switch
+        kill_switch = False
+        daily_chg   = None
+        if len(prices) >= 2 and float(prices.iloc[-2]) != 0:
+            daily_chg   = (float(prices.iloc[-1]) - float(prices.iloc[-2])) / float(prices.iloc[-2]) * 100
+            kill_switch = daily_chg <= -3.0
+
+        close   = prices.astype(float)
+        current = float(close.iloc[-1])
+
+        ema20  = self._ema(close, self.ema20_period)
+        sma50  = self._sma(close, self.sma50_period) if len(close) >= self.sma50_period else None
+        sma200 = self._sma(close, self.sma200_period) if len(close) >= self.sma200_period else None
+
+        ema20_v  = self._fval(ema20)
+        sma50_v  = self._fval(sma50) if sma50 is not None else None
+        sma200_v = self._fval(sma200) if sma200 is not None else None
+
+        rsi     = self._rsi(close)
+        rsi_val = self._fval(rsi)
+        rsi_c   = rsi.dropna()
+        rsi_prev = float(rsi_c.iloc[-2]) if len(rsi_c) >= 2 else rsi_val
+
+        # ADX: usa OHLC se disponibili, altrimenti Close-only
+        if high is not None and low is not None and len(high) == len(close):
+            adx_s   = self._adx(high.astype(float), low.astype(float), close)
+        else:
+            adx_s   = self._adx_close_only(close)
+        adx_val = self._fval(adx_s)
+
+        macd_d  = self._macd(close)
+        macd_h  = self._fval(macd_d['histogram'])
+        macd_hp = float(macd_d['histogram'].iloc[-2]) if len(macd_d['histogram']) >= 2 and pd.notna(macd_d['histogram'].iloc[-2]) else None
+
+        days_above_ema20 = self._days_above(close, ema20)
+        days_below_ema20 = self._days_below(close, ema20)
+        days_below_sma50 = self._days_below(close, sma50) if sma50 is not None else 0
+        ema20_slope      = self._slope(ema20, window=5) if ema20_v else 0.0
+
+        dist_ema20 = ((current - ema20_v) / ema20_v * 100) if ema20_v and ema20_v > 0 else 0.0
+
+        pct_1d = round((close.iloc[-1] / close.iloc[-2] - 1) * 100, 2) if len(close) >= 2  else None
+        pct_1w = round((close.iloc[-1] / close.iloc[-6] - 1) * 100, 2) if len(close) >= 6  else None
+        pct_1m = round((close.iloc[-1] / close.iloc[-22] - 1) * 100, 2) if len(close) >= 22 else None
+
+        peak_w  = min(252, len(close))
+        peak    = float(close.tail(peak_w).max())
+        drawdown = (peak - current) / peak * 100 if peak > 0 else 0.0
+
+        # ── Exit rules (se gia' in L1) ─────────────────────────────────────
+        exit_rule = None
+        if current_level == 1:
+            if kill_switch:
+                exit_rule = f'Regola F — Kill Switch: calo {daily_chg:.1f}% (>= 3%)'
+            elif days_below_ema20 >= 3:
+                exit_rule = f'Regola A — Stop Loss: prezzo sotto EMA20 da {days_below_ema20}gg'
+            elif ema20_v and sma50_v and ema20_v < sma50_v:
+                exit_rule = f'Regola B — Death Cross: EMA20 {ema20_v:.2f} < SMA50 {sma50_v:.2f}'
+            elif rsi_val is not None and rsi_val < p['rsi_exit_min']:
+                exit_rule = f'Regola C — Momentum: RSI {rsi_val:.0f} < {p["rsi_exit_min"]}'
+            elif rsi_val is not None and rsi_val > p['rsi_overbought']:
+                exit_rule = f'Regola D — Overbought: RSI {rsi_val:.0f} > {p["rsi_overbought"]}'
+            elif adx_val is not None and adx_val < 15:
+                exit_rule = f'Regola E — Trend: ADX {adx_val:.0f} < 15'
+
+        # ── 5 condizioni L1 ───────────────────────────────────────────────────
+        # 1. Allineamento: price > EMA20 > SMA50 (+ regime SMA200)
+        price_ema_ok  = ema20_v is not None and current > ema20_v
+        ema_sma50_ok  = ema20_v is not None and sma50_v is not None and ema20_v > sma50_v
+        regime_ok     = True
+        if p['mm200_filter'] and sma200_v is not None:
+            regime_ok = current > sma200_v
+        allineamento  = price_ema_ok and ema_sma50_ok and regime_ok
+
+        # 2. Persistenza: >= 3gg sopra EMA20 + slope EMA20 positivo
+        persistenza   = days_above_ema20 >= p['days_above_ema'] and ema20_slope > 0
+
+        # 3. RSI nel range target
+        rsi_ok        = rsi_val is not None and p['rsi_entry_low'] <= rsi_val <= p['rsi_entry_high']
+
+        # 4. Distanza da EMA20 entro limite
+        dist_ok       = 0 <= dist_ema20 <= p['ema_dist_max']
+
+        # 5. ADX sopra soglia
+        adx_ok        = adx_val is not None and adx_val >= p['adx_entry']
+
+        conditions = {
+            'allineamento_ok':    allineamento,
+            'persistenza_ok':     persistenza,
+            'rsi_ok':             rsi_ok,
+            'distance_ok':        dist_ok,
+            'adx_ok':             adx_ok,
+            # Valori per display
+            'ema20_current':      round(ema20_v, 4) if ema20_v else None,
+            'sma50_current':      round(sma50_v, 4) if sma50_v else None,
+            'sma200_current':     round(sma200_v, 4) if sma200_v else None,
+            'rsi':                round(rsi_val, 1) if rsi_val else None,
+            'adx':                round(adx_val, 1) if adx_val else None,
+            'days_above_ema20':   days_above_ema20,
+            'dist_ema20':         round(dist_ema20, 2),
+            'ema20_slope':        round(ema20_slope, 6),
+            'regime_ok':          regime_ok,
+            'kill_switch':        kill_switch,
+            'daily_change_pct':   round(daily_chg, 2) if daily_chg is not None else None,
+            'macd_histogram':     round(macd_h, 4) if macd_h else None,
+            'pct_1d':             pct_1d,
+            'pct_1w':             pct_1w,
+            'pct_1m':             pct_1m,
+            'peak_price':         round(peak, 4),
+            'drawdown_from_peak': round(drawdown, 2),
+        }
+        buy_count = sum([allineamento, persistenza, rsi_ok, dist_ok, adx_ok])
+
+        # ── Determina livello ──────────────────────────────────────────────────
+        reason_codes = []
+
+        if current_level == 1:
+            if exit_rule:
+                conditions['exit_rule']    = exit_rule
+                conditions['exit_trigger'] = exit_rule
+                suggested = 3
+                reason    = f'Uscita L1 — {exit_rule}'
+                reason_codes.append('L1_EXIT')
+            else:
+                conditions['exit_rule']    = None
+                suggested = 1
+                reason    = f'Mantenuto L1 — RSI {rsi_val:.0f}, ADX {adx_val:.0f}' if rsi_val and adx_val else 'Mantenuto L1'
+                reason_codes.append('L1_HOLD')
+
+        elif sma50_v is None:
+            # Non abbastanza storico per SMA50 — blocca L1
+            suggested = 2 if days_above_ema20 >= p['days_above_ema'] else 3
+            reason    = f'Storico insufficiente per SMA50 (min {self.sma50_period} giorni)'
+            reason_codes.append('L2_WATCHLIST' if suggested == 2 else 'L3_MONITOR')
+
+        elif allineamento and persistenza and rsi_ok and dist_ok and adx_ok:
+            if kill_switch:
+                suggested = current_level
+                reason    = f'Kill Switch [{daily_chg:.1f}%]: nuovo ingresso L1 bloccato'
+                reason_codes.extend(['KILL_SWITCH', 'L1_ENTRY_BLOCKED'])
+            else:
+                suggested = 1
+                regime_note = '' if regime_ok else ' (no SMA200)'
+                reason = (
+                    f'L1 Trend Sicuro: EMA20>SMA50 ✓, {days_above_ema20}gg sopra EMA20 ✓, '
+                    f'RSI {rsi_val:.0f} ✓, dist {dist_ema20:.1f}% ✓, ADX {adx_val:.0f} ✓{regime_note}'
+                )
+                reason_codes.append('L1_ENTRY')
+
+        elif days_above_ema20 >= p['days_above_ema'] or (ema20_v and sma50_v and ema20_v > sma50_v):
+            suggested = 2
+            reason    = f'Watchlist: {buy_count}/5 condizioni L1 ({days_above_ema20}gg sopra EMA20)'
+            reason_codes.append('L2_WATCHLIST')
+
+        elif price_ema_ok:
+            suggested = 2
+            reason    = f'Prezzo sopra EMA20 da {days_above_ema20} giorni'
+            reason_codes.append('L2_WATCHLIST')
+
+        else:
+            suggested = 3
+            reason    = 'Monitoraggio passivo'
+            reason_codes.append('L3_MONITOR')
+
+        return {
+            'suggested_level': suggested,
+            'current_level':   current_level,
+            'level_change':    suggested != current_level,
+            'reason':          reason,
+            'reason_codes':    reason_codes,
+            'conditions':      conditions,
+            'buy_count':       buy_count,
+        }
+
+    # ── Full analysis ──────────────────────────────────────────────────────────
+
+    def analyze_etf(self, df: pd.DataFrame, current_level: int = 3) -> Dict:
         """
         Analisi tecnica completa di un ETF.
 
         Args:
-            close_df: DataFrame con almeno colonna 'Close'
-            level: Livello attuale dell'ETF (1, 2, 3)
+            df: DataFrame con colonne Close (+ Open, High, Low, Volume se disponibili).
+                Index deve essere Date.
+            current_level: Livello attuale (0-3).
 
         Returns:
-            Dizionario con tutti gli indicatori e segnali
+            Dict con tutti gli indicatori, condizioni e livello suggerito.
         """
-        min_data = self.sma_slow_period + 5  # ~55 giorni
-
-        if len(close_df) < min_data:
-            close_price = float(close_df['Close'].iloc[-1]) if len(close_df) > 0 else None
+        if len(df) < self.ema20_period:
+            price = float(df['Close'].iloc[-1]) if len(df) > 0 else None
             return {
-                'current_price': close_price,
-                'ema13': None,
-                'sma50': None,
-                'rsi': None,
-                'macd': None,
-                'macd_signal': None,
-                'macd_histogram': None,
-                'bb_width': None,
-                'bb_pct_b': None,
-                'crossover': 'neutral',
-                'days_above_ema': 0,
-                'days_above_sma': 0,
-                'days_below_ema': 0,
-                'days_below_sma': 0,
-                'final_signal': 'HOLD',
-                'signal_strength': 0,
-                'buy_conditions': {},
-                'sell_conditions': {},
-                'suggested_level': level,
-                'level_change': False,
-                'level_reason': f'Dati insufficienti: {len(close_df)}/{min_data} giorni',
-                'pct_change_1d': None,
-                'pct_change_1w': None,
-                'pct_change_1m': None,
-                'data_status': 'insufficient'
+                'current_price': price,
+                'ema20': None, 'sma50': None, 'sma200': None,
+                'rsi': None, 'adx': None, 'macd_histogram': None,
+                'dist_ema20': None, 'ema20_slope': None,
+                'days_above_ema20': 0, 'days_below_ema20': 0,
+                'peak_price': price, 'drawdown_from_peak': 0.0,
+                'pct_change_1d': None, 'pct_change_1w': None, 'pct_change_1m': None,
+                'suggested_level': current_level, 'level_change': False,
+                'level_reason': f'Dati insufficienti: {len(df)} giorni',
+                'conditions': {}, 'buy_count': 0,
+                'l0_entry': False, 'l0_exit_rule': None,
+                'data_status': 'insufficient',
+                'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
             }
 
-        close = close_df['Close'].astype(float)
-        current_price = float(close.iloc[-1])
+        close = df['Close'].astype(float)
+        has_ohlc = all(c in df.columns for c in ['Open', 'High', 'Low'])
+        high = df['High'].astype(float) if has_ohlc else None
+        low  = df['Low'].astype(float)  if has_ohlc else None
 
-        # === VARIAZIONI PERCENTUALI ===
-        pct_1d = round((close.iloc[-1] - close.iloc[-2]) / close.iloc[-2] * 100, 2) if len(close) >= 2 else None
-        pct_1w = round((close.iloc[-1] - close.iloc[-6]) / close.iloc[-6] * 100, 2) if len(close) >= 6 else None
-        pct_1m = round((close.iloc[-1] - close.iloc[-22]) / close.iloc[-22] * 100, 2) if len(close) >= 22 else None
+        # L0 check
+        l0 = self.suggest_level_0(close, current_level)
 
-        # === CALCOLO INDICATORI ===
-        ema13 = self.calculate_ema(close, self.ema_fast_period)
-        sma50 = self.calculate_sma(close, self.sma_slow_period)
-        rsi = self.calculate_rsi(close)
-        macd_data = self.calculate_macd(close)
-        bb_data = self.calculate_bollinger_bands(close)
+        # L1/L2/L3 check
+        level = self.suggest_level(close, current_level, high=high, low=low)
+        lc = level['conditions']
 
-        ema13_current = float(ema13.iloc[-1]) if pd.notna(ema13.iloc[-1]) else None
-        sma50_current = float(sma50.iloc[-1]) if pd.notna(sma50.iloc[-1]) else None
-        rsi_current = float(rsi.iloc[-1]) if pd.notna(rsi.iloc[-1]) else None
+        # If L0 entry → override
+        if l0.get('l0_entry') and current_level != 0:
+            level['suggested_level'] = 0
+            level['level_change']    = True
+            level['reason']          = f"L0 Deep Recovery: {l0.get('distance_from_peak', '?')}% dal picco"
+            level['reason_codes']    = ['L0_ENTRY']
 
-        macd_current = float(macd_data['macd_line'].iloc[-1]) if pd.notna(macd_data['macd_line'].iloc[-1]) else None
-        macd_signal_current = float(macd_data['signal_line'].iloc[-1]) if pd.notna(macd_data['signal_line'].iloc[-1]) else None
-        macd_hist_current = float(macd_data['histogram'].iloc[-1]) if pd.notna(macd_data['histogram'].iloc[-1]) else None
-        macd_hist_prev = float(macd_data['histogram'].iloc[-2]) if len(macd_data['histogram']) >= 2 and pd.notna(macd_data['histogram'].iloc[-2]) else None
-
-        bb_width_current = float(bb_data['width'].iloc[-1]) if pd.notna(bb_data['width'].iloc[-1]) else None
-        bb_width_prev = float(bb_data['width'].iloc[-2]) if len(bb_data['width']) >= 2 and pd.notna(bb_data['width'].iloc[-2]) else None
-        bb_pct_b_current = float(bb_data['pct_b'].iloc[-1]) if pd.notna(bb_data['pct_b'].iloc[-1]) else None
-
-        # Crossover EMA/SMA
-        crossover = self.detect_crossover(ema13, sma50)
-
-        # Giorni sopra/sotto MA
-        days_above_ema = self.count_days_above(close, ema13)
-        days_above_sma = self.count_days_above(close, sma50)
-        days_below_ema = self.count_days_below(close, ema13)
-        days_below_sma = self.count_days_below(close, sma50)
-
-        # === CONDIZIONI BUY (tutte e 5 devono essere vere) ===
-
-        # 1. Prezzo > EMA13 e SMA50 per 3+ giorni
-        buy_cond_1 = (days_above_ema >= self.days_above_ma and
-                      days_above_sma >= self.days_above_ma)
-
-        # 2. EMA13 > SMA50 (golden cross)
-        buy_cond_2 = crossover == 'golden_cross'
-
-        # 3. RSI tra 55 e 65 (zona ottimale)
-        buy_cond_3 = (rsi_current is not None and
-                      self.rsi_buy_low <= rsi_current <= self.rsi_buy_high)
-
-        # 4. MACD positivo e crescente (conferma momentum)
-        buy_cond_4 = (macd_hist_current is not None and
-                      macd_hist_prev is not None and
-                      macd_hist_current > 0 and
-                      macd_hist_current > macd_hist_prev)
-
-        # 5. Bollinger Band Width in espansione (trend forte)
-        buy_cond_5 = (bb_width_current is not None and
-                      bb_width_prev is not None and
-                      bb_width_current > bb_width_prev)
-
-        buy_conditions = {
-            'price_above_ma_3days': buy_cond_1,
-            'golden_cross': buy_cond_2,
-            'rsi_optimal': buy_cond_3,
-            'macd_positive_rising': buy_cond_4,
-            'bb_width_expanding': buy_cond_5
-        }
-        buy_count = sum(buy_conditions.values())
-
-        # === CONDIZIONI SELL ===
-
-        # 1. Prezzo < EMA13 e SMA50 per 3+ giorni
-        sell_cond_1 = (days_below_ema >= self.days_above_ma and
-                       days_below_sma >= self.days_above_ma)
-
-        # 2. EMA13 < SMA50 (death cross)
-        sell_cond_2 = crossover == 'death_cross'
-
-        # 3. RSI > 75 (overbought) o RSI < 25 (oversold)
-        sell_cond_3 = (rsi_current is not None and
-                       (rsi_current > self.rsi_overbought or
-                        rsi_current < self.rsi_oversold))
-
-        sell_conditions = {
-            'price_below_ma_3days': sell_cond_1,
-            'death_cross': sell_cond_2,
-            'rsi_extreme': sell_cond_3
-        }
-        sell_count = sum(sell_conditions.values())
-
-        # === FILTRO PULLBACK ===
-        # Distanza % del prezzo dalla EMA13
-        distance_from_ema = ((current_price - ema13_current) / ema13_current * 100) if ema13_current and ema13_current > 0 else 0.0
-        pullback_active = False
-        limit_order_price = None
-
-        # === SEGNALE FINALE ===
-        if buy_count == 5:
-            if distance_from_ema > self.pullback_max_distance:
-                # Pullback: prezzo troppo lontano da EMA13, segnale sospeso
-                final_signal = 'PULLBACK'
-                signal_strength = 5
-                pullback_active = True
-                # Prezzo limit order suggerito: EMA13 + 2%
-                limit_order_price = round(ema13_current * (1 + self.pullback_limit_offset / 100), 4) if ema13_current else None
-            else:
-                final_signal = 'BUY'
-                signal_strength = 5
-        elif sell_count >= 2:
-            final_signal = 'SELL'
-            signal_strength = sell_count
-        elif buy_count >= 3:
-            final_signal = 'HOLD'
-            signal_strength = buy_count
-        else:
-            final_signal = 'HOLD'
-            signal_strength = 0
-
-        # === LIVELLO SUGGERITO ===
-        level_suggestion = self._suggest_level(
-            buy_conditions, sell_conditions, buy_count,
-            crossover, rsi_current, level, pullback_active
-        )
+        # If in L0 and exit triggered → override
+        if current_level == 0 and l0.get('l0_exit_rule'):
+            level['suggested_level'] = 2
+            level['level_change']    = True
+            level['reason']          = f"Uscita L0 [{l0['l0_exit_rule']}]: {l0.get('l0_exit_trigger', '')}"
+            level['reason_codes']    = [f"L0_EXIT_{l0['l0_exit_rule'].upper()}"]
 
         return {
-            'current_price': round(current_price, 4),
-            'ema13': round(ema13_current, 4) if ema13_current else None,
-            'sma50': round(sma50_current, 4) if sma50_current else None,
-            'rsi': round(rsi_current, 2) if rsi_current else None,
-            'macd': round(macd_current, 4) if macd_current else None,
-            'macd_signal': round(macd_signal_current, 4) if macd_signal_current else None,
-            'macd_histogram': round(macd_hist_current, 4) if macd_hist_current else None,
-            'bb_width': round(bb_width_current, 2) if bb_width_current else None,
-            'bb_pct_b': round(bb_pct_b_current, 2) if bb_pct_b_current else None,
-            'crossover': crossover,
-            'days_above_ema': days_above_ema,
-            'days_above_sma': days_above_sma,
-            'days_below_ema': days_below_ema,
-            'days_below_sma': days_below_sma,
-            'buy_conditions': buy_conditions,
-            'buy_count': buy_count,
-            'sell_conditions': sell_conditions,
-            'sell_count': sell_count,
-            'final_signal': final_signal,
-            'signal_strength': signal_strength,
-            'suggested_level': level_suggestion['suggested_level'],
-            'level_change': level_suggestion['level_change'],
-            'level_reason': level_suggestion['reason'],
-            'pct_change_1d': pct_1d,
-            'pct_change_1w': pct_1w,
-            'pct_change_1m': pct_1m,
-            'distance_from_ema': round(distance_from_ema, 2),
-            'pullback_active': pullback_active,
-            'limit_order_price': limit_order_price,
-            'data_status': 'ok',
-            'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M')
+            'current_price':      round(float(close.iloc[-1]), 4),
+            'ema20':              lc.get('ema20_current'),
+            'sma50':              lc.get('sma50_current'),
+            'sma200':             lc.get('sma200_current'),
+            'rsi':                lc.get('rsi'),
+            'adx':                lc.get('adx'),
+            'macd_histogram':     lc.get('macd_histogram'),
+            'dist_ema20':         lc.get('dist_ema20'),
+            'ema20_slope':        lc.get('ema20_slope'),
+            'days_above_ema20':   lc.get('days_above_ema20', 0),
+            'days_below_ema20':   lc.get('days_below_ema20', 0) if 'days_below_ema20' in lc else 0,
+            'peak_price':         lc.get('peak_price'),
+            'drawdown_from_peak': lc.get('drawdown_from_peak', 0.0),
+            'pct_change_1d':      lc.get('pct_1d'),
+            'pct_change_1w':      lc.get('pct_1w'),
+            'pct_change_1m':      lc.get('pct_1m'),
+            'suggested_level':    level['suggested_level'],
+            'level_change':       level['level_change'],
+            'level_reason':       level['reason'],
+            'conditions':         lc,
+            'buy_count':          level.get('buy_count', 0),
+            'l0_entry':           l0.get('l0_entry', False),
+            'l0_exit_rule':       l0.get('l0_exit_rule'),
+            'l0_data':            l0,
+            'data_status':        'ok',
+            'analysis_date':      datetime.now().strftime('%Y-%m-%d %H:%M'),
         }
 
-    def _suggest_level(self, buy_conditions: dict, sell_conditions: dict,
-                       buy_count: int, crossover: str, rsi: float,
-                       current_level: int, pullback_active: bool = False) -> Dict:
-        """
-        Suggerisce il livello appropriato per un ETF.
+    # ── Utility ────────────────────────────────────────────────────────────────
 
-        - L1 (BUY Alert): 5/5 condizioni + distanza EMA13 < 5%
-        - L1 (PULLBACK): 5/5 condizioni ma distanza EMA13 > 5%
-        - L2 (Watchlist): EMA13 > SMA50 oppure RSI > 50
-        - L3 (Universe): Monitoraggio passivo
-        """
-        if buy_count == 5:
-            suggested = 1
-            if pullback_active:
-                reason = 'PULLBACK: 5/5 condizioni OK ma prezzo troppo distante da EMA13 (>5%). Attendere ritracciamento.'
-            else:
-                reason = 'BUY ALERT: Tutte le 5 condizioni soddisfatte, prezzo vicino a EMA13'
-        elif crossover == 'golden_cross' or (rsi is not None and rsi > 50):
-            suggested = 2
-            parts = []
-            if crossover == 'golden_cross':
-                parts.append('EMA13 > SMA50')
-            if rsi is not None and rsi > 50:
-                parts.append(f'RSI {rsi:.0f} > 50')
-            reason = f'Watchlist: {", ".join(parts)} ({buy_count}/5 condizioni BUY)'
-        else:
-            suggested = 3
-            reason = 'Monitoraggio passivo'
-
-        return {
-            'suggested_level': suggested,
-            'level_change': suggested != current_level,
-            'reason': reason
-        }
-
-
-def test_analyzer():
-    """Test dell'analizzatore tecnico ETF (solo Close)"""
-    analyzer = ETFTechnicalAnalyzer()
-
-    # Genera dati di test (100 giorni, solo Close)
-    np.random.seed(42)
-    n = 100
-    dates = pd.date_range(end=datetime.now(), periods=n, freq='D')
-    close = pd.Series(100 + np.cumsum(np.random.randn(n) * 2), index=dates)
-
-    close_df = pd.DataFrame({'Close': close}, index=dates)
-
-    result = analyzer.analyze_etf(close_df, level=3)
-
-    print("=" * 60)
-    print("TEST ETF TECHNICAL ANALYZER (Close-only)")
-    print("=" * 60)
-    print(f"Prezzo:    {result['current_price']:.2f}")
-    print(f"EMA13:     {result['ema13']:.2f}" if result['ema13'] else "EMA13: N/A")
-    print(f"SMA50:     {result['sma50']:.2f}" if result['sma50'] else "SMA50: N/A")
-    print(f"RSI:       {result['rsi']:.1f}" if result['rsi'] else "RSI: N/A")
-    print(f"MACD:      {result['macd']:.4f}" if result['macd'] else "MACD: N/A")
-    print(f"MACD Hist: {result['macd_histogram']:.4f}" if result['macd_histogram'] else "MACD Hist: N/A")
-    print(f"BB Width:  {result['bb_width']:.2f}" if result['bb_width'] else "BB Width: N/A")
-    print(f"BB %B:     {result['bb_pct_b']:.2f}" if result['bb_pct_b'] else "BB %B: N/A")
-    print(f"Crossover: {result['crossover']}")
-    print(f"\nCondizioni BUY: {result['buy_count']}/5")
-    for k, v in result['buy_conditions'].items():
-        print(f"  {'V' if v else 'X'} {k}")
-    print(f"\nSegnale: {result['final_signal']} (forza: {result['signal_strength']})")
-    print(f"Livello suggerito: L{result['suggested_level']}")
-    print(f"Motivo: {result['level_reason']}")
-
-
-if __name__ == "__main__":
-    test_analyzer()
+    @staticmethod
+    def category_to_etf_type(categoria: str) -> str:
+        """Mappa la categoria Excel al tipo ETF per il profilo di analisi."""
+        if not categoria:
+            return 'equity_developed'
+        cat = categoria.lower()
+        if any(k in cat for k in ('emer', 'asia', 'cina', 'india', 'brasile', 'paesi em')):
+            return 'equity_emerging'
+        if any(k in cat for k in ('materie', 'gold', 'oro', 'petrolio', 'commodit', 'metal')):
+            return 'commodity'
+        if any(k in cat for k in ('obblig', 'bond', 'reddito', 'treasury', 'government', 'corporate', 'credit')):
+            return 'bond'
+        if any(k in cat for k in ('tematic', 'clean', 'biotech', 'robot', 'innov', 'megatr')):
+            return 'thematic'
+        if any(k in cat for k in ('settori', 'sector', 'tech', 'health', 'finanz', 'energia', 'real estate')):
+            return 'equity_sector'
+        return 'equity_developed'

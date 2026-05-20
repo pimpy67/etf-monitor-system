@@ -1,9 +1,8 @@
 """
-app.py - Web server per la dashboard ETF
-==========================================
-Serve la dashboard HTML e i dati JSON.
-Legge dati direttamente da PostgreSQL (persistente).
-Include auto-recovery: se il monitoraggio non ha girato oggi, lo lancia automaticamente.
+app.py - Web server dashboard ETF
+===================================
+Serve la dashboard HTML e le API JSON.
+Auto-recovery: lancia il monitoraggio se non ha girato oggi.
 """
 
 from flask import Flask, send_file, send_from_directory, jsonify, request
@@ -16,285 +15,216 @@ from database import PriceDatabase
 import monitor_lock
 
 app = Flask(__name__)
-
-# Database instance globale
-db = PriceDatabase()
+db  = PriceDatabase()
 
 
 @app.route('/')
 def index():
-    """Serve la dashboard principale"""
     return send_file('dashboard.html')
 
 @app.route('/data/<path:filename>')
 def serve_data(filename):
-    """Serve i file dati JSON"""
     return send_from_directory('data', filename)
 
 
-def _get_last_update():
-    """Legge la data dell'ultimo aggiornamento dal file JSON"""
+def _get_dashboard_data():
     try:
         with open('data/dashboard_data.json', 'r') as f:
-            data = json.load(f)
-        return data.get('last_update')
-    except:
+            return json.load(f)
+    except Exception:
         return None
 
 
 def _should_run_today():
-    """Controlla se il monitoraggio deve girare oggi.
-    Ritorna True se:
-    - Non ha mai girato, oppure
-    - L'ultimo aggiornamento non e' di oggi E siamo dopo l'orario programmato
-    - Il file esiste ma ha 0 ETF (file iniziale vuoto creato al deploy)
-    """
-    now = datetime.now()
+    now          = datetime.now()
     monitor_hour = int(os.environ.get('MONITOR_HOUR', 18))
-
     try:
-        with open('data/dashboard_data.json', 'r') as f:
-            data = json.load(f)
-        last_update = data.get('last_update')
-        total_etfs = data.get('summary', {}).get('total_etfs', 0)
-
-        # Se ha 0 ETF, il file e' vuoto (creato al deploy) -> deve girare
-        if total_etfs == 0:
+        data         = _get_dashboard_data()
+        if not data:
             return True
-
+        total = data.get('summary', {}).get('total_etfs', 0)
+        if total == 0:
+            return True
+        last_update = data.get('last_update')
         if not last_update:
             return True
-
         last_dt = datetime.fromisoformat(last_update)
-        # Se l'ultimo aggiornamento non e' di oggi E siamo dopo l'ora programmata
-        if last_dt.date() < now.date() and now.hour >= monitor_hour:
-            return True
-    except:
+        return last_dt.date() < now.date() and now.hour >= monitor_hour
+    except Exception:
         return True
-
-    return False
 
 
 def _trigger_auto_monitor():
-    """Lancia il monitoraggio in background se non sta gia' girando"""
     if not monitor_lock.try_acquire():
         return False
 
     def run():
         try:
-            print(f"\nAUTO-RECOVERY: Monitoraggio ETF automatico avviato - {datetime.now()}")
+            print(f"\nAUTO-RECOVERY: Avvio — {datetime.now()}")
             from monitor import ETFMonitor
-            monitor = ETFMonitor()
-            monitor.run(send_daily_report=True)
-            print(f"AUTO-RECOVERY: Monitoraggio ETF completato - {datetime.now()}")
+            ETFMonitor().run(send_daily_report=True)
+            print(f"AUTO-RECOVERY: Completato — {datetime.now()}")
         except Exception as e:
-            print(f"AUTO-RECOVERY: Errore monitoraggio ETF: {e}")
+            print(f"AUTO-RECOVERY: Errore — {e}")
         finally:
             monitor_lock.release()
 
-    thread = threading.Thread(target=run, daemon=True)
-    thread.start()
+    threading.Thread(target=run, daemon=True).start()
     return True
 
 
 @app.route('/api/status')
 def status():
-    """Endpoint per verificare lo stato del sistema (+ auto-recovery)"""
-    json_status = None
-    try:
-        with open('data/dashboard_data.json', 'r') as f:
-            data = json.load(f)
-        json_status = {
-            'last_update': data.get('last_update'),
-            'total_etfs': data.get('summary', {}).get('total_etfs', 0)
-        }
-    except:
-        pass
-
+    data     = _get_dashboard_data()
     db_stats = db.get_stats()
 
-    # AUTO-RECOVERY: se il monitoraggio non ha girato oggi, lancialo
-    auto_recovery_triggered = False
+    auto_triggered = False
     if _should_run_today() and not monitor_lock.is_running():
-        auto_recovery_triggered = _trigger_auto_monitor()
+        auto_triggered = _trigger_auto_monitor()
 
     return jsonify({
-        'status': 'ok',
-        'json_data': json_status,
-        'database': db_stats,
-        'database_url_set': bool(os.environ.get('DATABASE_URL')),
-        'monitor_running': monitor_lock.is_running(),
-        'auto_recovery_triggered': auto_recovery_triggered
+        'status':                  'ok',
+        'last_update':             data.get('last_update') if data else None,
+        'total_etfs':              data.get('summary', {}).get('total_etfs', 0) if data else 0,
+        'database':                db_stats,
+        'monitor_running':         monitor_lock.is_running(),
+        'auto_recovery_triggered': auto_triggered,
     })
+
 
 @app.route('/api/etfs')
 def get_etfs():
-    """API per ottenere tutti gli ETF"""
     try:
         with open('data/dashboard_data.json', 'r') as f:
             return jsonify(json.load(f))
-    except:
+    except Exception:
         return jsonify({'error': 'Data not available'}), 404
 
-@app.route('/api/db-status')
-def db_status_endpoint():
-    """Diagnostica connessione database PostgreSQL"""
-    raw_url = os.environ.get('DATABASE_URL', '')
 
-    safe_url = 'NOT SET'
-    if raw_url:
-        import re
-        safe_url = re.sub(r'://([^:]+):([^@]+)@', r'://\1:***@', raw_url)
-
-    result = {
-        'database_url_safe': safe_url,
-        'database_url_length': len(raw_url),
-        'db_url_resolved': bool(db.database_url),
-        'timestamp': datetime.now().isoformat()
-    }
+@app.route('/api/etf-detail')
+def etf_detail():
+    """Dettaglio completo di un ETF (per modal dashboard)."""
+    ticker = request.args.get('ticker', '')
+    isin   = request.args.get('isin', '')
 
     try:
-        import psycopg2
-        try:
-            conn = psycopg2.connect(raw_url, sslmode='require', connect_timeout=5)
-            conn.close()
-            result['connection'] = 'OK (SSL)'
-        except Exception as ssl_err:
-            result['ssl_error'] = str(ssl_err)
-            try:
-                conn = psycopg2.connect(raw_url, connect_timeout=5)
-                conn.close()
-                result['connection'] = 'OK (no SSL)'
-            except Exception as no_ssl_err:
-                result['connection'] = 'ERRORE'
-                result['no_ssl_error'] = str(no_ssl_err)
-    except Exception as e:
-        result['connection'] = 'ERRORE'
-        result['error'] = str(e)
+        data = _get_dashboard_data()
+        if not data:
+            return jsonify({'error': 'Dashboard data non disponibile'}), 404
 
-    return jsonify(result)
+        # Cerca nelle liste di tutti i livelli
+        etf_info = None
+        for level_list in data.get('levels', {}).values():
+            for etf in level_list:
+                if (ticker and etf.get('ticker') == ticker) or \
+                   (isin and etf.get('isin') == isin):
+                    etf_info = etf
+                    break
+            if etf_info:
+                break
+
+        if not etf_info:
+            return jsonify({'error': 'ETF non trovato'}), 404
+
+        # Recupera storico prezzi dal DB per il grafico
+        identifier  = isin or ticker
+        price_hist  = []
+        df = db.get_close_by_isin(identifier, days=90)
+        if df.empty and ticker:
+            df = db.get_ohlcv(ticker, days=90)
+            if not df.empty:
+                for _, row in df.iterrows():
+                    price_hist.append({'date': str(row['date']), 'close': float(row['close'])})
+        else:
+            for date_idx, row in df.iterrows():
+                price_hist.append({'date': str(date_idx.date()), 'close': float(row['Close'])})
+
+        return jsonify({
+            **etf_info,
+            'price_history': price_hist,
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/prices')
 def get_prices():
-    """API per ottenere prezzi dal database (per ticker o ISIN)"""
+    """Storico prezzi per ticker o ISIN."""
     ticker = request.args.get('ticker')
-    isin = request.args.get('isin')
-    days = int(request.args.get('days', 30))
+    isin   = request.args.get('isin')
+    days   = int(request.args.get('days', 30))
 
     identifier = isin or ticker
-    if identifier:
-        # Prova prima per ISIN, poi per ticker
-        df = db.get_close_by_isin(identifier, days)
-        if df.empty:
-            df_old = db.get_ohlcv(identifier, days)
-            if not df_old.empty:
-                prices = []
-                for _, row in df_old.iterrows():
-                    prices.append({
-                        'date': str(row['date']),
-                        'close': float(row['close'])
-                    })
-                return jsonify({'identifier': identifier, 'prices': prices, 'count': len(prices)})
-            return jsonify({'identifier': identifier, 'prices': [], 'count': 0})
+    if not identifier:
+        return jsonify(db.get_stats())
 
-        prices = []
-        for date_idx, row in df.iterrows():
-            prices.append({
-                'date': str(date_idx),
-                'close': float(row['Close'])
-            })
-        return jsonify({'identifier': identifier, 'prices': prices, 'count': len(prices)})
-    else:
-        stats = db.get_stats()
-        return jsonify(stats)
+    df = db.get_close_by_isin(identifier, days)
+    if df.empty:
+        df_old = db.get_ohlcv(identifier, days)
+        if not df_old.empty:
+            return jsonify({'identifier': identifier,
+                            'prices': [{'date': str(r['date']), 'close': float(r['close'])}
+                                       for _, r in df_old.iterrows()],
+                            'count': len(df_old)})
+        return jsonify({'identifier': identifier, 'prices': [], 'count': 0})
+
+    return jsonify({'identifier': identifier,
+                    'prices': [{'date': str(d.date()), 'close': float(r['Close'])}
+                               for d, r in df.iterrows()],
+                    'count': len(df)})
+
 
 @app.route('/api/trigger-update', methods=['GET', 'POST'])
 def trigger_update():
-    """Trigger manuale del monitoraggio (GET o POST)"""
     started = _trigger_auto_monitor()
-
     if started:
-        return jsonify({
-            'status': 'started',
-            'message': 'Monitoraggio ETF avviato in background',
-            'timestamp': datetime.now().isoformat()
-        })
-    else:
-        return jsonify({
-            'status': 'already_running',
-            'message': 'Monitoraggio gia in esecuzione, attendere il completamento',
-            'timestamp': datetime.now().isoformat()
-        })
+        return jsonify({'status': 'started',
+                        'message': 'Monitoraggio ETF avviato in background',
+                        'timestamp': datetime.now().isoformat()})
+    return jsonify({'status': 'already_running',
+                    'message': 'Monitoraggio gia in esecuzione',
+                    'timestamp': datetime.now().isoformat()})
+
 
 @app.route('/api/monitor-log')
 def get_monitor_log():
-    """Mostra il log del monitoraggio"""
     from monitor import monitor_log
     return jsonify({
-        'log': monitor_log,
-        'count': len(monitor_log),
+        'log':             monitor_log,
+        'count':           len(monitor_log),
         'monitor_running': monitor_lock.is_running(),
-        'timestamp': datetime.now().isoformat()
+        'timestamp':       datetime.now().isoformat(),
     })
 
-@app.route('/api/test-etf')
-def test_etf():
-    """Test di debug: prova ad analizzare un singolo ETF"""
-    import traceback
-    result = {'steps': []}
 
+@app.route('/api/db-status')
+def db_status_endpoint():
+    raw_url  = os.environ.get('DATABASE_URL', '')
+    import re
+    safe_url = re.sub(r'://([^:]+):([^@]+)@', r'://\1:***@', raw_url) if raw_url else 'NOT SET'
+    result   = {'database_url_safe': safe_url, 'timestamp': datetime.now().isoformat()}
     try:
-        from monitor import ETFMonitor
-        monitor = ETFMonitor()
-        result['steps'].append('ETFMonitor creato OK')
-
-        df = monitor.load_etfs()
-        result['steps'].append(f'Excel caricato: {len(df)} ETF')
-
-        if df.empty:
-            result['error'] = 'DataFrame vuoto'
-            return jsonify(result)
-
-        row = df.iloc[0]
-        isin = str(row.get('ISIN', ''))
-        result['test_etf'] = {
-            'ticker': str(row['Ticker']),
-            'isin': isin,
-            'nome': str(row['Nome ETF']),
-            'livello': int(row['Livello'])
-        }
-        result['steps'].append(f"ETF selezionato: {row['Nome ETF']} ({isin})")
-
-        if isin:
-            close_df = monitor.get_etf_history(isin)
-        else:
-            close_df = monitor.get_etf_history(row['Ticker'])
-        result['history_count'] = len(close_df)
-        result['steps'].append(f"Storico: {len(close_df)} giorni")
-
-        analysis = monitor.analyze_etf(row)
-        result['analysis'] = str(analysis.get('analysis', {}))
-        result['steps'].append('Analisi completata OK')
-
+        import psycopg2
+        conn = psycopg2.connect(raw_url, sslmode='require', connect_timeout=5)
+        conn.close()
+        result['connection'] = 'OK'
     except Exception as e:
-        result['error'] = str(e)
-        result['traceback'] = traceback.format_exc()
-
+        result['connection'] = 'ERRORE'
+        result['error']      = str(e)
     return jsonify(result)
 
 
 if __name__ == '__main__':
     os.makedirs('data', exist_ok=True)
-
     if not os.path.exists('data/dashboard_data.json'):
-        initial_data = {
-            'last_update': datetime.now().isoformat(),
-            'summary': {'total_etfs': 0, 'buy_signals': 0, 'sell_signals': 0, 'hold_signals': 0},
-            'levels': {'1': [], '2': [], '3': []},
-            'categories': {}
-        }
         with open('data/dashboard_data.json', 'w') as f:
-            json.dump(initial_data, f)
-
+            json.dump({
+                'last_update': datetime.now().isoformat(),
+                'summary': {'total_etfs': 0, 'l0_count': 0, 'l1_count': 0,
+                            'l2_count': 0, 'l3_count': 0},
+                'levels': {'0': [], '1': [], '2': [], '3': []},
+                'categories': {}
+            }, f)
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
