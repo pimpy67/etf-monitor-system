@@ -126,18 +126,44 @@ def etf_detail():
         if not etf_info:
             return jsonify({'error': 'ETF non trovato'}), 404
 
-        # Recupera storico prezzi dal DB per il grafico
-        identifier  = isin or ticker
-        price_hist  = []
-        df = db.get_close_by_isin(identifier, days=90)
-        if df.empty and ticker:
-            df = db.get_ohlcv(ticker, days=90)
-            if not df.empty:
-                for _, row in df.iterrows():
-                    price_hist.append({'date': str(row['date']), 'close': float(row['close'])})
-        else:
-            for date_idx, row in df.iterrows():
-                price_hist.append({'date': str(date_idx.date()), 'close': float(row['Close'])})
+        # Recupera storico prezzi dal DB con indicatori per il grafico
+        import math as _math
+
+        identifier = isin or ticker
+        df = db.get_close_by_isin(identifier, days=120)
+
+        price_hist = []
+        if not df.empty:
+            df = df.reset_index()
+            df.columns = ['date', 'close']
+            df = df.sort_values('date').reset_index(drop=True)
+        elif ticker:
+            df_old = db.get_ohlcv(ticker, days=120)
+            if not df_old.empty:
+                df = df_old[['date', 'close']].copy()
+                df = df.sort_values('date').reset_index(drop=True)
+
+        if not df.empty and 'close' in df.columns:
+            prices = df['close'].astype(float)
+            df['ema20']  = prices.ewm(span=20, adjust=False).mean()
+            df['sma50']  = prices.rolling(window=50, min_periods=1).mean()
+            df['sma200'] = prices.rolling(window=200, min_periods=1).mean()
+
+            def _fmt(v, d=4):
+                try:
+                    f = float(v)
+                    return None if _math.isnan(f) or _math.isinf(f) else round(f, d)
+                except Exception:
+                    return None
+
+            for _, row in df.tail(90).iterrows():
+                price_hist.append({
+                    'date':  str(row['date'].date()) if hasattr(row['date'], 'date') else str(row['date'])[:10],
+                    'close': _fmt(row['close']),
+                    'ema20': _fmt(row['ema20']),
+                    'sma50': _fmt(row['sma50']),
+                    'sma200': _fmt(row['sma200']),
+                })
 
         return jsonify({
             **etf_info,

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ETF Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1117,#161b22); min-height:100vh; color:#e6edf3; }
@@ -23,17 +24,49 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .sitem.tot .num { color:#e6edf3; }
 .last-update { color:#8b949e; font-size:0.72em; }
 
+/* ── Health badge ─────────────────────────────────────────────────────── */
+.health-badge { display:flex; align-items:center; cursor:pointer; padding:4px 10px; border-radius:12px; background:rgba(255,255,255,0.08); font-size:0.75em; gap:4px; }
+.health-badge:hover { background:rgba(255,255,255,0.15); }
+.health-dot { width:10px; height:10px; border-radius:50%; display:inline-block; animation:pulse 2s infinite; }
+.health-dot.green  { background:#3fb950; box-shadow:0 0 6px #3fb950; }
+.health-dot.yellow { background:#d29922; box-shadow:0 0 6px #d29922; }
+.health-dot.red    { background:#f85149; box-shadow:0 0 6px #f85149; }
+.health-dot.grey   { background:#555; box-shadow:none; animation:none; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+.health-panel { display:none; position:fixed; top:50px; right:20px; width:360px; background:rgba(22,27,34,0.98); border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:16px; z-index:300; box-shadow:0 8px 32px rgba(0,0,0,0.5); backdrop-filter:blur(12px); }
+.health-panel.open { display:block; }
+.health-panel h3 { margin:0 0 12px; font-size:0.95em; color:#e6edf3; }
+.hp-close { position:absolute; top:8px; right:12px; cursor:pointer; color:#555; font-size:1.2em; }
+.hp-close:hover { color:#e6edf3; }
+.hp-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.07); font-size:0.82em; }
+.hp-label { color:#8b949e; }
+.hp-value { font-weight:bold; }
+.hp-value.ok   { color:#3fb950; }
+.hp-value.warn { color:#d29922; }
+.hp-value.err  { color:#f85149; }
+.hp-errors { margin-top:10px; max-height:120px; overflow-y:auto; }
+.hp-error-item { padding:4px 6px; background:rgba(248,81,73,0.12); border-radius:4px; margin-bottom:4px; font-size:0.75em; color:#f07070; font-family:monospace; }
+
+/* ── Search ──────────────────────────────────────────────────────────── */
+.search-wrap { position:relative; display:flex; align-items:center; }
+.search-input { background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.13); border-radius:18px; padding:4px 28px 4px 12px; color:#e6edf3; font-size:0.78em; width:180px; outline:none; transition:border-color .15s,background .15s; }
+.search-input::placeholder { color:#555; }
+.search-input:focus { border-color:#58a6ff; background:rgba(88,166,255,0.1); }
+.search-clear { position:absolute; right:8px; background:none; border:none; color:#555; cursor:pointer; font-size:1em; line-height:1; padding:0; display:none; }
+.search-clear:hover { color:#e6edf3; }
+.search-clear.visible { display:block; }
+
 /* ── Column header (sticky below main header) ─────────────────────────── */
 .col-header { position:sticky; top:42px; z-index:199; background:rgba(13,17,23,0.97); backdrop-filter:blur(10px); border-bottom:2px solid rgba(255,255,255,0.12); padding:0 20px; }
-.col-header table { width:100%; max-width:1600px; margin:0 auto; border-collapse:collapse; table-layout:fixed; }
+.col-header table { width:100%; max-width:1640px; margin:0 auto; border-collapse:collapse; table-layout:fixed; }
 .col-header th { padding:7px 8px; text-align:left; font-size:0.75em; font-weight:600; color:#8b949e; text-transform:uppercase; letter-spacing:.03em; overflow:hidden; }
 
 /* Column widths */
-.col-nome   { width:22%; } .col-ticker { width:7%; }
-.col-prezzo { width:7%; }  .col-pct    { width:5%; }
-.col-ema20  { width:7%; }  .col-sma50  { width:7%; } .col-sma200 { width:7%; }
+.col-nome   { width:22%; } .col-ticker { width:6%; }
+.col-prezzo { width:6%; }  .col-pct    { width:5%; }
+.col-ema20  { width:6%; }  .col-sma50  { width:6%; } .col-sma200 { width:7%; }
 .col-rsi    { width:5%; }  .col-adx    { width:5%; }
-.col-buy    { width:6%; }  .col-ragione { width:17%; }
+.col-buy    { width:6%; }  .col-ragione { width:15%; }
 
 /* ── Container ───────────────────────────────────────────────────────────── */
 .container { max-width:1640px; margin:0 auto; padding:14px 20px; }
@@ -50,9 +83,12 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 /* ── Table ───────────────────────────────────────────────────────────────── */
 .etf-table { width:100%; border-collapse:collapse; table-layout:fixed; }
 .etf-table thead { display:none; }
-.etf-table td { padding:8px 8px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.83em; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; cursor:pointer; }
-.etf-table tr:hover { background:rgba(88,166,255,0.06); }
-.etf-table colgroup col { overflow:hidden; }
+.etf-table td { padding:8px 8px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.83em; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
+.etf-table tr:hover { background:rgba(88,166,255,0.05); }
+
+/* L1 table with visible header */
+.l1-table thead { display:table-header-group !important; background:rgba(10,15,25,0.7); border-bottom:1px solid rgba(255,255,255,0.1); }
+.l1-table thead th { padding:7px 8px; text-align:left; font-size:0.75em; font-weight:600; color:#555; }
 
 /* ── Value colors ─────────────────────────────────────────────────────────── */
 .pct { font-weight:600; }
@@ -61,9 +97,9 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .pct.zero { color:#8b949e; }
 
 .rsi-val { font-weight:700; }
-.rsi-val.oversold { color:#58a6ff; }
-.rsi-val.optimal  { color:#3fb950; }
-.rsi-val.mid      { color:#d29922; }
+.rsi-val.oversold   { color:#58a6ff; }
+.rsi-val.optimal    { color:#3fb950; }
+.rsi-val.mid        { color:#d29922; }
 .rsi-val.overbought { color:#f85149; }
 
 .adx-val { font-weight:600; }
@@ -80,9 +116,18 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .buy-dots  { display:flex; gap:2px; }
 .buy-dot   { width:7px; height:7px; border-radius:50%; background:#30363d; }
 .buy-dot.on { background:#3fb950; }
-.buy-dot.on.adx { background:#58a6ff; }
-.buy-count-num { font-size:0.8em; font-weight:700; color:#8b949e; }
-.buy-count-num.all { color:#3fb950; }
+.buy-count { font-weight:700; font-size:0.85em; }
+.buy-count.bc5 { color:#fff; text-shadow:0 0 8px #3fb950,0 0 16px #1a7a30; }
+.buy-count.bc4 { color:#3fb950; text-shadow:0 0 6px #3fb950; }
+.buy-count.bc3 { color:#7fff00; }
+.buy-count.bc2 { color:#d29922; }
+.buy-count.bc1 { color:#ff9966; }
+.buy-count.bc0 { color:#555; }
+.cond-dots { font-size:0.7em; margin-left:3px; letter-spacing:1px; }
+
+/* Badge NUOVO */
+@keyframes pulse-nuovo { 0%,100%{opacity:1} 50%{opacity:0.35} }
+.badge-nuovo { display:inline-block; background:#3fb950; color:#fff; font-size:0.58em; font-weight:bold; padding:1px 5px; border-radius:3px; margin-left:5px; vertical-align:middle; animation:pulse-nuovo 1.1s ease-in-out infinite; letter-spacing:0.5px; }
 
 /* Drawdown pill (L0) */
 .dd-pill { display:inline-block; padding:2px 7px; border-radius:10px; font-size:0.75em; font-weight:700; background:#7c3c0044; color:#ff8c00; border:1px solid #7c3c00; }
@@ -94,28 +139,137 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .lv2 { background:#7c5a0066; color:#d29922; }
 .lv3 { background:#1c2e4a66; color:#58a6ff; }
 
-.etf-nome { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.etf-type-tag { display:inline-block; font-size:0.65em; padding:0 5px; border-radius:3px; background:rgba(255,255,255,0.08); color:#8b949e; margin-left:4px; vertical-align:middle; }
-
+.etf-nome { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:4px; }
+.etf-type-tag { display:inline-block; font-size:0.65em; padding:0 5px; border-radius:3px; background:rgba(255,255,255,0.08); color:#8b949e; flex-shrink:0; }
 .empty-msg { padding:28px; text-align:center; color:#8b949e; }
 
-/* ── Modal ───────────────────────────────────────────────────────────────── */
-.modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; overflow-y:auto; }
-.modal-overlay.open { display:flex; align-items:flex-start; justify-content:center; padding:30px 16px; }
-.modal { background:#161b22; border:1px solid rgba(255,255,255,0.12); border-radius:14px; width:100%; max-width:760px; padding:24px 28px; position:relative; }
-.modal-close { position:absolute; top:16px; right:18px; background:none; border:none; color:#8b949e; font-size:1.4em; cursor:pointer; line-height:1; }
-.modal-close:hover { color:#e6edf3; }
-.modal-title { font-size:1.1em; font-weight:700; margin-bottom:4px; }
-.modal-sub   { font-size:0.8em; color:#8b949e; margin-bottom:18px; }
+/* +Port. button */
+.btn-portfolio-add { background:none; border:1px solid rgba(88,166,255,0.4); color:#58a6ff; border-radius:4px; cursor:pointer; font-size:0.68em; padding:1px 5px; line-height:1.4; transition:all .15s; white-space:nowrap; margin-left:5px; flex-shrink:0; }
+.btn-portfolio-add:hover { background:rgba(88,166,255,0.15); border-color:#58a6ff; color:#fff; }
+.btn-portfolio-add.in-portfolio { border-color:rgba(63,185,80,0.5); color:#3fb950; }
+.btn-portfolio-add.in-portfolio:hover { background:rgba(63,185,80,0.1); }
 
-/* KPI grid */
-.kpi-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px; margin-bottom:18px; }
-.kpi-card { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:10px 12px; }
-.kpi-card .kpi-label { font-size:0.7em; color:#8b949e; text-transform:uppercase; margin-bottom:3px; }
-.kpi-card .kpi-value { font-size:1.05em; font-weight:700; }
+/* Exit warning */
+.exit-warn { display:inline-block; font-size:0.72em; margin-left:4px; cursor:default; vertical-align:middle; }
+
+/* ── Category filters ─────────────────────────────────────────────────── */
+.cat-filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.cat-btn { padding:5px 14px; border:1px solid rgba(255,255,255,0.12); border-radius:14px; background:transparent; color:#8b949e; cursor:pointer; font-size:0.78em; transition:all .15s; }
+.cat-btn:hover,.cat-btn.active { background:#58a6ff22; border-color:#58a6ff; color:#58a6ff; }
+
+/* ── L1 exits section ─────────────────────────────────────────────────── */
+.l1-exits-section { margin-bottom:16px; background:rgba(248,81,73,0.04); border-radius:10px; border:1px solid rgba(248,81,73,0.18); overflow:hidden; }
+.l1-exits-header { padding:10px 18px; background:rgba(248,81,73,0.07); display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; }
+.l1-exits-header:hover { background:rgba(248,81,73,0.12); }
+.l1-exits-header h3 { font-size:0.88em; color:#f85149; font-weight:700; margin:0; letter-spacing:0.5px; }
+.l1-exits-table { width:100%; border-collapse:collapse; font-size:0.82em; }
+.l1-exits-table th { padding:7px 10px; text-align:left; color:#555; font-weight:bold; border-bottom:1px solid rgba(255,255,255,0.08); font-size:0.79em; background:rgba(10,15,25,0.5); white-space:nowrap; }
+.l1-exits-table td { padding:7px 10px; border-bottom:1px solid rgba(255,255,255,0.04); color:#8b949e; vertical-align:middle; }
+.l1-exits-table tr:hover > td { background:rgba(255,255,255,0.02); }
+.exit-rule-badge { display:inline-block; padding:1px 5px; border-radius:3px; font-size:0.75em; font-weight:bold; background:rgba(248,81,73,0.18); color:#f87070; border:1px solid rgba(248,81,73,0.35); white-space:nowrap; }
+
+/* ── Portfolio section ────────────────────────────────────────────────── */
+.portfolio-section { margin-top:24px; background:rgba(255,255,255,0.03); border-radius:10px; overflow:hidden; border:1px solid rgba(88,166,255,0.25); }
+.portfolio-header { padding:10px 18px; background:linear-gradient(90deg,rgba(88,166,255,0.18),rgba(88,166,255,0.06)); display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; }
+.portfolio-header:hover { background:linear-gradient(90deg,rgba(88,166,255,0.25),rgba(88,166,255,0.1)); }
+.portfolio-header h3 { font-size:0.88em; color:#58a6ff; font-weight:700; margin:0; letter-spacing:0.5px; }
+.portfolio-table { width:100%; border-collapse:collapse; font-size:0.82em; }
+.portfolio-table th { padding:8px 10px; text-align:left; color:#555; font-weight:bold; border-bottom:1px solid rgba(255,255,255,0.1); font-size:0.8em; background:rgba(10,15,25,0.5); white-space:nowrap; }
+.portfolio-table td { padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.05); color:#ccc; vertical-align:middle; }
+.portfolio-table tr:hover > td { background:rgba(255,255,255,0.02); }
+.portfolio-empty { padding:24px; text-align:center; color:#555; font-size:0.85em; }
+.perf-badge { font-weight:bold; padding:2px 8px; border-radius:10px; font-size:0.9em; white-space:nowrap; }
+.perf-badge.pos  { background:rgba(63,185,80,0.15); color:#3fb950; }
+.perf-badge.neg  { background:rgba(248,81,73,0.15); color:#f85149; }
+.perf-badge.zero { background:rgba(255,255,255,0.07); color:#8b949e; }
+.history-row td { padding:0 !important; border-bottom:2px solid rgba(88,166,255,0.15) !important; background:rgba(10,15,25,0.5) !important; }
+.history-table { width:100%; border-collapse:collapse; font-size:0.79em; }
+.history-table th { padding:6px 10px; text-align:right; color:#555; font-weight:bold; border-bottom:1px solid rgba(255,255,255,0.07); background:rgba(5,8,18,0.7); }
+.history-table th:first-child { text-align:left; }
+.history-table td { padding:5px 10px; text-align:right; border-bottom:1px solid rgba(255,255,255,0.03); color:#8b949e; }
+.history-table td:first-child { text-align:left; color:#666; font-family:monospace; font-size:0.93em; }
+.btn-remove { background:none; border:1px solid rgba(248,81,73,0.35); color:#f85149; border-radius:4px; cursor:pointer; font-size:0.75em; padding:2px 7px; transition:all .15s; }
+.btn-remove:hover { background:rgba(248,81,73,0.12); }
+.btn-toggle-hist { background:none; border:1px solid rgba(255,255,255,0.13); color:#666; border-radius:4px; cursor:pointer; font-size:0.75em; padding:2px 7px; transition:all .15s; }
+.btn-toggle-hist:hover { color:#e6edf3; border-color:rgba(255,255,255,0.28); }
+
+/* ── Param ref section ────────────────────────────────────────────────── */
+.param-ref { margin-top:24px; background:rgba(255,255,255,0.03); border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.08); }
+.param-ref-header { padding:10px 18px; background:rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; }
+.param-ref-header:hover { background:rgba(255,255,255,0.08); }
+.param-ref-header h3 { font-size:0.88em; color:#ccc; font-weight:700; margin:0; }
+.param-ref-toggle { color:#555; font-size:0.75em; transition:transform .2s; }
+.param-ref-toggle.open { transform:rotate(180deg); }
+.param-ref-body { display:none; padding:16px 20px 20px; }
+.param-ref-body.open { display:block; }
+.param-section-title { font-size:0.78em; font-weight:bold; color:#8b949e; text-transform:uppercase; letter-spacing:1px; margin:14px 0 8px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.08); }
+.param-section-title:first-child { margin-top:0; }
+.param-table { width:100%; border-collapse:collapse; font-size:0.8em; }
+.param-table th { padding:7px 12px; text-align:left; color:#8b949e; font-weight:bold; border-bottom:1px solid rgba(255,255,255,0.12); font-size:0.85em; }
+.param-table th.cls-eq  { color:#58a6ff; }
+.param-table th.cls-em  { color:#a78bfa; }
+.param-table th.cls-sec { color:#fb923c; }
+.param-table th.cls-etf { color:#34d399; }
+.param-table td { padding:6px 12px; border-bottom:1px solid rgba(255,255,255,0.05); color:#8b949e; vertical-align:middle; }
+.param-table td.param-name { color:#6b7280; font-size:0.9em; white-space:nowrap; }
+.param-table td.val-eq  { color:#58a6ff; font-weight:bold; }
+.param-table td.val-em  { color:#a78bfa; font-weight:bold; }
+.param-table td.val-sec { color:#fb923c; font-weight:bold; }
+.param-table td.val-na  { color:#374151; font-style:italic; }
+.param-table tr:hover td { background:rgba(255,255,255,0.02); }
+.exit-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; margin-top:4px; }
+.exit-item { font-size:0.8em; color:#8b949e; padding:5px 10px; background:rgba(255,255,255,0.04); border-radius:6px; border-left:3px solid rgba(255,255,255,0.1); }
+.exit-item .exit-label { font-weight:bold; color:#e6edf3; display:inline-block; min-width:22px; }
+.exit-item.exit-l1 { border-left-color:#3fb950; }
+.exit-item.exit-l0 { border-left-color:#ff8c00; }
+
+/* ── Portfolio Modal ──────────────────────────────────────────────────── */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:1000; backdrop-filter:blur(4px); align-items:center; justify-content:center; }
+.modal-overlay.open { display:flex; }
+.modal-box { background:#161b22; border:1px solid rgba(255,255,255,0.15); border-radius:14px; padding:24px 26px; width:380px; max-width:95vw; box-shadow:0 16px 48px rgba(0,0,0,0.6); }
+.modal-box h3 { margin:0 0 18px; font-size:0.98em; color:#58a6ff; }
+.modal-field { margin-bottom:14px; }
+.modal-field label { display:block; font-size:0.75em; color:#666; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.5px; }
+.modal-field input { width:100%; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:8px 10px; color:#e6edf3; font-size:0.88em; outline:none; transition:border-color .15s; }
+.modal-field input:focus { border-color:#58a6ff; background:rgba(88,166,255,0.08); }
+.modal-actions { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
+.btn-primary { background:#1f6feb; color:#fff; border:none; border-radius:6px; padding:8px 18px; cursor:pointer; font-size:0.85em; font-weight:bold; transition:background .15s; }
+.btn-primary:hover { background:#388bfd; }
+.btn-cancel { background:rgba(255,255,255,0.06); color:#8b949e; border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:8px 14px; cursor:pointer; font-size:0.85em; transition:all .15s; }
+.btn-cancel:hover { background:rgba(255,255,255,0.12); color:#e6edf3; }
+
+/* ── Detail Modal (lightbox) ──────────────────────────────────────────── */
+.detail-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.78); z-index:1100; backdrop-filter:blur(5px); align-items:flex-start; justify-content:center; overflow-y:auto; padding:20px 10px; }
+.detail-overlay.open { display:flex; }
+.detail-box { background:#111927; border:1px solid rgba(255,255,255,0.12); border-radius:16px; width:900px; max-width:98vw; box-shadow:0 20px 60px rgba(0,0,0,0.7); padding:0; overflow:hidden; position:relative; margin:auto; }
+.detail-header { padding:16px 22px 12px; background:rgba(255,255,255,0.04); border-bottom:1px solid rgba(255,255,255,0.08); display:flex; justify-content:space-between; align-items:flex-start; }
+.detail-title { font-size:1em; font-weight:bold; color:#e6edf3; }
+.detail-sub { font-size:0.72em; color:#555; font-family:monospace; margin-top:2px; }
+.detail-close { background:none; border:none; color:#555; font-size:1.4em; cursor:pointer; padding:0 4px; line-height:1; }
+.detail-close:hover { color:#e6edf3; }
+.detail-body { padding:16px 22px 22px; }
+
+/* KPIs in modal */
+.detail-kpis { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+.kpi-box { background:rgba(255,255,255,0.04); border-radius:8px; padding:8px 12px; min-width:88px; flex:1; text-align:center; border:1px solid rgba(255,255,255,0.07); }
+.kpi-box .kpi-label { font-size:0.68em; color:#555; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px; }
+.kpi-box .kpi-value { font-size:1.1em; font-weight:bold; color:#e6edf3; }
+
+/* Regime bar */
+.regime-bar { padding:8px 12px; border-radius:8px; font-size:0.82em; margin-bottom:14px; }
+.regime-bar.bull { background:#145a2322; border:1px solid #145a23; color:#3fb950; }
+.regime-bar.bear { background:#3c000022; border:1px solid #5c0000; color:#f85149; }
+
+/* L0 section in modal */
+.l0-section { background:rgba(122,58,0,0.12); border:1px solid rgba(122,58,0,0.3); border-radius:8px; padding:12px 14px; margin-bottom:14px; }
+.l0-section h4 { color:#ff8c00; font-size:0.85em; margin-bottom:8px; }
+.l0-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; font-size:0.78em; }
+.l0-kpi { text-align:center; }
+.l0-kpi .lk { color:#8b949e; }
+.l0-kpi .lv { font-weight:700; color:#ff8c00; }
 
 /* Conditions checklist */
-.cond-section { margin-bottom:18px; }
+.cond-section { margin-bottom:16px; }
 .cond-title { font-size:0.8em; font-weight:700; color:#8b949e; text-transform:uppercase; margin-bottom:10px; }
 .cond-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .cond-item { display:flex; align-items:center; gap:8px; font-size:0.82em; }
@@ -124,29 +278,30 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .cond-dot.no { background:#f85149; }
 .cond-dot.na { background:#30363d; }
 
-/* Regime bar */
-.regime-bar { padding:8px 12px; border-radius:8px; font-size:0.82em; margin-bottom:14px; }
-.regime-bar.bull { background:#145a2322; border:1px solid #145a23; color:#3fb950; }
-.regime-bar.bear { background:#3c000022; border:1px solid #5c0000; color:#f85149; }
-
-/* L0 section */
-.l0-section { background:rgba(122,58,0,0.12); border:1px solid rgba(122,58,0,0.3); border-radius:8px; padding:12px 14px; margin-bottom:14px; }
-.l0-section h4 { color:#ff8c00; font-size:0.85em; margin-bottom:8px; }
-.l0-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; font-size:0.78em; }
-.l0-kpi { text-align:center; }
-.l0-kpi .lk  { color:#8b949e; }
-.l0-kpi .lv  { font-weight:700; color:#ff8c00; }
-
-/* Reason text */
+/* Reason box */
 .reason-box { background:rgba(255,255,255,0.04); border-left:3px solid #58a6ff; padding:8px 12px; border-radius:4px; font-size:0.8em; color:#e6edf3; margin-bottom:14px; }
+
+/* Chart */
+.detail-chart-wrap { background:rgba(0,0,0,0.3); border-radius:10px; padding:12px; margin-bottom:16px; height:200px; position:relative; }
+
+/* Day selector */
+.detail-days-btn { background:none; border:1px solid rgba(255,255,255,0.12); color:#666; border-radius:4px; cursor:pointer; font-size:0.72em; padding:2px 8px; margin-left:4px; transition:all .15s; }
+.detail-days-btn:hover,.detail-days-btn.active { background:rgba(88,166,255,0.18); border-color:#58a6ff; color:#e6edf3; }
+
+/* Historical table */
+.detail-hist-wrap { max-height:280px; overflow-y:auto; border-radius:8px; border:1px solid rgba(255,255,255,0.07); }
+.detail-hist-wrap::-webkit-scrollbar { width:5px; }
+.detail-hist-wrap::-webkit-scrollbar-thumb { background:#333; border-radius:3px; }
+.detail-table { width:100%; border-collapse:collapse; font-size:0.76em; }
+.detail-table thead { position:sticky; top:0; background:#0d1320; z-index:1; }
+.detail-table th { padding:7px 8px; text-align:right; color:#555; font-weight:bold; border-bottom:1px solid rgba(255,255,255,0.08); white-space:nowrap; }
+.detail-table th:first-child { text-align:left; }
+.detail-table td { padding:5px 8px; text-align:right; border-bottom:1px solid rgba(255,255,255,0.04); color:#8b949e; white-space:nowrap; }
+.detail-table td:first-child { text-align:left; color:#555; font-family:monospace; }
+.detail-table tr:hover td { background:rgba(255,255,255,0.02); }
 
 /* Loader */
 .loader { text-align:center; padding:60px; color:#8b949e; }
-
-/* Category filters */
-.cat-filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
-.cat-btn { padding:5px 14px; border:1px solid rgba(255,255,255,0.12); border-radius:14px; background:transparent; color:#8b949e; cursor:pointer; font-size:0.78em; transition:all .15s; }
-.cat-btn:hover,.cat-btn.active { background:#58a6ff22; border-color:#58a6ff; color:#58a6ff; }
 
 @media(max-width:900px){ .col-ragione,.col-sma200 { display:none; } }
 @media(max-width:600px){ .etf-table td,.col-header th { font-size:0.72em; padding:6px 5px; } }
@@ -166,7 +321,83 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
       <div class="sitem l3"><span class="num" id="l3Count">–</span><span class="lbl">L3</span></div>
     </div>
   </div>
-  <div class="last-update" id="lastUpdate">Caricamento...</div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div class="search-wrap">
+      <input class="search-input" id="searchInput" type="text" placeholder="Cerca nome o ISIN…" oninput="filterSearch(this.value)" autocomplete="off" spellcheck="false">
+      <button class="search-clear" id="searchClear" onclick="clearSearch()" title="Cancella">&times;</button>
+    </div>
+    <div class="health-badge" onclick="toggleHealthPanel()" id="healthBadge" title="Diagnostica sistema">
+      <span class="health-dot grey" id="healthDot"></span>
+      <span id="healthLabel">Verifica...</span>
+    </div>
+    <div class="last-update" id="lastUpdate">Caricamento...</div>
+  </div>
+</div>
+
+<!-- ── Health panel ───────────────────────────────────────────────────────── -->
+<div class="health-panel" id="healthPanel">
+  <span class="hp-close" onclick="toggleHealthPanel()">&times;</span>
+  <h3>Diagnostica Sistema</h3>
+  <div class="hp-row"><span class="hp-label">Stato</span><span class="hp-value" id="hpStatus">-</span></div>
+  <div class="hp-row"><span class="hp-label">Ultimo aggiornamento</span><span class="hp-value" id="hpLastUpdate">-</span></div>
+  <div class="hp-row"><span class="hp-label">Ore da ultimo update</span><span class="hp-value" id="hpHours">-</span></div>
+  <div class="hp-row"><span class="hp-label">Database PostgreSQL</span><span class="hp-value" id="hpDb">-</span></div>
+  <div class="hp-row"><span class="hp-label">ETF analizzati</span><span class="hp-value" id="hpEtfsOk">-</span></div>
+  <div class="hp-row"><span class="hp-label">ETF con errore</span><span class="hp-value" id="hpEtfsErr">-</span></div>
+  <div class="hp-row"><span class="hp-label">Monitor in esecuzione</span><span class="hp-value" id="hpRunning">-</span></div>
+  <div class="hp-errors" id="hpErrors"></div>
+</div>
+
+<!-- ── Modal Portafoglio ──────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="portfolioModal" onclick="if(event.target===this)closePortfolioModal()">
+  <div class="modal-box">
+    <h3>&#128200; Aggiungi al Portafoglio</h3>
+    <div class="modal-field"><label>ETF</label><input type="text" id="pfFundName" readonly style="color:#8b949e;cursor:default;"></div>
+    <div class="modal-field"><label>ISIN</label><input type="text" id="pfIsin" readonly style="color:#555;cursor:default;font-family:monospace;font-size:0.82em;"></div>
+    <div class="modal-field"><label>Data Acquisto</label><input type="date" id="pfEntryDate"></div>
+    <div class="modal-field"><label>Prezzo Acquisto</label><input type="number" id="pfEntryPrice" step="0.0001" min="0" placeholder="es. 84.5200"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closePortfolioModal()">Annulla</button>
+      <button class="btn-primary" onclick="submitPortfolioEntry()">Aggiungi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Detail Modal (lightbox) ───────────────────────────────────────────── -->
+<div class="detail-overlay" id="detailOverlay" onclick="if(event.target===this)closeDetail()">
+  <div class="detail-box">
+    <div class="detail-header">
+      <div>
+        <div class="detail-title" id="detailTitle">-</div>
+        <div class="detail-sub" id="detailSub">-</div>
+      </div>
+      <button class="detail-close" onclick="closeDetail()">&times;</button>
+    </div>
+    <div class="detail-body">
+      <div class="detail-kpis" id="detailKpis"></div>
+      <div id="detailRegime"></div>
+      <div id="detailL0"></div>
+      <div id="detailExit"></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <span style="font-size:0.75em;color:#555;">Storico:</span>
+        <button class="detail-days-btn active" id="dbtn30" onclick="changeDetailDays(30)">30gg</button>
+        <button class="detail-days-btn" id="dbtn60" onclick="changeDetailDays(60)">60gg</button>
+        <button class="detail-days-btn" id="dbtn90" onclick="changeDetailDays(90)">90gg</button>
+      </div>
+      <div class="detail-chart-wrap"><canvas id="detailChart"></canvas></div>
+      <div class="cond-section" id="detailConds"></div>
+      <div class="reason-box" id="detailReason" style="display:none;"></div>
+      <div class="detail-hist-wrap">
+        <table class="detail-table">
+          <thead><tr>
+            <th>Data</th><th>Prezzo</th><th>%1G</th><th>%1W</th>
+            <th>EMA20</th><th>SMA50</th><th>Dist%EMA20</th><th>RSI14</th>
+          </tr></thead>
+          <tbody id="detailTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ── Column header ──────────────────────────────────────────────────────── -->
@@ -195,93 +426,145 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
   <div id="mainContent"><div class="loader">Caricamento dati...</div></div>
 </div>
 
-<!-- ── Modal ─────────────────────────────────────────────────────────────── -->
-<div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
-  <div class="modal" id="modalContent">
-    <button class="modal-close" onclick="closeModal()">&#x2715;</button>
-    <div id="modalBody"><div class="loader">Caricamento...</div></div>
-  </div>
-</div>
-
 <script>
 // ── State ─────────────────────────────────────────────────────────────────
 let allData = null;
 let activeCat = 'all';
+let searchQuery = '';
+let portfolioIsins = new Set();
+let allEtfMap = {};          // isin → {nome, price}
+let l1TrackingMap = {};      // isin → {entry_date, entry_price, pct_gain, days_in_l1, is_new}
+let l1ExitsData = [];
+let l1ExitsOpen = false;
+let portfolioSectionOpen = false;
+let historyCache = {};
 
 // ── Init ──────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => { loadDashboard(); });
-document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
+window.addEventListener('DOMContentLoaded', () => {
+  loadData();
+  loadHealth();
+  loadPortfolio();
+  document.addEventListener('keydown', e => { if(e.key==='Escape') { closeDetail(); closePortfolioModal(); } });
+  document.addEventListener('click', function(e) {
+    const panel = document.getElementById('healthPanel');
+    const badge = document.getElementById('healthBadge');
+    if (panel.classList.contains('open') && !panel.contains(e.target) && !badge.contains(e.target))
+      panel.classList.remove('open');
+  });
+  setInterval(loadData, 60000);
+  setInterval(loadHealth, 120000);
+  setInterval(loadPortfolio, 120000);
+});
 
-async function loadDashboard() {
+// ── Data loading ──────────────────────────────────────────────────────────
+async function loadData() {
   try {
-    const res = await fetch('/data/dashboard_data.json');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    allData = await res.json();
-    renderDashboard(allData);
+    const [dashRes, l1TrackRes, l1ExitRes] = await Promise.all([
+      fetch('/data/dashboard_data.json'),
+      fetch('/api/l1-tracking'),
+      fetch('/api/l1-exits'),
+    ]);
+    allData = await dashRes.json();
+    const l1Track = await l1TrackRes.json();
+    const l1Exit  = await l1ExitRes.json();
+    l1TrackingMap = {};
+    (l1Track.tracking || []).forEach(t => { l1TrackingMap[t.isin] = t; });
+    l1ExitsData = l1Exit.exits || [];
+    renderDashboard();
+    renderL1Exits();
   } catch(e) {
     document.getElementById('mainContent').innerHTML =
       `<div class="loader" style="color:#f85149">Errore: ${e.message} — <a href="/api/trigger-update" style="color:#58a6ff">Aggiorna</a></div>`;
   }
 }
 
-function renderDashboard(data) {
-  // Summary
-  const s = data.summary || {};
-  document.getElementById('totCount').textContent = s.total_etfs || 0;
-  document.getElementById('l0Count').textContent  = s.l0_count || 0;
-  document.getElementById('l1Count').textContent  = s.l1_count || 0;
-  document.getElementById('l2Count').textContent  = s.l2_count || 0;
-  document.getElementById('l3Count').textContent  = s.l3_count || 0;
+// ── Dashboard render ──────────────────────────────────────────────────────
+function renderDashboard() {
+  if (!allData) return;
 
-  // Last update
-  if (data.last_update) {
-    const d = new Date(data.last_update);
+  const s = allData.summary || {};
+  document.getElementById('totCount').textContent = s.total_etfs || 0;
+  document.getElementById('l0Count').textContent  = s.l0_count  || 0;
+  document.getElementById('l1Count').textContent  = s.l1_count  || 0;
+  document.getElementById('l2Count').textContent  = s.l2_count  || 0;
+  document.getElementById('l3Count').textContent  = s.l3_count  || 0;
+
+  if (allData.last_update) {
+    const d = new Date(allData.last_update);
     document.getElementById('lastUpdate').textContent =
-      `Aggiornato: ${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`;
+      `Agg.: ${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`;
   }
 
   // Category filters
-  const cats = Object.keys(data.categories || {});
+  const cats = Object.keys(allData.categories || {});
   const cf = document.getElementById('catFilters');
   if (cats.length > 1) {
     cf.style.display = 'flex';
-    cf.innerHTML = `<button class="cat-btn active" onclick="filterCat('all',this)">Tutte</button>` +
-      cats.map(c => `<button class="cat-btn" onclick="filterCat('${c}',this)">${c}</button>`).join('');
+    cf.innerHTML = `<button class="cat-btn ${activeCat==='all'?'active':''}" onclick="filterCat('all',this)">Tutte</button>` +
+      cats.map(c => `<button class="cat-btn ${activeCat===c?'active':''}" onclick="filterCat('${c.replace(/'/g,"\\'")}',this)">${c}</button>`).join('');
   }
 
-  // Level sections
-  const levels = data.levels || {};
-  const html = [];
-  for (const [lvl, label, cls] of [
-    ['0','L0 — Deep Recovery','level-0'],
-    ['1','L1 — Trend Sicuro','level-1'],
-    ['2','L2 — Watchlist','level-2'],
-    ['3','L3 — Universo','level-3'],
-  ]) {
-    const list = (levels[lvl] || levels[parseInt(lvl)] || []);
-    html.push(renderLevelSection(parseInt(lvl), label, cls, list));
+  // Build etf map
+  for (const list of Object.values(allData.levels || {}))
+    for (const e of list) if (e.isin) allEtfMap[e.isin] = {nome: e.nome || e.ticker, price: e.price || 0, ticker: e.ticker || ''};
+  for (const e of allData.l0_funds || []) if (e.isin) allEtfMap[e.isin] = {nome: e.nome || e.ticker, price: e.price || 0, ticker: e.ticker || ''};
+
+  const levels = allData.levels || {};
+  const sections = [];
+
+  // L0
+  const l0list = (allData.l0_funds || []).filter(applyFilters);
+  sections.push(renderLevelSection(0, 'L0 — Deep Recovery', 'level-0', l0list));
+
+  // L1
+  const l1list = (levels['1'] || levels[1] || []).filter(applyFilters);
+  sections.push(renderL1Section(l1list));
+
+  // L1 exits placeholder
+  sections.push('<div id="l1ExitsContainer"></div>');
+
+  // L2 / L3
+  for (const [lvl, label, cls] of [['2','L2 — Watchlist','level-2'],['3','L3 — Universo','level-3']]) {
+    const list = (levels[lvl] || levels[parseInt(lvl)] || []).filter(applyFilters);
+    sections.push(renderLevelSection(parseInt(lvl), label, cls, list));
   }
-  document.getElementById('mainContent').innerHTML = html.join('');
+
+  // Portfolio + param ref
+  sections.push(renderPortfolioSection());
+  sections.push(renderParamRef());
+
+  document.getElementById('mainContent').innerHTML = sections.join('');
+
+  // Re-render L1 exits into placeholder
+  renderL1Exits();
+}
+
+function applyFilters(e) {
+  const catOk = activeCat === 'all' || e.categoria === activeCat;
+  const sq = searchQuery;
+  const searchOk = !sq || (e.nome||'').toLowerCase().includes(sq) || (e.isin||'').toLowerCase().includes(sq) || (e.ticker||'').toLowerCase().includes(sq);
+  return catOk && searchOk;
 }
 
 function filterCat(cat, btn) {
   activeCat = cat;
   document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-
-  if (!allData) return;
-  const levels = allData.levels || {};
-  for (const lvl of [0,1,2,3]) {
-    const tbody = document.getElementById(`tbody-${lvl}`);
-    if (!tbody) continue;
-    const list = levels[lvl] || levels[String(lvl)] || [];
-    const filtered = cat==='all' ? list : list.filter(e => e.categoria===cat);
-    tbody.innerHTML = filtered.length
-      ? filtered.map(e => renderETFRow(e, lvl)).join('')
-      : `<tr><td colspan="13" class="empty-msg">Nessun ETF</td></tr>`;
-  }
+  if(btn) btn.classList.add('active');
+  renderDashboard();
 }
 
+function filterSearch(q) {
+  searchQuery = q.trim().toLowerCase();
+  document.getElementById('searchClear').classList.toggle('visible', !!searchQuery);
+  renderDashboard();
+}
+
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  filterSearch('');
+}
+
+// ── L0 + L2/L3 section render ─────────────────────────────────────────────
 function renderLevelSection(lvl, label, cls, list) {
   const count = list.length;
   return `
@@ -297,234 +580,780 @@ function renderLevelSection(lvl, label, cls, list) {
         <col class="col-rsi"><col class="col-adx">
         <col class="col-buy"><col class="col-ragione">
       </colgroup>
-      <tbody id="tbody-${lvl}">
+      <tbody>
         ${count ? list.map(e => renderETFRow(e, lvl)).join('') : '<tr><td colspan="13" class="empty-msg">Nessun ETF</td></tr>'}
       </tbody>
     </table>
   </div>`;
 }
 
-function renderETFRow(e, lvl) {
-  const ticker = e.ticker || '';
-  const isin   = e.isin   || '';
-  const key    = encodeURIComponent(ticker || isin);
+// ── L1 section (dedicated, with header row + tracking columns) ────────────
+function renderL1Section(list) {
+  const count = list.length;
+  const rows = count ? list.map(e => renderL1Row(e)).join('') : '<tr><td colspan="10" class="empty-msg">Nessun ETF in L1</td></tr>';
+  return `
+  <div class="level-section level-1">
+    <div class="level-header">
+      <span>L1 — Trend Sicuro <span class="count">(${count} ETF)</span></span>
+    </div>
+    <table class="etf-table l1-table" style="table-layout:fixed;width:100%;">
+      <colgroup>
+        <col style="width:26%"><col style="width:6%">
+        <col style="width:5%"><col style="width:5%"><col style="width:5%">
+        <col style="width:6%"><col style="width:7%">
+        <col style="width:5%"><col style="width:16%"><col style="width:9%">
+      </colgroup>
+      <thead><tr>
+        <th>ETF</th><th>Prezzo</th>
+        <th>%1G</th><th>%1W</th><th>%1M</th>
+        <th>Gg L1</th><th>vs Ent.</th>
+        <th>RSI</th><th>Cond.</th><th>SMA200</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
 
-  // Price
-  const price  = e.price != null ? fmtNum(e.price, 4) : '—';
+function renderL1Row(e) {
+  const isin   = e.isin || '';
+  const track  = l1TrackingMap[isin] || {};
+  const today  = new Date().toISOString().slice(0,10);
+  const ed     = track.entry_date;
 
-  // % changes
-  const pct1g  = fmtPct(e.pct_1d);
-  const pct1w  = fmtPct(e.pct_1w);
-  const pct1m  = fmtPct(e.pct_1m);
+  // Giorni in L1
+  let daysHtml = '—';
+  if (ed) {
+    const days = tradingDays(ed, today);
+    const col  = days <= 5 ? '#3fb950' : days <= 15 ? '#d29922' : '#8b949e';
+    daysHtml = `<span style="font-weight:bold;color:${col}">${days}</span><span style="color:#555;font-size:0.78em"> gg</span>`;
+  }
 
-  // MAs
-  const ema20  = e.ema20  != null ? fmtNum(e.ema20, 4)  : '—';
-  const sma50  = e.sma50  != null ? fmtNum(e.sma50, 4)  : '—';
+  // Badge NUOVO
+  const nuovoBadge = track.is_new ? `<span class="badge-nuovo">NUOVO</span>` : '';
 
-  // SMA200 regime indicator
+  // Exit warning
+  const exitRule = e.conditions && e.conditions.exit_rule;
+  const exitWarn = exitRule ? `<span class="exit-warn" title="Uscita imminente — regola ${exitRule}">⚠️</span>` : '';
+
+  // % vs entrata
+  const pg = track.pct_gain;
+  const pveCls = pg > 0 ? 'pos' : pg < 0 ? 'neg' : 'zero';
+  const pveStr = pg != null
+    ? `<span class="pct ${pveCls}">${pg > 0 ? '+' : ''}${pg.toFixed(2)}%</span>`
+    : '<span style="color:#555">—</span>';
+
+  // SMA200 regime
   let sma200Html = '—';
   if (e.sma200 != null) {
     const isBull = e.price != null && e.price > e.sma200;
-    sma200Html = `<span class="regime-${isBull?'bull':'bear'}">${isBull?'▲ Bull':'▼ Bear'}</span>`;
+    sma200Html = `<span class="${isBull?'regime-bull':'regime-bear'}">${isBull?'▲ Bull':'▼ Bear'}</span>`;
   }
 
-  // RSI
-  const rsiHtml = fmtRsi(e.rsi);
+  const inPf   = portfolioIsins.has(isin);
+  const pfBtn  = isin ? `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf?'&#10003;':'+ Port.'}</button>` : '';
 
-  // ADX
-  const adxHtml = fmtAdx(e.adx);
+  const bc     = e.buy_count || 0;
+  const c      = e.conditions || {};
+  const condHtml = `<span class="buy-count bc${bc}">${bc}/5</span> <span class="cond-dots">${condDot(c.allineamento_ok,'A','Allineamento')}${condDot(c.persistenza_ok,'P','Persistenza')}${condDot(c.rsi_ok,'R','RSI range')}${condDot(c.distance_ok,'D','Distanza EMA20')}${condDot(c.adx_ok,'X','ADX')}</span>`;
 
-  // Buy count badge
-  const bc   = e.buy_count || 0;
-  const dots = [0,1,2,3,4].map(i =>
-    `<div class="buy-dot ${i < bc ? 'on' : ''}"></div>`
-  ).join('');
-  const buyHtml = `<div class="buy-badge"><div class="buy-dots">${dots}</div><span class="buy-count-num ${bc>=5?'all':''}">${bc}/5</span></div>`;
+  const fmtPct = v => {
+    if (v == null) return '<td class="pct zero">—</td>';
+    const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+    return `<td class="pct ${cls}">${v > 0 ? '+' : ''}${v.toFixed(2)}%</td>`;
+  };
 
-  // L0: show drawdown instead of buy count
-  let extraCell = buyHtml;
+  const nome = e.nome || e.ticker || isin;
+  return `<tr style="cursor:pointer;" onclick="openETFDetail('${encodeURIComponent(e.ticker||'')}','${isin}')">
+    <td style="overflow:hidden;">
+      <div class="etf-nome">${nome}${nuovoBadge}${exitWarn}${pfBtn}</div>
+      <div style="font-size:0.7em;color:#555;font-family:monospace;">${isin}</div>
+    </td>
+    <td style="font-weight:600">${e.price != null ? fmtNum(e.price,4) : '—'}</td>
+    ${fmtPct(e.pct_1d)}${fmtPct(e.pct_1w)}${fmtPct(e.pct_1m)}
+    <td style="text-align:center">${daysHtml}</td>
+    <td style="text-align:center">${pveStr}</td>
+    <td>${fmtRsi(e.rsi)}</td>
+    <td>${condHtml}</td>
+    <td>${sma200Html}</td>
+  </tr>`;
+}
+
+// ── Generic ETF row (L0, L2, L3) ─────────────────────────────────────────
+function renderETFRow(e, lvl) {
+  const ticker = e.ticker || '';
+  const isin   = e.isin   || '';
+  const price  = e.price != null ? fmtNum(e.price,4) : '—';
+  const ema20  = e.ema20  != null ? fmtNum(e.ema20,4)  : '—';
+  const sma50  = e.sma50  != null ? fmtNum(e.sma50,4)  : '—';
+  let sma200Html = '—';
+  if (e.sma200 != null) {
+    const isBull = e.price != null && e.price > e.sma200;
+    sma200Html = `<span class="${isBull?'regime-bull':'regime-bear'}">${isBull?'▲ Bull':'▼ Bear'}</span>`;
+  }
+  const bc = e.buy_count || 0;
+  const c  = e.conditions || {};
+  let extraCell;
   if (lvl === 0 && e.drawdown_from_peak != null) {
     extraCell = `<span class="dd-pill">-${fmtNum(e.drawdown_from_peak,1)}%</span>`;
+  } else {
+    const dots = [0,1,2,3,4].map(i => `<div class="buy-dot ${i < bc ? 'on' : ''}"></div>`).join('');
+    extraCell = `<div class="buy-badge"><div class="buy-dots">${dots}</div><span class="buy-count bc${bc}" style="font-size:0.78em;color:#555">${bc}/5</span></div>`;
   }
-
-  // Reason (truncated)
-  const reason = (e.level_reason || '').substring(0, 60);
+  const reason = (e.level_reason || '').substring(0,60);
   const nome   = e.nome || ticker;
-  const typeTag= e.etf_type ? `<span class="etf-type-tag">${e.etf_type.replace('equity_','').replace('_',' ')}</span>` : '';
+  const typeTag = e.etf_type ? `<span class="etf-type-tag">${e.etf_type.replace('equity_','').replace('_',' ')}</span>` : '';
+  const inPf   = portfolioIsins.has(isin);
+  const pfBtn  = isin ? `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf?'&#10003;':'+ Port.'}</button>` : '';
 
-  return `<tr onclick="openETFDetail('${key}','${ticker}','${isin}')">
-    <td class="col-nome"><div class="etf-nome">${nome}${typeTag}</div></td>
+  return `<tr style="cursor:pointer;" onclick="openETFDetail('${encodeURIComponent(ticker)}','${isin}')">
+    <td class="col-nome">
+      <div class="etf-nome">${nome}${typeTag}${pfBtn}</div>
+    </td>
     <td class="col-ticker" style="color:#8b949e">${ticker}</td>
     <td class="col-prezzo" style="font-weight:600">${price}</td>
-    <td class="col-pct">${pct1g}</td>
-    <td class="col-pct">${pct1w}</td>
-    <td class="col-pct">${pct1m}</td>
+    <td class="col-pct">${fmtPct(e.pct_1d)}</td>
+    <td class="col-pct">${fmtPct(e.pct_1w)}</td>
+    <td class="col-pct">${fmtPct(e.pct_1m)}</td>
     <td class="col-ema20" style="color:#58a6ff">${ema20}</td>
     <td class="col-sma50" style="color:#a5d6ff">${sma50}</td>
     <td class="col-sma200">${sma200Html}</td>
-    <td class="col-rsi">${rsiHtml}</td>
-    <td class="col-adx">${adxHtml}</td>
+    <td class="col-rsi">${fmtRsi(e.rsi)}</td>
+    <td class="col-adx">${fmtAdx(e.adx)}</td>
     <td class="col-buy">${extraCell}</td>
     <td class="col-ragione" style="color:#8b949e;font-size:0.78em">${reason}</td>
   </tr>`;
 }
 
-// ── Modal ─────────────────────────────────────────────────────────────────
-async function openETFDetail(key, ticker, isin) {
-  const overlay = document.getElementById('modalOverlay');
-  document.getElementById('modalBody').innerHTML = '<div class="loader">Caricamento dettaglio...</div>';
-  overlay.classList.add('open');
+// ── L1 exits render ───────────────────────────────────────────────────────
+function renderL1Exits() {
+  const container = document.getElementById('l1ExitsContainer');
+  if (!container) return;
+  if (!l1ExitsData || l1ExitsData.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  const ruleNames = {1:'A — Stop Loss',2:'B — Trailing Stop',3:'C — Stanchezza RSI',4:'D — Strutturale',5:'E — ADX debole',6:'F — Storico insuff.'};
+  const rows = l1ExitsData.map(ex => {
+    const perf = ex.pct_gain;
+    const perfCol = perf > 0 ? '#3fb950' : perf < 0 ? '#f85149' : '#8b949e';
+    const perfStr = perf != null ? `<span style="font-weight:bold;color:${perfCol}">${perf > 0 ? '+' : ''}${perf.toFixed(2)}%</span>` : '—';
+    const ruleName = ruleNames[ex.exit_rule] || (ex.exit_rule ? `Regola ${ex.exit_rule}` : '—');
+    return `<tr style="cursor:pointer;" onclick="openETFDetail('','${ex.isin}')">
+      <td style="font-weight:600">${ex.fund_name}<br><span style="font-family:monospace;font-size:0.75em;color:#555">${ex.isin}</span></td>
+      <td style="color:#8b949e;font-size:0.85em">${ex.entry_date||'—'}</td>
+      <td style="color:#8b949e;font-size:0.85em">${ex.exit_date}</td>
+      <td style="text-align:center;color:#8b949e">${ex.days_in_l1??'—'}</td>
+      <td style="font-family:monospace;font-size:0.85em">${ex.entry_price?ex.entry_price.toFixed(4):'—'}</td>
+      <td style="font-family:monospace;font-size:0.85em">${ex.exit_price?ex.exit_price.toFixed(4):'—'}</td>
+      <td style="text-align:center">${perfStr}</td>
+      <td><span class="exit-rule-badge">${ruleName}</span></td>
+    </tr>`;
+  }).join('');
 
-  try {
-    const params = ticker ? `ticker=${encodeURIComponent(ticker)}` : `isin=${encodeURIComponent(isin)}`;
-    const res  = await fetch(`/api/etf-detail?${params}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    renderModal(data);
-  } catch(e) {
-    // Fallback: search in allData
-    let etfData = null;
-    if (allData) {
-      for (const list of Object.values(allData.levels || {})) {
-        etfData = list.find(x => x.ticker===ticker || x.isin===isin);
-        if (etfData) break;
-      }
-    }
-    if (etfData) renderModal(etfData);
-    else document.getElementById('modalBody').innerHTML =
-      `<div class="loader" style="color:#f85149">Errore: ${e.message}</div>`;
+  container.innerHTML = `
+  <div class="l1-exits-section">
+    <div class="l1-exits-header" onclick="toggleL1Exits()">
+      <h3>📤 Usciti da L1 — ultimi 30 giorni</h3>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:0.78em;color:#8b949e">${l1ExitsData.length} uscit${l1ExitsData.length===1?'a':'e'}</span>
+        <span id="l1ExitsToggle" style="color:#555;font-size:0.75em">&#9660;</span>
+      </div>
+    </div>
+    <div id="l1ExitsBody" style="display:none;">
+      <table class="l1-exits-table">
+        <thead><tr>
+          <th style="width:25%">ETF</th>
+          <th style="width:9%">Entrato il</th>
+          <th style="width:9%">Uscito il</th>
+          <th style="width:6%">Gg L1</th>
+          <th style="width:8%">Pr. Ent.</th>
+          <th style="width:8%">Pr. Usc.</th>
+          <th style="width:7%">Perf %</th>
+          <th style="width:28%">Motivo</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+
+  if (l1ExitsOpen) {
+    document.getElementById('l1ExitsBody').style.display = 'block';
+    document.getElementById('l1ExitsToggle').innerHTML = '&#9650;';
   }
 }
 
-function closeModal() {
-  document.getElementById('modalOverlay').classList.remove('open');
+function toggleL1Exits() {
+  l1ExitsOpen = !l1ExitsOpen;
+  const body = document.getElementById('l1ExitsBody');
+  const tog  = document.getElementById('l1ExitsToggle');
+  if (body) body.style.display = l1ExitsOpen ? 'block' : 'none';
+  if (tog)  tog.innerHTML = l1ExitsOpen ? '&#9650;' : '&#9660;';
 }
 
-function handleOverlayClick(e) {
-  if (e.target === document.getElementById('modalOverlay')) closeModal();
+// ── Portfolio section HTML builder ────────────────────────────────────────
+function renderPortfolioSection() {
+  return `
+  <div class="portfolio-section" id="portfolioSection">
+    <div class="portfolio-header" onclick="togglePortfolioSection()">
+      <h3>&#128200; Portafoglio Personale</h3>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span id="portfolioCount" style="font-size:0.78em;color:#555">0 ETF</span>
+        <span id="portfolioToggle" style="color:#555;font-size:0.75em">&#9660;</span>
+      </div>
+    </div>
+    <div class="portfolio-body" id="portfolioBody" style="display:none;">
+      <div id="portfolioContent">
+        <div class="portfolio-empty">Nessun ETF nel portafoglio.<br>
+          <span style="color:#374151;">Usa il pulsante <strong style="color:#58a6ff;">+ Port.</strong> accanto a un ETF per aggiungerlo.</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
 }
 
-function renderModal(e) {
-  const lvl = e.suggested_level != null ? e.suggested_level
-            : (e.conditions && e.conditions.suggested_level != null ? e.conditions.suggested_level : '—');
+// ── Param ref HTML ─────────────────────────────────────────────────────────
+function renderParamRef() {
+  return `
+  <div class="param-ref">
+    <div class="param-ref-header" onclick="toggleParamRef()">
+      <h3>&#x1F4CB; Parametri di Riferimento — Profili e Regole L0/L1</h3>
+      <span class="param-ref-toggle" id="paramRefToggle">&#9660;</span>
+    </div>
+    <div class="param-ref-body" id="paramRefBody">
+
+      <div class="param-section-title">L1 "Trend Sicuro" — 5 Condizioni di Entrata (tutte richieste)</div>
+      <table class="param-table">
+        <thead><tr>
+          <th style="width:22%">Parametro</th>
+          <th class="cls-eq"  style="width:20%">&#9670; Equity / Settoriali</th>
+          <th class="cls-em"  style="width:18%">&#9670; Mercati Emergenti</th>
+          <th class="cls-sec" style="width:18%">&#9670; Materie Prime</th>
+          <th class="cls-etf" style="width:22%">&#9670; Bond / High Yield</th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="param-name">RSI range entrata</td><td class="val-eq">50 – 65</td><td class="val-em">50 – 65</td><td class="val-sec">50 – 65</td><td class="val-na">N/A</td></tr>
+          <tr><td class="param-name">Persistenza EMA20</td><td class="val-eq">3 giorni</td><td class="val-em">3 giorni</td><td class="val-sec">3 giorni</td><td class="val-na">3 giorni</td></tr>
+          <tr><td class="param-name">Distanza max EMA20</td><td class="val-eq">4%</td><td class="val-em">4%</td><td class="val-sec">4%</td><td class="val-na">4%</td></tr>
+          <tr><td class="param-name">ADX(14) richiesto</td><td class="val-eq">&gt; 20</td><td class="val-em">&gt; 20</td><td class="val-sec">&gt; 20</td><td class="val-na">No</td></tr>
+          <tr><td class="param-name">Filtro bear market</td><td class="val-eq" colspan="4" style="color:#8b949e;">Prezzo &gt; SMA200 — blocca nuovi ingressi L1 in bear market</td></tr>
+        </tbody>
+      </table>
+
+      <div class="param-section-title" style="margin-top:16px;">L1 — Regole di Uscita</div>
+      <div class="exit-grid">
+        <div class="exit-item exit-l1"><span class="exit-label">A.</span> Stop Loss: Prezzo &lt; EMA20</div>
+        <div class="exit-item exit-l1"><span class="exit-label">B.</span> Trailing Stop: EMA10 &lt; EMA20</div>
+        <div class="exit-item exit-l1"><span class="exit-label">C.</span> Stanchezza: RSI era &gt;70 e scende sotto 70</div>
+        <div class="exit-item exit-l1"><span class="exit-label">D.</span> Strutturale: EMA20 &lt; SMA50</div>
+        <div class="exit-item exit-l1"><span class="exit-label">E.</span> ADX &lt; 20 (solo equity/commodities)</div>
+      </div>
+
+      <div class="param-section-title" style="border-left:3px solid #ff8c00;padding-left:8px;border-bottom:none;margin-top:20px;">L0 "Deep Recovery" — Recupero dopo Forte Deprezzamento</div>
+      <div class="exit-grid">
+        <div class="exit-item exit-l0"><span class="exit-label">1.</span> Drawdown: Prezzo &ge;15% sotto il picco storico</div>
+        <div class="exit-item exit-l0"><span class="exit-label">2.</span> Oversold: RSI &lt; 30</div>
+        <div class="exit-item exit-l0"><span class="exit-label">3.</span> Divergenza: Prezzo &rarr; nuovo min, RSI &rarr; min più alto</div>
+        <div class="exit-item exit-l0"><span class="exit-label">4.</span> Segnale recupero: RSI &gt; 32 o micro-breakout +0.3%</div>
+      </div>
+      <div style="font-size:0.79em;color:#555;margin-top:8px;padding:0 4px;">
+        Uscita L0: &alpha; Stop loss (panic low) &nbsp;|&nbsp; &beta; Bear trap (RSI &lt;25) &nbsp;|&nbsp; &gamma; Promozione (Prezzo &gt; EMA20) &nbsp;|&nbsp; &epsilon; Timeout 30gg
+      </div>
+
+      <div class="param-section-title" style="border-left:3px solid #f85149;padding-left:8px;border-bottom:none;margin-top:20px;">Kill Switch</div>
+      <div style="font-size:0.8em;color:#8b949e;padding:4px 0 10px;">
+        Se variazione giornaliera &le; <strong style="color:#f85149;">-3.0%</strong>: tutti i nuovi ingressi L1 e L0 vengono bloccati. Le uscite rimangono sempre operative.
+      </div>
+
+    </div>
+  </div>`;
+}
+
+function toggleParamRef() {
+  const body = document.getElementById('paramRefBody');
+  const tog  = document.getElementById('paramRefToggle');
+  body.classList.toggle('open');
+  tog.classList.toggle('open');
+}
+
+// ── Portfolio ──────────────────────────────────────────────────────────────
+async function loadPortfolio() {
+  try {
+    const res  = await fetch('/api/portfolio');
+    const data = await res.json();
+    const pf   = data.portfolio || [];
+    portfolioIsins = new Set(pf.filter(p => p.status === 'active').map(p => p.isin));
+    const countEl = document.getElementById('portfolioCount');
+    if (countEl) countEl.textContent = pf.length + ' ETF';
+    renderPortfolio(pf);
+  } catch(e) { console.error('Portfolio load error', e); }
+}
+
+function renderPortfolio(portfolio) {
+  const content = document.getElementById('portfolioContent');
+  if (!content) return;
+  if (!portfolio || portfolio.length === 0) {
+    content.innerHTML = '<div class="portfolio-empty">Nessun ETF nel portafoglio.<br><span style="color:#374151;">Usa il pulsante <strong style="color:#58a6ff;">+ Port.</strong> per aggiungere.</span></div>';
+    return;
+  }
+  content.innerHTML = `<table class="portfolio-table">
+    <thead><tr>
+      <th style="width:28%">ETF</th>
+      <th style="width:10%">Acquisto</th>
+      <th style="width:9%">Pr. Acq.</th>
+      <th style="width:9%">Pr. Att.</th>
+      <th style="width:8%">Perf %</th>
+      <th style="width:5%;text-align:center">Liv.</th>
+      <th style="width:6%;text-align:center">RSI</th>
+      <th style="width:8%;text-align:center">Dist EMA20</th>
+      <th style="width:8%;text-align:center">Storico</th>
+      <th style="width:9%;text-align:center">Rimuovi</th>
+    </tr></thead>
+    <tbody id="portfolioTableBody"></tbody>
+  </table>`;
+  const tbody = document.getElementById('portfolioTableBody');
+  tbody.innerHTML = portfolio.map(p => {
+    const perf = p.perf_pct;
+    const perfCls = perf > 0 ? 'pos' : perf < 0 ? 'neg' : 'zero';
+    const perfStr = perf != null ? (perf > 0 ? '+' : '') + perf.toFixed(2) + '%' : '-';
+    const rsiVal  = p.rsi != null ? parseFloat(p.rsi).toFixed(0) : '-';
+    const rsiCls  = p.rsi < 35 ? 'oversold' : p.rsi <= 65 ? 'optimal' : p.rsi <= 75 ? 'mid' : 'overbought';
+    const distEma = p.dist_ema20 != null ? (p.dist_ema20 > 0 ? '+' : '') + parseFloat(p.dist_ema20).toFixed(1) + '%' : '-';
+    const distCls = (p.dist_ema20||0) > 0 ? 'pos' : (p.dist_ema20||0) < 0 ? 'neg' : 'zero';
+    const prAtt   = p.current_price != null ? parseFloat(p.current_price).toFixed(4) : '-';
+    const prAcq   = p.entry_price   != null ? parseFloat(p.entry_price).toFixed(4) : '-';
+    const lv = p.level;
+    const levBadge = lv != null ? `<span class="lv-badge lv${lv}">L${lv}</span>` : '-';
+    const isin = p.isin;
+    return `<tr id="pf-row-${isin}" style="cursor:pointer;" onclick="openETFDetail('${(allEtfMap[isin]?.ticker||'').replace(/'/g,"\\'")}','${isin}')">
+      <td style="font-weight:600">${p.fund_name||isin}<br><span style="font-family:monospace;font-size:0.7em;color:#555">${isin}</span></td>
+      <td style="color:#8b949e;font-size:0.83em">${p.entry_date||'-'}</td>
+      <td style="font-family:monospace;font-size:0.85em">${prAcq}</td>
+      <td style="font-family:monospace;font-size:0.85em">${prAtt}</td>
+      <td><span class="perf-badge ${perfCls}">${perfStr}</span></td>
+      <td style="text-align:center">${levBadge}</td>
+      <td class="rsi-val ${rsiCls}" style="text-align:center">${rsiVal}</td>
+      <td class="pct ${distCls}" style="text-align:center;font-size:0.88em">${distEma}</td>
+      <td style="text-align:center"><button class="btn-toggle-hist" onclick="event.stopPropagation();toggleEtfHistory('${isin}')" id="btn-hist-${isin}">&#9660; 30gg</button></td>
+      <td style="text-align:center"><button class="btn-remove" onclick="event.stopPropagation();removeFromPortfolio('${isin}')" title="Rimuovi">&#10005;</button></td>
+    </tr>
+    <tr class="history-row" id="pf-hist-${isin}" style="display:none;">
+      <td colspan="10"><div id="hist-wrap-${isin}" style="padding:12px;color:#555;text-align:center;font-size:0.8em">Caricamento...</div></td>
+    </tr>`;
+  }).join('');
+}
+
+function togglePortfolioSection() {
+  portfolioSectionOpen = !portfolioSectionOpen;
+  const body = document.getElementById('portfolioBody');
+  const tog  = document.getElementById('portfolioToggle');
+  if (body) body.style.display = portfolioSectionOpen ? 'block' : 'none';
+  if (tog)  tog.innerHTML = portfolioSectionOpen ? '&#9650;' : '&#9660;';
+  if (portfolioSectionOpen) loadPortfolio();
+}
+
+async function toggleEtfHistory(isin) {
+  const histRow = document.getElementById('pf-hist-' + isin);
+  const btn     = document.getElementById('btn-hist-' + isin);
+  const isOpen  = histRow.style.display !== 'none';
+  if (isOpen) { histRow.style.display = 'none'; btn.innerHTML = '&#9660; 30gg'; return; }
+  histRow.style.display = 'table-row';
+  btn.innerHTML = '&#9650; Chiudi';
+  if (historyCache[isin]) { renderHistory(isin, historyCache[isin]); return; }
+  try {
+    const res  = await fetch('/api/portfolio-history/' + isin);
+    const data = await res.json();
+    historyCache[isin] = data.history || [];
+    renderHistory(isin, historyCache[isin]);
+  } catch(e) {
+    document.getElementById('hist-wrap-' + isin).innerHTML = '<div style="color:#f85149">Errore caricamento storico</div>';
+  }
+}
+
+function renderHistory(isin, history) {
+  const wrap = document.getElementById('hist-wrap-' + isin);
+  if (!history || history.length === 0) {
+    wrap.innerHTML = '<div style="padding:12px;color:#555;text-align:center;font-size:0.8em">Nessun dato storico disponibile.</div>';
+    return;
+  }
+  const rows = [...history].reverse();
+  const fp = (v,d=2) => {
+    if (v == null) return '<td style="color:#333">—</td>';
+    const col = v > 0 ? '#3fb950' : v < 0 ? '#f85149' : '#8b949e';
+    return `<td style="color:${col}">${v > 0 ? '+' : ''}${v.toFixed(d)}%</td>`;
+  };
+  wrap.innerHTML = `<table class="history-table">
+    <thead><tr><th>Data</th><th>Prezzo</th><th>&#916;1G%</th><th>&#916;1W%</th><th>EMA20</th><th>SMA50</th><th>Dist EMA20%</th><th>RSI14</th></tr></thead>
+    <tbody>${rows.map(r => {
+      const rsiC = r.rsi14 < 35 ? '#3fb950' : r.rsi14 > 65 ? '#f85149' : '#d29922';
+      return `<tr>
+        <td>${r.date}</td>
+        <td>${r.price != null ? r.price.toFixed(4) : '—'}</td>
+        ${fp(r.pct_1g)}${fp(r.pct_1w)}
+        <td>${r.ema20 != null ? r.ema20.toFixed(4) : '—'}</td>
+        <td>${r.sma50 != null ? r.sma50.toFixed(4) : '—'}</td>
+        ${fp(r.dist_ema20)}
+        <td style="color:${rsiC};font-weight:bold">${r.rsi14 != null ? r.rsi14.toFixed(0) : '—'}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+function openPortfolioModal(isin) {
+  const etf = allEtfMap[isin] || {};
+  document.getElementById('pfIsin').value      = isin;
+  document.getElementById('pfFundName').value  = etf.nome || isin;
+  document.getElementById('pfEntryDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('pfEntryPrice').value = etf.price ? etf.price.toFixed(4) : '';
+  document.getElementById('portfolioModal').classList.add('open');
+  setTimeout(() => document.getElementById('pfEntryPrice').focus(), 100);
+}
+
+function closePortfolioModal() {
+  document.getElementById('portfolioModal').classList.remove('open');
+}
+
+async function submitPortfolioEntry() {
+  const isin       = document.getElementById('pfIsin').value;
+  const fundName   = document.getElementById('pfFundName').value;
+  const entryDate  = document.getElementById('pfEntryDate').value;
+  const entryPrice = parseFloat(document.getElementById('pfEntryPrice').value);
+  if (!isin || !entryDate || isNaN(entryPrice) || entryPrice <= 0) {
+    alert('Compila tutti i campi correttamente (Prezzo deve essere > 0)');
+    return;
+  }
+  try {
+    const res = await fetch('/api/portfolio', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({isin, entry_date:entryDate, entry_price:entryPrice, fund_name:fundName})
+    });
+    const data = await res.json();
+    if (res.ok) {
+      closePortfolioModal();
+      portfolioIsins.add(isin);
+      historyCache = {};
+      renderDashboard();
+      if (!portfolioSectionOpen) togglePortfolioSection();
+      else loadPortfolio();
+    } else {
+      alert('Errore: ' + (data.error || 'Errore sconosciuto'));
+    }
+  } catch(e) { alert('Errore di rete: ' + e.message); }
+}
+
+async function removeFromPortfolio(isin) {
+  if (!confirm('Rimuovere ' + (allEtfMap[isin]?.nome || isin) + ' dal portafoglio?')) return;
+  try {
+    const res = await fetch('/api/portfolio/' + isin, {method:'DELETE'});
+    if (res.ok) {
+      portfolioIsins.delete(isin);
+      delete historyCache[isin];
+      renderDashboard();
+      loadPortfolio();
+    }
+  } catch(e) { alert('Errore: ' + e.message); }
+}
+
+// ── Health ─────────────────────────────────────────────────────────────────
+function toggleHealthPanel() {
+  document.getElementById('healthPanel').classList.toggle('open');
+}
+
+async function loadHealth() {
+  try {
+    const res = await fetch('/api/health');
+    const h   = await res.json();
+    const dot   = document.getElementById('healthDot');
+    const label = document.getElementById('healthLabel');
+    dot.className = 'health-dot ' + (h.status || 'grey');
+    label.textContent = h.status === 'green' ? 'OK' : h.status === 'yellow' ? 'Attenzione' : h.status === 'red' ? 'Problema' : '?';
+
+    document.getElementById('hpStatus').textContent  = h.message || '-';
+    document.getElementById('hpStatus').className    = 'hp-value ' + (h.status==='green'?'ok':h.status==='yellow'?'warn':'err');
+    if (h.last_update) document.getElementById('hpLastUpdate').textContent = new Date(h.last_update).toLocaleString('it-IT');
+    const hrs = h.hours_since_update;
+    document.getElementById('hpHours').textContent  = hrs != null ? hrs + 'h' : '-';
+    document.getElementById('hpHours').className    = 'hp-value ' + (hrs != null && hrs <= 24 ? 'ok' : 'err');
+    document.getElementById('hpDb').textContent     = h.database?.connected ? 'Connesso' : 'Non disponibile';
+    document.getElementById('hpDb').className       = 'hp-value ' + (h.database?.connected ? 'ok' : 'err');
+    const etfs = h.etfs || {};
+    document.getElementById('hpEtfsOk').textContent  = (etfs.analyzed_ok||0) + '/' + (etfs.total||0);
+    document.getElementById('hpEtfsOk').className    = 'hp-value ' + (etfs.errors===0?'ok':'warn');
+    document.getElementById('hpEtfsErr').textContent = etfs.errors || 0;
+    document.getElementById('hpEtfsErr').className   = 'hp-value ' + (etfs.errors===0?'ok':'err');
+    document.getElementById('hpRunning').textContent = h.monitor_running ? 'Sì' : 'No';
+    const errDiv = document.getElementById('hpErrors');
+    const errs   = etfs.error_details || [];
+    errDiv.innerHTML = errs.length ? '<div style="color:#8b949e;font-size:0.8em;margin-bottom:4px">Dettaglio errori:</div>' +
+      errs.map(e => `<div class="hp-error-item">${e.isin||''}: ${(e.error||'').substring(0,60)}</div>`).join('') : '';
+  } catch(e) {
+    document.getElementById('healthDot').className   = 'health-dot grey';
+    document.getElementById('healthLabel').textContent = 'Offline';
+  }
+}
+
+// ── Detail Modal ───────────────────────────────────────────────────────────
+let detailChart = null;
+let currentDetailIsin   = null;
+let currentDetailTicker = null;
+let currentDetailDays   = 30;
+let detailDataCache = {};
+
+async function openETFDetail(ticker, isin) {
+  ticker = decodeURIComponent(ticker || '');
+  isin   = isin || '';
+  currentDetailTicker = ticker;
+  currentDetailIsin   = isin;
+  currentDetailDays   = 30;
+  document.getElementById('detailOverlay').classList.add('open');
+  document.getElementById('detailTitle').textContent = (allEtfMap[isin]?.nome) || ticker || isin;
+  document.getElementById('detailSub').textContent   = [ticker, isin].filter(Boolean).join(' · ');
+  document.getElementById('detailKpis').innerHTML    = '<span style="color:#555;font-size:0.8em">Caricamento...</span>';
+  document.getElementById('detailRegime').innerHTML  = '';
+  document.getElementById('detailL0').innerHTML      = '';
+  document.getElementById('detailExit').innerHTML    = '';
+  document.getElementById('detailConds').innerHTML   = '';
+  document.getElementById('detailReason').style.display = 'none';
+  document.getElementById('detailTableBody').innerHTML = '';
+  [30,60,90].forEach(d => document.getElementById('dbtn'+d).classList.toggle('active', d===30));
+  await loadETFDetail(ticker, isin, 30);
+}
+
+function closeDetail() {
+  document.getElementById('detailOverlay').classList.remove('open');
+  if (detailChart) { detailChart.destroy(); detailChart = null; }
+}
+
+async function changeDetailDays(days) {
+  currentDetailDays = days;
+  [30,60,90].forEach(d => document.getElementById('dbtn'+d).classList.toggle('active', d===days));
+  await loadETFDetail(currentDetailTicker, currentDetailIsin, days);
+}
+
+async function loadETFDetail(ticker, isin, days) {
+  const params = ticker ? `ticker=${encodeURIComponent(ticker)}` : `isin=${encodeURIComponent(isin)}`;
+  const key    = params;
+  let data = detailDataCache[key];
+  if (!data) {
+    try {
+      const res = await fetch(`/api/etf-detail?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      data = await res.json();
+      if (!data.error) detailDataCache[key] = data;
+    } catch(e) {
+      // fallback: search in allData
+      if (allData) {
+        for (const list of Object.values(allData.levels || {})) {
+          const found = list.find(x => x.ticker===ticker || x.isin===isin);
+          if (found) { data = found; break; }
+        }
+      }
+      if (!data) {
+        document.getElementById('detailKpis').innerHTML = `<span style="color:#f85149">Errore: ${e.message}</span>`;
+        return;
+      }
+    }
+  }
+  renderDetailModal(data, days);
+}
+
+function renderDetailModal(e, days) {
+  const lvl = e.suggested_level != null ? e.suggested_level : (e.level != null ? e.level : '—');
   const lvlBadge = `<span class="lv-badge lv${lvl}">L${lvl}</span>`;
-
-  const etf_type = e.etf_type || 'equity_developed';
 
   // Regime
   let regimeHtml = '';
   if (e.sma200 != null) {
     const bull = e.price != null && e.price > e.sma200;
-    regimeHtml = `<div class="regime-bar ${bull?'bull':'bear'}">
+    document.getElementById('detailRegime').innerHTML = `<div class="regime-bar ${bull?'bull':'bear'}">
       ${bull ? '▲ Bull Market — Prezzo sopra SMA200' : '▼ Bear Market — Prezzo sotto SMA200 (ingressi L1 bloccati)'}
       &nbsp;(SMA200: ${fmtNum(e.sma200,4)})
     </div>`;
+  } else {
+    document.getElementById('detailRegime').innerHTML = '';
   }
 
-  // KPI cards
-  const kpis = [
-    ['Prezzo',      e.price  != null ? fmtNum(e.price,4)  : '—', ''],
-    ['EMA20',       e.ema20  != null ? fmtNum(e.ema20,4)  : '—', 'color:#58a6ff'],
-    ['SMA50',       e.sma50  != null ? fmtNum(e.sma50,4)  : '—', 'color:#a5d6ff'],
-    ['SMA200',      e.sma200 != null ? fmtNum(e.sma200,4) : '—', e.price>e.sma200?'color:#3fb950':'color:#f85149'],
-    ['RSI14',       e.rsi    != null ? e.rsi.toFixed(1)   : '—', rsiColor(e.rsi)],
-    ['ADX14',       e.adx    != null ? e.adx.toFixed(1)   : '—', adxColor(e.adx)],
-    ['MACD Hist',   e.macd_histogram != null ? fmtNum(e.macd_histogram,4) : '—', e.macd_histogram>0?'color:#3fb950':'color:#f85149'],
-    ['Dist EMA20',  e.dist_ema20 != null ? `${e.dist_ema20.toFixed(2)}%` : '—', ''],
-    ['%1G',         fmtPctRaw(e.pct_1d), pctColor(e.pct_1d)],
-    ['%1W',         fmtPctRaw(e.pct_1w), pctColor(e.pct_1w)],
-    ['%1M',         fmtPctRaw(e.pct_1m), pctColor(e.pct_1m)],
-    ['Drawdown',    e.drawdown_from_peak != null ? `-${e.drawdown_from_peak.toFixed(2)}%` : '—', e.drawdown_from_peak>10?'color:#f85149':'color:#8b949e'],
-  ];
-  const kpiHtml = kpis.map(([l,v,s]) =>
-    `<div class="kpi-card"><div class="kpi-label">${l}</div><div class="kpi-value" style="${s}">${v}</div></div>`
-  ).join('');
-
-  // Conditions
-  const cond = e.conditions || {};
-  const condMap = [
-    ['allineamento_ok', 'Allineamento: Prezzo>EMA20>SMA50'],
-    ['persistenza_ok',  'Persistenza: ≥3gg sopra EMA20 + slope↑'],
-    ['rsi_ok',          `RSI nel range target (${cond.rsi!=null?cond.rsi.toFixed(0):'—'})`],
-    ['distance_ok',     `Distanza EMA20 ≤ max (${cond.dist_ema20!=null?cond.dist_ema20.toFixed(1)+'%':'—'})`],
-    ['adx_ok',          `ADX ≥ soglia (${cond.adx!=null?cond.adx.toFixed(0):'—'})`],
-  ];
-  const condHtml = condMap.map(([k, label]) => {
-    const ok = cond[k];
-    const dotClass = ok===true?'ok':ok===false?'no':'na';
-    return `<div class="cond-item"><div class="cond-dot ${dotClass}"></div><span>${label}</span></div>`;
-  }).join('');
-
-  // L0 section (if in L0 or has drawdown info)
-  let l0Html = '';
+  // L0 info
   if ((e.l0_entry || lvl===0) && e.drawdown_from_peak != null) {
     const l0d = e.l0_data || {};
-    l0Html = `<div class="l0-section">
+    document.getElementById('detailL0').innerHTML = `<div class="l0-section">
       <h4>Deep Recovery (L0)</h4>
       <div class="l0-grid">
         <div class="l0-kpi"><div class="lk">Drawdown</div><div class="lv">-${fmtNum(e.drawdown_from_peak,1)}%</div></div>
         <div class="l0-kpi"><div class="lk">Picco</div><div class="lv">${e.peak_price!=null?fmtNum(e.peak_price,4):'—'}</div></div>
-        <div class="l0-kpi"><div class="lk">RSI</div><div class="lv">${cond.rsi!=null?cond.rsi.toFixed(1):'—'}</div></div>
+        <div class="l0-kpi"><div class="lk">RSI</div><div class="lv">${e.rsi!=null?e.rsi.toFixed(1):'—'}</div></div>
         <div class="l0-kpi"><div class="lk">Divergenza</div><div class="lv">${l0d.divergence?'Sì':'No'}</div></div>
       </div>
     </div>`;
+  } else {
+    document.getElementById('detailL0').innerHTML = '';
   }
 
   // Exit rule
-  let exitHtml = '';
+  const cond = e.conditions || {};
   if (cond.exit_rule) {
-    exitHtml = `<div class="reason-box" style="border-left-color:#f85149">Uscita: ${cond.exit_rule}</div>`;
+    document.getElementById('detailExit').innerHTML = `<div class="reason-box" style="border-left-color:#f85149;margin-bottom:14px">Uscita imminente — Regola ${cond.exit_rule}: ${cond.exit_trigger||''}</div>`;
+  } else {
+    document.getElementById('detailExit').innerHTML = '';
   }
 
-  document.getElementById('modalBody').innerHTML = `
-    <div class="modal-title">${e.nome || e.ticker}</div>
-    <div class="modal-sub">
-      ${lvlBadge}&nbsp;
-      <span style="color:#8b949e">${e.ticker || ''}</span>
-      ${e.isin?`&nbsp;·&nbsp;<span style="color:#8b949e">${e.isin}</span>`:''}
-      &nbsp;·&nbsp;<span style="color:#8b949e">${e.etf_type||''}</span>
-    </div>
+  // KPIs
+  const kpis = [
+    ['Livello',    lvlBadge, ''],
+    ['Prezzo',     e.price   != null ? fmtNum(e.price,4)   : '—', ''],
+    ['EMA20',      e.ema20   != null ? fmtNum(e.ema20,4)   : '—', 'color:#58a6ff'],
+    ['SMA50',      e.sma50   != null ? fmtNum(e.sma50,4)   : '—', 'color:#a5d6ff'],
+    ['SMA200',     e.sma200  != null ? fmtNum(e.sma200,4)  : '—', e.price>e.sma200?'color:#3fb950':'color:#f85149'],
+    ['RSI14',      e.rsi     != null ? e.rsi.toFixed(1)    : '—', rsiColor(e.rsi)],
+    ['ADX14',      e.adx     != null ? e.adx.toFixed(1)    : '—', adxColor(e.adx)],
+    ['Dist EMA20', e.dist_ema20 != null ? `${e.dist_ema20.toFixed(2)}%` : '—', ''],
+    ['%1G',        fmtPctRaw(e.pct_1d), pctColor(e.pct_1d)],
+    ['%1W',        fmtPctRaw(e.pct_1w), pctColor(e.pct_1w)],
+    ['%1M',        fmtPctRaw(e.pct_1m), pctColor(e.pct_1m)],
+    ['Drawdown',   e.drawdown_from_peak != null ? `-${e.drawdown_from_peak.toFixed(2)}%` : '—', e.drawdown_from_peak>10?'color:#f85149':'color:#8b949e'],
+  ];
+  document.getElementById('detailKpis').innerHTML = kpis.map(([l,v,s]) =>
+    `<div class="kpi-box"><div class="kpi-label">${l}</div><div class="kpi-value" style="${s}">${v}</div></div>`
+  ).join('');
 
-    ${regimeHtml}
-    ${exitHtml}
-    ${l0Html}
+  // Conditions
+  const condMap = [
+    ['allineamento_ok', 'Allineamento: Prezzo>EMA20>SMA50'],
+    ['persistenza_ok',  'Persistenza: ≥3gg sopra EMA20 + slope↑'],
+    ['rsi_ok',          `RSI nel range target (${cond.rsi!=null?cond.rsi.toFixed(0):'—'})`],
+    ['distance_ok',     `Distanza EMA20 ≤ 4% (${cond.dist_ema20!=null?cond.dist_ema20.toFixed(1)+'%':'—'})`],
+    ['adx_ok',          `ADX ≥ 20 (${cond.adx!=null?cond.adx.toFixed(0):'—'})`],
+  ];
+  const condHtml = condMap.map(([k, label]) => {
+    const ok = cond[k];
+    const dc = ok===true?'ok':ok===false?'no':'na';
+    return `<div class="cond-item"><div class="cond-dot ${dc}"></div><span>${label}</span></div>`;
+  }).join('');
+  document.getElementById('detailConds').innerHTML = `
+    <div class="cond-title">Condizioni L1 Trend Sicuro (${e.buy_count||0}/5)</div>
+    <div class="cond-grid">${condHtml}</div>`;
 
-    <div class="kpi-grid">${kpiHtml}</div>
+  // Reason
+  const reasonText = e.level_reason || cond.level_reason || '';
+  if (reasonText) {
+    document.getElementById('detailReason').textContent = reasonText;
+    document.getElementById('detailReason').style.display = 'block';
+  }
 
-    <div class="cond-section">
-      <div class="cond-title">Condizioni L1 Trend Sicuro (${e.buy_count||0}/5)</div>
-      <div class="cond-grid">${condHtml}</div>
-    </div>
-
-    <div class="reason-box">${e.level_reason || e.conditions?.level_reason || 'N/D'}</div>
-
-    ${renderPriceHistory(e.price_history)}
-  `;
+  // Chart + table
+  renderDetailChart(e.price_history || [], days);
+  renderDetailHistTable(e.price_history || [], days);
 }
 
-function renderPriceHistory(hist) {
-  if (!hist || hist.length < 5) return '';
-  const prices = hist.map(p => p.close);
-  const dates  = hist.map(p => p.date);
-  const min    = Math.min(...prices);
-  const max    = Math.max(...prices);
-  const range  = max - min || 1;
-  const W = 680, H = 90, pad = 10;
-  const pts = prices.map((p, i) => {
-    const x = pad + (i / (prices.length - 1)) * (W - pad * 2);
-    const y = H - pad - ((p - min) / range) * (H - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
-  const lastP = prices[prices.length - 1];
-  const firstP = prices[0];
-  const trend  = lastP >= firstP ? '#3fb950' : '#f85149';
-  return `
-  <div style="margin-top:14px">
-    <div class="cond-title">Andamento (${hist.length} gg)</div>
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px;background:rgba(255,255,255,0.02);border-radius:6px;margin-top:6px">
-      <polyline points="${pts}" fill="none" stroke="${trend}" stroke-width="1.5" stroke-linejoin="round"/>
-    </svg>
-  </div>`;
+function renderDetailChart(history, days) {
+  if (detailChart) { detailChart.destroy(); detailChart = null; }
+  if (!history || history.length < 3) return;
+
+  // Slice by days
+  const slice  = history.slice(-days);
+  const labels = slice.map(p => p.date);
+  const closes = slice.map(p => p.close);
+  const ema20s = slice.map(p => p.ema20 ?? null);
+  const sma50s = slice.map(p => p.sma50 ?? null);
+  const sma200s = slice.map(p => p.sma200 ?? null);
+
+  const ctx = document.getElementById('detailChart').getContext('2d');
+
+  // Entry marker for portfolio
+  const isin = currentDetailIsin;
+  const track = l1TrackingMap[isin] || {};
+  const entryDate  = track.entry_date || null;
+  const entryPrice = track.entry_price || null;
+  const entryIdx   = entryDate ? labels.findIndex(l => l >= entryDate) : -1;
+
+  const entryLinePlugin = {
+    id: 'entryLine',
+    afterDraw(chart) {
+      if (entryIdx < 0 || !entryPrice) return;
+      const { ctx: c, scales: { x, y } } = chart;
+      const xPos = x.getPixelForValue(entryIdx);
+      c.save();
+      c.strokeStyle = '#00FF88'; c.lineWidth = 1.5;
+      c.setLineDash([5,4]); c.globalAlpha = 0.7;
+      c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+      c.setLineDash([]); c.globalAlpha = 1; c.fillStyle = '#00FF88';
+      c.font = 'bold 10px sans-serif'; c.textAlign = 'left';
+      const yPos = y.getPixelForValue(entryPrice);
+      if (yPos > y.top && yPos < y.bottom)
+        c.fillText('✦ ' + entryPrice.toFixed(4), xPos + 4, yPos - 3);
+      c.restore();
+    }
+  };
+
+  detailChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label:'Prezzo', data:closes,  borderColor:'#58a6ff', borderWidth:2,   pointRadius:0, tension:0.3, fill:false },
+        { label:'EMA20',  data:ema20s,  borderColor:'#d29922', borderWidth:1.5, pointRadius:0, tension:0.3, fill:false, borderDash:[4,3] },
+        { label:'SMA50',  data:sma50s,  borderColor:'#fb923c', borderWidth:1,   pointRadius:0, tension:0.3, fill:false, borderDash:[6,4] },
+        { label:'SMA200', data:sma200s, borderColor:'#f85149', borderWidth:1,   pointRadius:0, tension:0.3, fill:false, borderDash:[8,4] },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{ labels:{ color:'#8b949e', font:{size:11}, boxWidth:24 } },
+        tooltip:{ backgroundColor:'rgba(10,15,25,0.92)', titleColor:'#ccc', bodyColor:'#8b949e' }
+      },
+      scales:{
+        x:{ ticks:{ color:'#555', maxTicksLimit:8, font:{size:10} }, grid:{ color:'rgba(255,255,255,0.05)' } },
+        y:{ ticks:{ color:'#555', font:{size:10} }, grid:{ color:'rgba(255,255,255,0.05)' } }
+      }
+    },
+    plugins:[entryLinePlugin]
+  });
+}
+
+function renderDetailHistTable(history, days) {
+  if (!history || history.length === 0) {
+    document.getElementById('detailTableBody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:#555;padding:16px">Nessun dato storico</td></tr>';
+    return;
+  }
+  const slice = [...history].slice(-days).reverse();
+  const fp = (v,d=2) => {
+    if (v == null) return '<td style="color:#333">—</td>';
+    const col = v > 0 ? '#3fb950' : v < 0 ? '#f85149' : '#8b949e';
+    return `<td style="color:${col}">${v > 0 ? '+' : ''}${v.toFixed(d)}%</td>`;
+  };
+  // Need to compute pct_1g and dist_ema20 from raw data
+  document.getElementById('detailTableBody').innerHTML = slice.map((r, i) => {
+    const rsiC = (r.rsi_val||r.rsi||50) < 35 ? '#3fb950' : (r.rsi_val||r.rsi||50) > 65 ? '#f85149' : '#d29922';
+    const distEma = r.ema20 && r.close ? (r.close - r.ema20) / r.ema20 * 100 : null;
+    return `<tr>
+      <td>${r.date}</td>
+      <td>${r.close != null ? r.close.toFixed(4) : '—'}</td>
+      <td style="color:#555">—</td>
+      <td style="color:#555">—</td>
+      <td style="color:#58a6ff">${r.ema20 != null ? r.ema20.toFixed(4) : '—'}</td>
+      <td style="color:#a5d6ff">${r.sma50 != null ? r.sma50.toFixed(4) : '—'}</td>
+      ${fp(distEma)}
+      <td style="color:#555">—</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Trading days helper ────────────────────────────────────────────────────
+function tradingDays(fromStr, toStr) {
+  const from = new Date(fromStr + 'T00:00:00');
+  const to   = new Date(toStr   + 'T00:00:00');
+  let count = 0, d = new Date(from);
+  while (d <= to) { const wd = d.getDay(); if (wd!==0 && wd!==6) count++; d.setDate(d.getDate()+1); }
+  return Math.max(1, count);
+}
+
+// ── Condition dot helper ──────────────────────────────────────────────────
+function condDot(ok, letter, title) {
+  return ok
+    ? `<span style="color:#3fb950" title="${title}">${letter}</span>`
+    : `<span style="color:#30363d" title="${title}">${letter}</span>`;
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────
@@ -536,14 +1365,12 @@ function fmtNum(v, dec=2) {
 function fmtPct(v) {
   if (v == null || isNaN(v)) return '<span class="pct zero">—</span>';
   const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
-  const sign = v > 0 ? '+' : '';
-  return `<span class="pct ${cls}">${sign}${parseFloat(v).toFixed(2)}%</span>`;
+  return `<span class="pct ${cls}">${v > 0 ? '+' : ''}${parseFloat(v).toFixed(2)}%</span>`;
 }
 
 function fmtPctRaw(v) {
   if (v == null || isNaN(v)) return '—';
-  const sign = v > 0 ? '+' : '';
-  return `${sign}${parseFloat(v).toFixed(2)}%`;
+  return `${v > 0 ? '+' : ''}${parseFloat(v).toFixed(2)}%`;
 }
 
 function pctColor(v) {
@@ -571,7 +1398,7 @@ function rsiColor(v) {
 
 function fmtAdx(v) {
   if (v == null) return '—';
-  let cls = v >= 20 ? 'strong' : v >= 15 ? 'mid' : 'weak';
+  const cls = v >= 20 ? 'strong' : v >= 15 ? 'mid' : 'weak';
   return `<span class="adx-val ${cls}">${parseFloat(v).toFixed(1)}</span>`;
 }
 
