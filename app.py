@@ -129,7 +129,7 @@ def etf_detail():
         # Recupera storico prezzi dal DB con indicatori per il grafico
         import math as _math
 
-        identifier = isin or ticker
+        identifier = etf_info.get('isin') or isin or ticker
         df = db.get_close_by_isin(identifier, days=120)
 
         price_hist = []
@@ -137,8 +137,8 @@ def etf_detail():
             df = df.reset_index()
             df.columns = ['date', 'close']
             df = df.sort_values('date').reset_index(drop=True)
-        elif ticker:
-            df_old = db.get_ohlcv(ticker, days=120)
+        elif ticker or etf_info.get('isin'):
+            df_old = db.get_ohlcv(etf_info.get('isin') or ticker, days=120)
             if not df_old.empty:
                 df = df_old[['date', 'close']].copy()
                 df = df.sort_values('date').reset_index(drop=True)
