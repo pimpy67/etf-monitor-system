@@ -1282,7 +1282,23 @@ function renderDetailChart(history, days) {
   const l1LinesPlugin = {
     id: 'l1Lines',
     afterDraw(chart) {
-      const { ctx: c, scales: { x, y } } = chart;
+      const { ctx: c, scales: { x, y }, chartArea } = chart;
+
+      // Etichette a destra di ogni linea
+      chart.data.datasets.forEach((ds, i) => {
+        const meta = chart.getDatasetMeta(i);
+        if (meta.hidden) return;
+        let lastPt = null;
+        for (let j = ds.data.length - 1; j >= 0; j--) {
+          if (ds.data[j] != null) { lastPt = meta.data[j]; break; }
+        }
+        if (!lastPt) return;
+        c.save();
+        c.fillStyle = ds.borderColor; c.globalAlpha = 0.9;
+        c.font = 'bold 9px sans-serif'; c.textAlign = 'left';
+        c.fillText(ds.label, chartArea.right + 4, lastPt.y + 4);
+        c.restore();
+      });
 
       // Linea verde — entrata corrente in L1
       if (entryIdx >= 0 && entryPrice) {
@@ -1346,6 +1362,7 @@ function renderDetailChart(history, days) {
     options: {
       responsive:true, maintainAspectRatio:false,
       interaction:{ mode:'index', intersect:false },
+      layout:{ padding:{ right:46 } },
       plugins:{
         legend:{ labels:{ color:'#8b949e', font:{size:11}, boxWidth:24 } },
         tooltip:{ backgroundColor:'rgba(10,15,25,0.92)', titleColor:'#ccc', bodyColor:'#8b949e' }
