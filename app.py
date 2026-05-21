@@ -130,7 +130,7 @@ def etf_detail():
         import math as _math
 
         identifier = etf_info.get('isin') or isin or ticker
-        df = db.get_close_by_isin(identifier, days=120)
+        df = db.get_close_by_isin(identifier, days=260)
 
         price_hist = []
         if not df.empty:
@@ -138,7 +138,7 @@ def etf_detail():
             df.columns = ['date', 'close']
             df = df.sort_values('date').reset_index(drop=True)
         elif ticker or etf_info.get('isin'):
-            df_old = db.get_ohlcv(etf_info.get('isin') or ticker, days=120)
+            df_old = db.get_ohlcv(etf_info.get('isin') or ticker, days=260)
             if not df_old.empty:
                 df = df_old[['date', 'close']].copy()
                 df = df.sort_values('date').reset_index(drop=True)
