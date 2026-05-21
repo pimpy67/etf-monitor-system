@@ -62,33 +62,36 @@ class ETFMonitor:
     def get_etf_history(self, ticker: str, isin: str = '') -> pd.DataFrame:
         """
         Recupera storico OHLCV per un ETF.
-        Prima prova il DB, poi scarica da Yahoo Finance.
+        Prima prova il DB; se i dati sono datati (> 5gg) rifresca da Yahoo Finance.
         """
+        import pandas as _pd
+
         # 1. Database
+        db_df = _pd.DataFrame()
         if isin:
             db_df = self.db.get_close_by_isin(isin, days=260)
-            if not db_df.empty and len(db_df) >= 55:
-                # DB ha solo Close — usa per analisi tecnica (OHLC non disponibile)
-                return db_df
 
-        # 2. Yahoo Finance (OHLCV completo)
+        # Usa il DB solo se ha dati recenti (entro 5 giorni lavorativi)
+        if not db_df.empty and len(db_df) >= 55:
+            today     = _pd.Timestamp.today().normalize()
+            last_date = db_df.index[-1] if hasattr(db_df.index[-1], 'date') else _pd.Timestamp(db_df.index[-1])
+            if (today - last_date).days <= 5:
+                return db_df  # dati freschi → no fetch Yahoo Finance
+
+        # 2. Yahoo Finance (OHLCV completo) — DB assente o datato
         df = self.data_fetcher.get_historical_data(ticker, days=260)
         if not df.empty:
-            # Salva Close nel DB per uso futuro
             if isin:
-                saved = self.db.save_close_bulk(isin, df, source='yfinance')
+                self.db.save_close_bulk(isin, df, source='yfinance')
             else:
-                # Salva con ticker come identificatore
-                saved = self.db.save_ohlcv_bulk(ticker, df, source='yfinance')
+                self.db.save_ohlcv_bulk(ticker, df, source='yfinance')
             return df
 
-        # 3. DB anche se insufficiente
-        if isin:
-            db_df = self.db.get_close_by_isin(isin, days=260)
-            if not db_df.empty:
-                return db_df
+        # 3. DB come fallback anche se datato
+        if not db_df.empty:
+            return db_df
 
-        return pd.DataFrame()
+        return _pd.DataFrame()
 
     def analyze_etf(self, row: pd.Series) -> dict:
         """Analizza un singolo ETF dalla riga Excel."""
