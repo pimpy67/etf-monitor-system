@@ -1266,7 +1266,9 @@ function renderDetailChart(history, days) {
   const track      = l1TrackingMap[isin] || {};
   const entryDate  = track.entry_date ? track.entry_date.substring(0,10) : null;
   const entryPrice = track.entry_price || null;
-  const entryIdx   = entryDate ? labels.findIndex(l => l >= entryDate) : -1;
+  let entryIdx = entryDate ? labels.findIndex(l => l >= entryDate) : -1;
+  if (entryIdx === -1 && entryDate && labels.length > 0 && entryDate > labels[labels.length - 1])
+    entryIdx = labels.length - 1;
 
   // Uscite e relative entrate dagli ultimi 30gg (stessa fonte della sezione "Usciti da L1")
   const isinExits = l1ExitsData.filter(e => e.isin === isin);
