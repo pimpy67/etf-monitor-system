@@ -1259,29 +1259,76 @@ function renderDetailChart(history, days) {
 
   const ctx = document.getElementById('detailChart').getContext('2d');
 
-  // Entry marker for portfolio
+  // Linee verticali L1: entrata (verde) e uscita (rossa)
   const isin = currentDetailIsin;
-  const track = l1TrackingMap[isin] || {};
-  const entryDate  = track.entry_date || null;
+
+  // Entrata corrente da l1TrackingMap
+  const track      = l1TrackingMap[isin] || {};
+  const entryDate  = track.entry_date ? track.entry_date.substring(0,10) : null;
   const entryPrice = track.entry_price || null;
   const entryIdx   = entryDate ? labels.findIndex(l => l >= entryDate) : -1;
 
-  const entryLinePlugin = {
-    id: 'entryLine',
+  // Uscite e relative entrate dagli ultimi 30gg (stessa fonte della sezione "Usciti da L1")
+  const isinExits = l1ExitsData.filter(e => e.isin === isin);
+  const exitMarkers = isinExits
+    .filter(e => e.exit_date)
+    .map(e => ({ idx: labels.findIndex(l => l >= e.exit_date.substring(0,10)), price: e.exit_price || null }))
+    .filter(m => m.idx >= 0);
+  const pastEntryMarkers = isinExits
+    .filter(e => e.entry_date)
+    .map(e => ({ idx: labels.findIndex(l => l >= e.entry_date.substring(0,10)), price: e.entry_price || null }))
+    .filter(m => m.idx >= 0 && m.idx !== entryIdx);
+
+  const l1LinesPlugin = {
+    id: 'l1Lines',
     afterDraw(chart) {
-      if (entryIdx < 0 || !entryPrice) return;
       const { ctx: c, scales: { x, y } } = chart;
-      const xPos = x.getPixelForValue(entryIdx);
-      c.save();
-      c.strokeStyle = '#00FF88'; c.lineWidth = 1.5;
-      c.setLineDash([5,4]); c.globalAlpha = 0.7;
-      c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
-      c.setLineDash([]); c.globalAlpha = 1; c.fillStyle = '#00FF88';
-      c.font = 'bold 10px sans-serif'; c.textAlign = 'left';
-      const yPos = y.getPixelForValue(entryPrice);
-      if (yPos > y.top && yPos < y.bottom)
-        c.fillText('✦ ' + entryPrice.toFixed(4), xPos + 4, yPos - 3);
-      c.restore();
+
+      // Linea verde — entrata corrente in L1
+      if (entryIdx >= 0 && entryPrice) {
+        const xPos = x.getPixelForValue(entryIdx);
+        c.save();
+        c.strokeStyle = '#00FF88'; c.lineWidth = 1.5; c.setLineDash([5,4]); c.globalAlpha = 0.75;
+        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+        c.setLineDash([]); c.globalAlpha = 1; c.fillStyle = '#00FF88';
+        c.font = 'bold 10px sans-serif'; c.textAlign = 'left';
+        const yPos = y.getPixelForValue(entryPrice);
+        if (yPos > y.top && yPos < y.bottom)
+          c.fillText('▲ ' + entryPrice.toFixed(4), xPos + 4, yPos - 3);
+        c.restore();
+      }
+
+      // Linee verdi — entrate di cicli L1 passati (dai record di uscita 30gg)
+      pastEntryMarkers.forEach(m => {
+        const xPos = x.getPixelForValue(m.idx);
+        c.save();
+        c.strokeStyle = '#00FF88'; c.lineWidth = 1; c.setLineDash([4,4]); c.globalAlpha = 0.45;
+        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+        if (m.price) {
+          c.setLineDash([]); c.globalAlpha = 0.7; c.fillStyle = '#00FF88';
+          c.font = '9px sans-serif'; c.textAlign = 'left';
+          const yPos = y.getPixelForValue(m.price);
+          if (yPos > y.top && yPos < y.bottom)
+            c.fillText('▲ ' + m.price.toFixed(4), xPos + 3, yPos - 3);
+        }
+        c.restore();
+      });
+
+      // Linee rosse — uscite da L1 (ultimi 30gg)
+      exitMarkers.forEach(m => {
+        const xPos = x.getPixelForValue(m.idx);
+        c.save();
+        c.strokeStyle = '#f85149'; c.lineWidth = 1.5; c.setLineDash([5,4]); c.globalAlpha = 0.75;
+        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+        if (m.price) {
+          c.setLineDash([]); c.globalAlpha = 1; c.fillStyle = '#f85149';
+          c.font = 'bold 10px sans-serif'; c.textAlign = 'left';
+          const yPos = y.getPixelForValue(m.price);
+          if (yPos > y.top && yPos < y.bottom)
+            c.fillText('▼ ' + m.price.toFixed(4), xPos + 4, yPos + 12);
+        }
+        c.restore();
+      });
     }
   };
 
@@ -1308,7 +1355,7 @@ function renderDetailChart(history, days) {
         y:{ ticks:{ color:'#555', font:{size:10} }, grid:{ color:'rgba(255,255,255,0.05)' } }
       }
     },
-    plugins:[entryLinePlugin]
+    plugins:[l1LinesPlugin]
   });
 }
 
