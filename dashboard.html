@@ -140,7 +140,8 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .lv2 { background:#7c5a0066; color:#d29922; }
 .lv3 { background:#1c2e4a66; color:#58a6ff; }
 
-.etf-nome { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:4px; }
+.etf-nome { font-weight:600; display:flex; align-items:center; gap:4px; overflow:hidden; }
+.etf-nome-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; }
 .etf-type-tag { display:inline-block; font-size:0.65em; padding:0 5px; border-radius:3px; background:rgba(255,255,255,0.08); color:#8b949e; flex-shrink:0; }
 .empty-msg { padding:28px; text-align:center; color:#8b949e; }
 
@@ -149,6 +150,9 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .btn-portfolio-add:hover { background:rgba(88,166,255,0.15); border-color:#58a6ff; color:#fff; }
 .btn-portfolio-add.in-portfolio { border-color:rgba(63,185,80,0.5); color:#3fb950; }
 .btn-portfolio-add.in-portfolio:hover { background:rgba(63,185,80,0.1); }
+.btn-pf-action { background:none; border:1px solid rgba(255,255,255,0.15); color:#8b949e; border-radius:4px; cursor:pointer; font-size:0.82em; padding:2px 6px; line-height:1.4; transition:all .15s; margin:0 2px; }
+.btn-edit:hover { border-color:#58a6ff; color:#58a6ff; background:rgba(88,166,255,0.1); }
+.btn-sell:hover { border-color:#f85149; color:#f85149; background:rgba(248,81,73,0.1); }
 
 /* Exit warning */
 .exit-warn { display:inline-block; font-size:0.72em; margin-left:4px; cursor:default; vertical-align:middle; }
@@ -352,14 +356,28 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 <!-- ── Modal Portafoglio ──────────────────────────────────────────────────── -->
 <div class="modal-overlay" id="portfolioModal" onclick="if(event.target===this)closePortfolioModal()">
   <div class="modal-box">
-    <h3>&#128200; Aggiungi al Portafoglio</h3>
+    <h3 id="pfModalTitle">&#128200; Aggiungi al Portafoglio</h3>
     <div class="modal-field"><label>ETF</label><input type="text" id="pfFundName" readonly style="color:#8b949e;cursor:default;"></div>
     <div class="modal-field"><label>ISIN</label><input type="text" id="pfIsin" readonly style="color:#555;cursor:default;font-family:monospace;font-size:0.82em;"></div>
     <div class="modal-field"><label>Data Acquisto</label><input type="date" id="pfEntryDate"></div>
     <div class="modal-field"><label>Prezzo Acquisto</label><input type="number" id="pfEntryPrice" step="0.0001" min="0" placeholder="es. 84.5200"></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closePortfolioModal()">Annulla</button>
-      <button class="btn-primary" onclick="submitPortfolioEntry()">Aggiungi</button>
+      <button class="btn-primary" id="pfSubmitBtn" onclick="submitPortfolioEntry()">Aggiungi</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="sellModal" onclick="if(event.target===this)closeSellModal()">
+  <div class="modal-box">
+    <h3>&#128184; Registra Vendita</h3>
+    <div class="modal-field"><label>ETF</label><input type="text" id="sellFundName" readonly style="color:#8b949e;cursor:default;"></div>
+    <div class="modal-field"><label>ISIN</label><input type="text" id="sellIsin" readonly style="color:#555;cursor:default;font-family:monospace;font-size:0.82em;"></div>
+    <div class="modal-field"><label>Data Vendita</label><input type="date" id="sellExitDate"></div>
+    <div class="modal-field"><label>Prezzo Vendita</label><input type="number" id="sellExitPrice" step="0.0001" min="0" placeholder="es. 84.5200"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeSellModal()">Annulla</button>
+      <button class="btn-primary" style="background:rgba(248,81,73,0.25);border-color:rgba(248,81,73,0.5);color:#f85149;" onclick="submitSell()">Conferma Vendita</button>
     </div>
   </div>
 </div>
@@ -433,19 +451,21 @@ let allData = null;
 let activeCat = 'all';
 let searchQuery = '';
 let portfolioIsins = new Set();
+let portfolioMap   = {};     // isin → {entry_date, entry_price, fund_name} — portafoglio personale
 let allEtfMap = {};          // isin → {nome, price}
 let l1TrackingMap = {};      // isin → {entry_date, entry_price, pct_gain, days_in_l1, is_new}
 let l1ExitsData = [];
 let l1ExitsOpen = false;
 let portfolioSectionOpen = false;
 let historyCache = {};
+let pfEditMode = false;      // true = modifica, false = aggiunta
 
 // ── Init ──────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   loadData();
   loadHealth();
   loadPortfolio();
-  document.addEventListener('keydown', e => { if(e.key==='Escape') { closeDetail(); closePortfolioModal(); } });
+  document.addEventListener('keydown', e => { if(e.key==='Escape') { closeDetail(); closePortfolioModal(); closeSellModal(); } });
   document.addEventListener('click', function(e) {
     const panel = document.getElementById('healthPanel');
     const badge = document.getElementById('healthBadge');
@@ -667,7 +687,7 @@ function renderL1Row(e) {
   const nome = e.nome || e.ticker || isin;
   return `<tr style="cursor:pointer;" onclick="openETFDetail('${encodeURIComponent(e.ticker||'')}','${isin}')">
     <td style="overflow:hidden;">
-      <div class="etf-nome">${nome}${nuovoBadge}${exitWarn}${pfBtn}</div>
+      <div class="etf-nome"><span class="etf-nome-text">${nome}${nuovoBadge}${exitWarn}</span>${pfBtn}</div>
       <div style="font-size:0.7em;color:#555;font-family:monospace;">${isin}</div>
     </td>
     <td style="font-weight:600">${e.price != null ? fmtNum(e.price,4) : '—'}</td>
@@ -709,7 +729,7 @@ function renderETFRow(e, lvl) {
 
   return `<tr style="cursor:pointer;" onclick="openETFDetail('${encodeURIComponent(ticker)}','${isin}')">
     <td class="col-nome">
-      <div class="etf-nome">${nome}${typeTag}${pfBtn}</div>
+      <div class="etf-nome"><span class="etf-nome-text">${nome}${typeTag}</span>${pfBtn}</div>
     </td>
     <td class="col-ticker" style="color:#8b949e">${ticker}</td>
     <td class="col-prezzo" style="font-weight:600">${price}</td>
@@ -895,6 +915,10 @@ async function loadPortfolio() {
     const data = await res.json();
     const pf   = data.portfolio || [];
     portfolioIsins = new Set(pf.filter(p => p.status === 'active').map(p => p.isin));
+    portfolioMap   = {};
+    pf.filter(p => p.status === 'active').forEach(p => {
+      portfolioMap[p.isin] = { entry_date: p.entry_date, entry_price: p.entry_price, fund_name: p.fund_name };
+    });
     const countEl = document.getElementById('portfolioCount');
     if (countEl) countEl.textContent = pf.length + ' ETF';
     renderPortfolio(pf);
@@ -919,7 +943,7 @@ function renderPortfolio(portfolio) {
       <th style="width:6%;text-align:center">RSI</th>
       <th style="width:8%;text-align:center">Dist EMA20</th>
       <th style="width:8%;text-align:center">Storico</th>
-      <th style="width:9%;text-align:center">Rimuovi</th>
+      <th style="width:14%;text-align:center">Azioni</th>
     </tr></thead>
     <tbody id="portfolioTableBody"></tbody>
   </table>`;
@@ -947,7 +971,11 @@ function renderPortfolio(portfolio) {
       <td class="rsi-val ${rsiCls}" style="text-align:center">${rsiVal}</td>
       <td class="pct ${distCls}" style="text-align:center;font-size:0.88em">${distEma}</td>
       <td style="text-align:center"><button class="btn-toggle-hist" onclick="event.stopPropagation();toggleEtfHistory('${isin}')" id="btn-hist-${isin}">&#9660; 30gg</button></td>
-      <td style="text-align:center"><button class="btn-remove" onclick="event.stopPropagation();removeFromPortfolio('${isin}')" title="Rimuovi">&#10005;</button></td>
+      <td style="text-align:center;white-space:nowrap">
+        <button class="btn-pf-action btn-edit" onclick="event.stopPropagation();openEditPortfolioModal('${isin}')" title="Modifica">&#9998;</button>
+        <button class="btn-pf-action btn-sell" onclick="event.stopPropagation();openSellModal('${isin}')" title="Vendi">&#128184;</button>
+        <button class="btn-remove" onclick="event.stopPropagation();removeFromPortfolio('${isin}')" title="Rimuovi">&#10005;</button>
+      </td>
     </tr>
     <tr class="history-row" id="pf-hist-${isin}" style="display:none;">
       <td colspan="10"><div id="hist-wrap-${isin}" style="padding:12px;color:#555;text-align:center;font-size:0.8em">Caricamento...</div></td>
@@ -1012,11 +1040,28 @@ function renderHistory(isin, history) {
 }
 
 function openPortfolioModal(isin) {
+  pfEditMode = false;
   const etf = allEtfMap[isin] || {};
-  document.getElementById('pfIsin').value      = isin;
-  document.getElementById('pfFundName').value  = etf.nome || isin;
-  document.getElementById('pfEntryDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('pfModalTitle').textContent = '📈 Aggiungi al Portafoglio';
+  document.getElementById('pfSubmitBtn').textContent  = 'Aggiungi';
+  document.getElementById('pfIsin').value       = isin;
+  document.getElementById('pfFundName').value   = etf.nome || isin;
+  document.getElementById('pfEntryDate').value  = new Date().toISOString().split('T')[0];
   document.getElementById('pfEntryPrice').value = etf.price ? etf.price.toFixed(4) : '';
+  document.getElementById('portfolioModal').classList.add('open');
+  setTimeout(() => document.getElementById('pfEntryPrice').focus(), 100);
+}
+
+function openEditPortfolioModal(isin) {
+  pfEditMode = true;
+  const etf = allEtfMap[isin] || {};
+  const pf  = portfolioMap[isin] || {};
+  document.getElementById('pfModalTitle').textContent = '✏️ Modifica Acquisto';
+  document.getElementById('pfSubmitBtn').textContent  = 'Salva Modifiche';
+  document.getElementById('pfIsin').value       = isin;
+  document.getElementById('pfFundName').value   = pf.fund_name || etf.nome || isin;
+  document.getElementById('pfEntryDate').value  = pf.entry_date ? pf.entry_date.substring(0,10) : '';
+  document.getElementById('pfEntryPrice').value = pf.entry_price ? parseFloat(pf.entry_price).toFixed(4) : '';
   document.getElementById('portfolioModal').classList.add('open');
   setTimeout(() => document.getElementById('pfEntryPrice').focus(), 100);
 }
@@ -1035,19 +1080,63 @@ async function submitPortfolioEntry() {
     return;
   }
   try {
-    const res = await fetch('/api/portfolio', {
-      method: 'POST',
+    const url    = pfEditMode ? '/api/portfolio/' + isin : '/api/portfolio';
+    const method = pfEditMode ? 'PUT' : 'POST';
+    const res = await fetch(url, {
+      method,
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({isin, entry_date:entryDate, entry_price:entryPrice, fund_name:fundName})
     });
     const data = await res.json();
     if (res.ok) {
       closePortfolioModal();
-      portfolioIsins.add(isin);
+      if (!pfEditMode) portfolioIsins.add(isin);
       historyCache = {};
       renderDashboard();
       if (!portfolioSectionOpen) togglePortfolioSection();
       else loadPortfolio();
+    } else {
+      alert('Errore: ' + (data.error || 'Errore sconosciuto'));
+    }
+  } catch(e) { alert('Errore di rete: ' + e.message); }
+}
+
+function openSellModal(isin) {
+  const etf = allEtfMap[isin] || {};
+  document.getElementById('sellIsin').value      = isin;
+  document.getElementById('sellFundName').value  = etf.nome || isin;
+  document.getElementById('sellExitDate').value  = new Date().toISOString().split('T')[0];
+  document.getElementById('sellExitPrice').value = etf.price ? etf.price.toFixed(4) : '';
+  document.getElementById('sellModal').classList.add('open');
+  setTimeout(() => document.getElementById('sellExitPrice').focus(), 100);
+}
+
+function closeSellModal() {
+  document.getElementById('sellModal').classList.remove('open');
+}
+
+async function submitSell() {
+  const isin      = document.getElementById('sellIsin').value;
+  const exitDate  = document.getElementById('sellExitDate').value;
+  const exitPrice = parseFloat(document.getElementById('sellExitPrice').value);
+  if (!isin || !exitDate || isNaN(exitPrice) || exitPrice <= 0) {
+    alert('Compila tutti i campi correttamente (Prezzo deve essere > 0)');
+    return;
+  }
+  try {
+    const res = await fetch('/api/portfolio/' + isin + '/exit', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({exit_date:exitDate, exit_price:exitPrice})
+    });
+    const data = await res.json();
+    if (res.ok) {
+      closeSellModal();
+      portfolioIsins.delete(isin);
+      delete portfolioMap[isin];
+      historyCache = {};
+      renderDashboard();
+      if (portfolioSectionOpen) loadPortfolio();
     } else {
       alert('Errore: ' + (data.error || 'Errore sconosciuto'));
     }
@@ -1283,13 +1372,21 @@ function renderDetailChart(history, days) {
   // Linee verticali L1: entrata (verde) e uscita (rossa)
   const isin = currentDetailIsin;
 
-  // Entrata corrente da l1TrackingMap
+  // Entrata corrente da l1TrackingMap (verde — segnale sistema)
   const track      = l1TrackingMap[isin] || {};
   const entryDate  = track.entry_date ? track.entry_date.substring(0,10) : null;
   const entryPrice = track.entry_price || null;
   let entryIdx = entryDate ? labels.findIndex(l => l >= entryDate) : -1;
   if (entryIdx === -1 && entryDate && labels.length > 0 && entryDate > labels[labels.length - 1])
     entryIdx = labels.length - 1;
+
+  // Acquisto personale da portfolioMap (cyan — data acquisto reale)
+  const pfEntry    = portfolioMap[isin] || {};
+  const pfDate     = pfEntry.entry_date ? pfEntry.entry_date.substring(0,10) : null;
+  const pfPrice    = pfEntry.entry_price ? parseFloat(pfEntry.entry_price) : null;
+  let pfIdx = pfDate ? labels.findIndex(l => l >= pfDate) : -1;
+  if (pfIdx === -1 && pfDate && labels.length > 0 && pfDate > labels[labels.length - 1])
+    pfIdx = labels.length - 1;
 
   // Uscite e relative entrate dagli ultimi 30gg (stessa fonte della sezione "Usciti da L1")
   const isinExits = l1ExitsData.filter(e => e.isin === isin);
@@ -1334,6 +1431,22 @@ function renderDetailChart(history, days) {
         const yPos = y.getPixelForValue(entryPrice);
         if (yPos > y.top && yPos < y.bottom)
           c.fillText('▲ ' + entryPrice.toFixed(4), xPos + 4, yPos - 3);
+        c.restore();
+      }
+
+      // Linea cyan — acquisto personale (portfolioMap)
+      if (pfIdx >= 0) {
+        const xPos = x.getPixelForValue(pfIdx);
+        c.save();
+        c.strokeStyle = '#00cfff'; c.lineWidth = 1.5; c.setLineDash([4,3]); c.globalAlpha = 0.8;
+        c.beginPath(); c.moveTo(xPos, y.top); c.lineTo(xPos, y.bottom); c.stroke();
+        if (pfPrice) {
+          c.setLineDash([]); c.globalAlpha = 1; c.fillStyle = '#00cfff';
+          c.font = 'bold 10px sans-serif'; c.textAlign = 'left';
+          const yPos = y.getPixelForValue(pfPrice);
+          if (yPos > y.top && yPos < y.bottom)
+            c.fillText('► ' + pfPrice.toFixed(4), xPos + 4, yPos + 12);
+        }
         c.restore();
       }
 
