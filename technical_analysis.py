@@ -5,7 +5,7 @@ Schema: EMA20 (fast) + SMA50 (medium) + SMA200 (regime filter)
 ADX14 reale (da OHLCV) + RSI14
 
 L0 Deep Recovery: ETF in drawdown profondo con segnali di rimbalzo
-L1 Trend Sicuro: 5 condizioni (allineamento, persistenza+slope, RSI, distanza, ADX)
+L1 Trend Sicuro: 6 condizioni (allineamento, persistenza+slope, RSI, distanza, ADX, MACD)
 L2 Watchlist: allineamento parziale
 L3 Universo: monitoraggio passivo
 """
@@ -533,7 +533,7 @@ class ETFTechnicalAnalyzer:
 
         elif days_above_ema20 >= p['days_above_ema'] or (ema20_v and sma50_v and ema20_v > sma50_v):
             suggested = 2
-            reason    = f'Watchlist: {buy_count}/5 condizioni L1 ({days_above_ema20}gg sopra EMA20)'
+            reason    = f'Watchlist: {buy_count}/6 condizioni L1 ({days_above_ema20}gg sopra EMA20)'
             reason_codes.append('L2_WATCHLIST')
 
         elif price_ema_ok:

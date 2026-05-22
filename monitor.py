@@ -209,7 +209,7 @@ class ETFMonitor:
                     color = 'FF6600'
                 elif suggested == 1:
                     conds = a.get('buy_count', 0)
-                    signal_txt = f'L1 BUY ({conds}/5)'
+                    signal_txt = f'L1 BUY ({conds}/6)'
                     color = '00B050'
                 elif suggested == 2:
                     signal_txt = 'L2 WATCH'
@@ -243,6 +243,7 @@ class ETFMonitor:
 
     def generate_dashboard_data(self, results: list) -> dict:
         """Genera dati JSON per la dashboard HTML."""
+        l1_tracking = self.db.get_all_l1_entries()
         dashboard = {
             'last_update': datetime.now().isoformat(),
             'data_source': 'Yahoo Finance',
@@ -291,6 +292,13 @@ class ETFMonitor:
                 'l0_entry':          a.get('l0_entry', False),
                 'data_status':       a.get('data_status', 'ok'),
             }
+
+            # entry_date e entry_price per ETF in L1 (serve per linea verticale grafico)
+            if suggested == 1:
+                isin_key = r.get('isin', '') or r['ticker']
+                tracking = l1_tracking.get(isin_key, {})
+                etf_data['entry_date']  = str(tracking.get('entry_date', '')) if tracking else ''
+                etf_data['entry_price'] = float(tracking.get('entry_price', 0)) if tracking else None
 
             level_int = max(0, min(3, int(suggested)))
             dashboard['levels'][level_int].append(etf_data)
