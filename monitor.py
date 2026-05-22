@@ -241,7 +241,7 @@ class ETFMonitor:
             add_log(traceback.format_exc())
             return []
 
-    def generate_dashboard_data(self, results: list) -> dict:
+    def generate_dashboard_data(self, results: list, send_daily_report: bool = True) -> dict:
         """Genera dati JSON per la dashboard HTML."""
         l1_tracking = self.db.get_all_l1_entries()
         dashboard = {
@@ -250,6 +250,7 @@ class ETFMonitor:
             'summary': {
                 'total_etfs': len(results),
                 'l0_count': 0, 'l1_count': 0, 'l2_count': 0, 'l3_count': 0,
+                'alerts_sent': send_daily_report,
             },
             'levels': {0: [], 1: [], 2: [], 3: []},
             'categories': {},
@@ -320,6 +321,13 @@ class ETFMonitor:
                 if isinstance(obj, (date_type, datetime)):
                     return str(obj)
                 return super().default(obj)
+
+        # Data freshness: data più recente nel DB
+        try:
+            stats = self.db.get_stats()
+            dashboard['summary']['data_as_of'] = stats.get('last_date')
+        except Exception:
+            dashboard['summary']['data_as_of'] = None
 
         os.makedirs('data', exist_ok=True)
         with open('data/dashboard_data.json', 'w') as f:
@@ -488,10 +496,16 @@ class ETFMonitor:
         else:
             add_log("  Nessun segnale portafoglio oggi")
 
-    def run(self):
-        """Esegue il ciclo completo di monitoraggio."""
+    def run(self, send_daily_report: bool = True):
+        """Esegue il ciclo completo di monitoraggio.
+
+        Args:
+            send_daily_report: Se True invia alert email (run principale).
+                               Se False aggiorna solo dashboard (run silenzioso mattutino).
+        """
         add_log("=" * 50)
-        add_log(f"ETF MONITOR — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        label = "completo" if send_daily_report else "silenzioso"
+        add_log(f"ETF MONITOR [{label}] — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
         add_log(f"Fonte dati: Yahoo Finance | Schema: EMA20+SMA50+SMA200+ADX+RSI")
 
         # 1. Carica ETF
@@ -531,7 +545,7 @@ class ETFMonitor:
         # 4. Genera dashboard
         try:
             add_log("Generazione dashboard...")
-            dashboard = self.generate_dashboard_data(results)
+            dashboard = self.generate_dashboard_data(results, send_daily_report=send_daily_report)
             add_log(f"Dashboard: L0={dashboard['summary']['l0_count']} "
                     f"L1={dashboard['summary']['l1_count']} "
                     f"L2={dashboard['summary']['l2_count']} "
@@ -559,12 +573,15 @@ class ETFMonitor:
             with open('data/dashboard_data.json', 'w') as f:
                 json.dump(dashboard, f, indent=2)
 
-        # 5. Invia alert
-        try:
-            add_log("Invio alert...")
-            self.send_alerts(results)
-        except Exception as e:
-            add_log(f"ERRORE Alert: {e}")
+        # 5. Invia alert (solo se run principale)
+        if send_daily_report:
+            try:
+                add_log("Invio alert...")
+                self.send_alerts(results)
+            except Exception as e:
+                add_log(f"ERRORE Alert: {e}")
+        else:
+            add_log("Alert saltati (refresh silenzioso)")
 
         add_log(f"Completato — {datetime.now().strftime('%H:%M')}")
         add_log("=" * 50)
