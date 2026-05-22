@@ -329,7 +329,7 @@ class ETFTechnicalAnalyzer:
           3. RSI: nel range target per l'asset class
           4. Distanza da EMA20: <= ema_dist_max
           5. ADX: >= adx_entry
-          6. MACD momentum: macd_h > 0 AND (macd_h > macd_h_prev OR dist_ema20 < 2%)
+          6. MACD momentum: macd_h > 0 AND macd_h > macd_h_prev (sempre pendenza positiva)
 
         Exit L1 (6 regole, priorità dall'alto):
           F: crollo giornaliero >= 3% (kill switch) — totale
@@ -458,8 +458,7 @@ class ETFTechnicalAnalyzer:
         # 6. MACD momentum: histogram positivo + in accelerazione (o dip vicino EMA20)
         macd_positive  = macd_h is not None and macd_h > 0
         macd_rising    = macd_hp is not None and macd_h is not None and macd_h > macd_hp
-        near_ema       = 0 <= dist_ema20 < 2.0
-        macd_ok        = macd_positive and (macd_rising or near_ema)
+        macd_ok        = macd_positive and macd_rising
 
         conditions = {
             'allineamento_ok':    allineamento,
