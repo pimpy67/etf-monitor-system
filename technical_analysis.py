@@ -19,18 +19,18 @@ from typing import Dict, List, Optional
 class ETFTechnicalAnalyzer:
     """Analisi tecnica ETF con EMA20 + SMA50 + SMA200 + ADX + RSI"""
 
-    # Profili parametri per tipo ETF
+    # Profili parametri per tipo ETF — versione definitiva 22/05/2026
     PROFILES = {
         'equity_developed': {
-            'rsi_entry_low': 50, 'rsi_entry_high': 65,
+            'rsi_entry_low': 50, 'rsi_entry_high': 70,
             'rsi_exit_min': 40,  'rsi_overbought': 78,
             'ema_dist_max': 4.0, 'adx_entry': 20,
             'l0_drawdown': 15.0, 'l0_rsi_max': 35,
             'days_above_ema': 3, 'mm200_filter': True,
         },
         'equity_sector': {
-            'rsi_entry_low': 50, 'rsi_entry_high': 68,
-            'rsi_exit_min': 38,  'rsi_overbought': 80,
+            'rsi_entry_low': 50, 'rsi_entry_high': 70,
+            'rsi_exit_min': 38,  'rsi_overbought': 78,
             'ema_dist_max': 5.0, 'adx_entry': 22,
             'l0_drawdown': 18.0, 'l0_rsi_max': 38,
             'days_above_ema': 3, 'mm200_filter': True,
@@ -43,11 +43,11 @@ class ETFTechnicalAnalyzer:
             'days_above_ema': 3, 'mm200_filter': True,
         },
         'commodity': {
-            'rsi_entry_low': 48, 'rsi_entry_high': 65,
+            'rsi_entry_low': 50, 'rsi_entry_high': 65,
             'rsi_exit_min': 38,  'rsi_overbought': 75,
             'ema_dist_max': 5.0, 'adx_entry': 22,
             'l0_drawdown': 20.0, 'l0_rsi_max': 40,
-            'days_above_ema': 3, 'mm200_filter': False,
+            'days_above_ema': 3, 'mm200_filter': True,
         },
         'bond': {
             'rsi_entry_low': 48, 'rsi_entry_high': 62,
@@ -57,8 +57,8 @@ class ETFTechnicalAnalyzer:
             'days_above_ema': 3, 'mm200_filter': False,
         },
         'thematic': {
-            'rsi_entry_low': 50, 'rsi_entry_high': 68,
-            'rsi_exit_min': 38,  'rsi_overbought': 80,
+            'rsi_entry_low': 50, 'rsi_entry_high': 70,
+            'rsi_exit_min': 38,  'rsi_overbought': 78,
             'ema_dist_max': 6.0, 'adx_entry': 22,
             'l0_drawdown': 20.0, 'l0_rsi_max': 40,
             'days_above_ema': 3, 'mm200_filter': True,
@@ -72,6 +72,7 @@ class ETFTechnicalAnalyzer:
         self.etf_type = etf_type if etf_type in self.PROFILES else 'equity_developed'
         self.p = self.PROFILES[self.etf_type]
 
+        self.ema10_period  = 10
         self.ema20_period  = 20
         self.sma50_period  = 50
         self.sma200_period = 200
@@ -322,22 +323,25 @@ class ETFTechnicalAnalyzer:
         """
         Suggerisce L1/L2/L3.
 
-        5 condizioni L1:
-          1. Allineamento: price > EMA20 > SMA50 (+ price > SMA200 se disponibile)
+        6 condizioni L1 (tutte obbligatorie):
+          1. Allineamento: price > EMA20 > SMA50 (+ price > SMA200 se mm200_filter)
           2. Persistenza: >= 3gg sopra EMA20 + slope EMA20 positivo
           3. RSI: nel range target per l'asset class
           4. Distanza da EMA20: <= ema_dist_max
           5. ADX: >= adx_entry
+          6. MACD momentum: macd_h > 0 AND (macd_h > macd_h_prev OR dist_ema20 < 2%)
 
-        Exit L1 (6 regole):
-          A: price < EMA20 (stop loss)
-          B: EMA20 < SMA50 (death cross)
-          C: RSI < rsi_exit_min (momentum perso)
-          D: RSI > rsi_overbought (take profit)
-          E: ADX < 15 (trend esaurito)
-          F: crollo giornaliero >= 3% (kill switch)
+        Exit L1 (6 regole, priorità dall'alto):
+          F: crollo giornaliero >= 3% (kill switch) — totale
+          A: prezzo sotto EMA20 per >= 3 giorni — totale
+          B: EMA10 < EMA20 (trailing stop reattivo) — totale
+          C: RSI_prev >= 70 AND RSI_oggi < 70 (stanchezza) — totale, solo non-bond
+          E: ADX < 18 AND prezzo < EMA20 (trend esaurito) — totale, solo equity/commodity
+          D: RSI > 78 (eccesso) — parziale 90%, flag dashboard
         """
         p = self.p
+        is_bond = self.etf_type == 'bond'
+        is_equity_family = self.etf_type in self.EQUITY_FAMILY or self.etf_type == 'commodity'
 
         if len(prices) < self.ema20_period:
             return {
@@ -358,10 +362,12 @@ class ETFTechnicalAnalyzer:
         close   = prices.astype(float)
         current = float(close.iloc[-1])
 
+        ema10  = self._ema(close, self.ema10_period)
         ema20  = self._ema(close, self.ema20_period)
         sma50  = self._sma(close, self.sma50_period) if len(close) >= self.sma50_period else None
         sma200 = self._sma(close, self.sma200_period) if len(close) >= self.sma200_period else None
 
+        ema10_v  = self._fval(ema10)
         ema20_v  = self._fval(ema20)
         sma50_v  = self._fval(sma50) if sma50 is not None else None
         sma200_v = self._fval(sma200) if sma200 is not None else None
@@ -397,23 +403,38 @@ class ETFTechnicalAnalyzer:
         peak    = float(close.tail(peak_w).max())
         drawdown = (peak - current) / peak * 100 if peak > 0 else 0.0
 
-        # ── Exit rules (se gia' in L1) ─────────────────────────────────────
-        exit_rule = None
+        # ── Exit rules (se gia' in L1) ─────────────────────────────────────────
+        exit_rule    = None
+        partial_exit = False  # True = segnale D (vendi 90%, tieni 10%)
+
         if current_level == 1:
             if kill_switch:
+                # F — Kill Switch: uscita totale immediata
                 exit_rule = f'Regola F — Kill Switch: calo {daily_chg:.1f}% (>= 3%)'
-            elif days_below_ema20 >= 3:
-                exit_rule = f'Regola A — Stop Loss: prezzo sotto EMA20 da {days_below_ema20}gg'
-            elif ema20_v and sma50_v and ema20_v < sma50_v:
-                exit_rule = f'Regola B — Death Cross: EMA20 {ema20_v:.2f} < SMA50 {sma50_v:.2f}'
-            elif rsi_val is not None and rsi_val < p['rsi_exit_min']:
-                exit_rule = f'Regola C — Momentum: RSI {rsi_val:.0f} < {p["rsi_exit_min"]}'
-            elif rsi_val is not None and rsi_val > p['rsi_overbought']:
-                exit_rule = f'Regola D — Overbought: RSI {rsi_val:.0f} > {p["rsi_overbought"]}'
-            elif adx_val is not None and adx_val < 15:
-                exit_rule = f'Regola E — Trend: ADX {adx_val:.0f} < 15'
 
-        # ── 5 condizioni L1 ───────────────────────────────────────────────────
+            elif days_below_ema20 >= 3:
+                # A — Stop Loss: prezzo sotto EMA20 da almeno 3 giorni
+                exit_rule = f'Regola A — Stop Loss: prezzo sotto EMA20 da {days_below_ema20}gg'
+
+            elif ema10_v and ema20_v and ema10_v < ema20_v:
+                # B — Trailing Stop: EMA10 scende sotto EMA20 (più reattivo del death cross)
+                exit_rule = f'Regola B — Trailing: EMA10 {ema10_v:.2f} < EMA20 {ema20_v:.2f}'
+
+            elif (not is_bond and rsi_val is not None and rsi_prev is not None
+                  and rsi_prev >= 70 and rsi_val < 70):
+                # C — Stanchezza: RSI usciva dall'ipercomprato (solo non-bond)
+                exit_rule = f'Regola C — Stanchezza: RSI {rsi_prev:.0f}→{rsi_val:.0f} (era ≥70, ora <70)'
+
+            elif (is_equity_family and adx_val is not None
+                  and adx_val < 18 and current < (ema20_v or current + 1)):
+                # E — ADX debole + prezzo sotto EMA20 (solo equity/commodity)
+                exit_rule = f'Regola E — ADX debole: {adx_val:.0f} < 18 e prezzo < EMA20'
+
+            elif rsi_val is not None and rsi_val > p['rsi_overbought']:
+                # D — Eccesso RSI: uscita parziale 90% (piede dentro)
+                partial_exit = True
+
+        # ── 6 condizioni L1 ───────────────────────────────────────────────────
         # 1. Allineamento: price > EMA20 > SMA50 (+ regime SMA200)
         price_ema_ok  = ema20_v is not None and current > ema20_v
         ema_sma50_ok  = ema20_v is not None and sma50_v is not None and ema20_v > sma50_v
@@ -434,17 +455,26 @@ class ETFTechnicalAnalyzer:
         # 5. ADX sopra soglia
         adx_ok        = adx_val is not None and adx_val >= p['adx_entry']
 
+        # 6. MACD momentum: histogram positivo + in accelerazione (o dip vicino EMA20)
+        macd_positive  = macd_h is not None and macd_h > 0
+        macd_rising    = macd_hp is not None and macd_h is not None and macd_h > macd_hp
+        near_ema       = 0 <= dist_ema20 < 2.0
+        macd_ok        = macd_positive and (macd_rising or near_ema)
+
         conditions = {
             'allineamento_ok':    allineamento,
             'persistenza_ok':     persistenza,
             'rsi_ok':             rsi_ok,
             'distance_ok':        dist_ok,
             'adx_ok':             adx_ok,
+            'macd_ok':            macd_ok,
             # Valori per display
+            'ema10_current':      round(ema10_v, 4) if ema10_v else None,
             'ema20_current':      round(ema20_v, 4) if ema20_v else None,
             'sma50_current':      round(sma50_v, 4) if sma50_v else None,
             'sma200_current':     round(sma200_v, 4) if sma200_v else None,
             'rsi':                round(rsi_val, 1) if rsi_val else None,
+            'rsi_prev':           round(rsi_prev, 1) if rsi_prev else None,
             'adx':                round(adx_val, 1) if adx_val else None,
             'days_above_ema20':   days_above_ema20,
             'dist_ema20':         round(dist_ema20, 2),
@@ -452,14 +482,16 @@ class ETFTechnicalAnalyzer:
             'regime_ok':          regime_ok,
             'kill_switch':        kill_switch,
             'daily_change_pct':   round(daily_chg, 2) if daily_chg is not None else None,
-            'macd_histogram':     round(macd_h, 4) if macd_h else None,
+            'macd_histogram':     round(macd_h, 4) if macd_h is not None else None,
+            'macd_histogram_prev': round(macd_hp, 4) if macd_hp is not None else None,
+            'partial_exit':       partial_exit,
             'pct_1d':             pct_1d,
             'pct_1w':             pct_1w,
             'pct_1m':             pct_1m,
             'peak_price':         round(peak, 4),
             'drawdown_from_peak': round(drawdown, 2),
         }
-        buy_count = sum([allineamento, persistenza, rsi_ok, dist_ok, adx_ok])
+        buy_count = sum([allineamento, persistenza, rsi_ok, dist_ok, adx_ok, macd_ok])
 
         # ── Determina livello ──────────────────────────────────────────────────
         reason_codes = []
@@ -483,7 +515,7 @@ class ETFTechnicalAnalyzer:
             reason    = f'Storico insufficiente per SMA50 (min {self.sma50_period} giorni)'
             reason_codes.append('L2_WATCHLIST' if suggested == 2 else 'L3_MONITOR')
 
-        elif allineamento and persistenza and rsi_ok and dist_ok and adx_ok:
+        elif allineamento and persistenza and rsi_ok and dist_ok and adx_ok and macd_ok:
             if kill_switch:
                 suggested = current_level
                 reason    = f'Kill Switch [{daily_chg:.1f}%]: nuovo ingresso L1 bloccato'
@@ -491,9 +523,11 @@ class ETFTechnicalAnalyzer:
             else:
                 suggested = 1
                 regime_note = '' if regime_ok else ' (no SMA200)'
+                macd_note   = '↑' if (macd_hp is not None and macd_h is not None and macd_h > macd_hp) else '~'
                 reason = (
                     f'L1 Trend Sicuro: EMA20>SMA50 ✓, {days_above_ema20}gg sopra EMA20 ✓, '
-                    f'RSI {rsi_val:.0f} ✓, dist {dist_ema20:.1f}% ✓, ADX {adx_val:.0f} ✓{regime_note}'
+                    f'RSI {rsi_val:.0f} ✓, dist {dist_ema20:.1f}% ✓, ADX {adx_val:.0f} ✓, '
+                    f'MACD {macd_note} ✓{regime_note}'
                 )
                 reason_codes.append('L1_ENTRY')
 
@@ -540,12 +574,14 @@ class ETFTechnicalAnalyzer:
             price = float(df['Close'].iloc[-1]) if len(df) > 0 else None
             return {
                 'current_price': price,
-                'ema20': None, 'sma50': None, 'sma200': None,
-                'rsi': None, 'adx': None, 'macd_histogram': None,
+                'ema10': None, 'ema20': None, 'sma50': None, 'sma200': None,
+                'rsi': None, 'adx': None,
+                'macd_histogram': None, 'macd_histogram_prev': None,
                 'dist_ema20': None, 'ema20_slope': None,
                 'days_above_ema20': 0, 'days_below_ema20': 0,
                 'peak_price': price, 'drawdown_from_peak': 0.0,
                 'pct_change_1d': None, 'pct_change_1w': None, 'pct_change_1m': None,
+                'partial_exit': False,
                 'suggested_level': current_level, 'level_change': False,
                 'level_reason': f'Dati insufficienti: {len(df)} giorni',
                 'conditions': {}, 'buy_count': 0,
@@ -581,50 +617,92 @@ class ETFTechnicalAnalyzer:
             level['reason_codes']    = [f"L0_EXIT_{l0['l0_exit_rule'].upper()}"]
 
         return {
-            'current_price':      round(float(close.iloc[-1]), 4),
-            'ema20':              lc.get('ema20_current'),
-            'sma50':              lc.get('sma50_current'),
-            'sma200':             lc.get('sma200_current'),
-            'rsi':                lc.get('rsi'),
-            'adx':                lc.get('adx'),
-            'macd_histogram':     lc.get('macd_histogram'),
-            'dist_ema20':         lc.get('dist_ema20'),
-            'ema20_slope':        lc.get('ema20_slope'),
-            'days_above_ema20':   lc.get('days_above_ema20', 0),
-            'days_below_ema20':   lc.get('days_below_ema20', 0) if 'days_below_ema20' in lc else 0,
-            'peak_price':         lc.get('peak_price'),
-            'drawdown_from_peak': lc.get('drawdown_from_peak', 0.0),
-            'pct_change_1d':      lc.get('pct_1d'),
-            'pct_change_1w':      lc.get('pct_1w'),
-            'pct_change_1m':      lc.get('pct_1m'),
-            'suggested_level':    level['suggested_level'],
-            'level_change':       level['level_change'],
-            'level_reason':       level['reason'],
-            'conditions':         lc,
-            'buy_count':          level.get('buy_count', 0),
-            'l0_entry':           l0.get('l0_entry', False),
-            'l0_exit_rule':       l0.get('l0_exit_rule'),
-            'l0_data':            l0,
-            'data_status':        'ok',
-            'analysis_date':      datetime.now().strftime('%Y-%m-%d %H:%M'),
+            'current_price':       round(float(close.iloc[-1]), 4),
+            'ema10':               lc.get('ema10_current'),
+            'ema20':               lc.get('ema20_current'),
+            'sma50':               lc.get('sma50_current'),
+            'sma200':              lc.get('sma200_current'),
+            'rsi':                 lc.get('rsi'),
+            'adx':                 lc.get('adx'),
+            'macd_histogram':      lc.get('macd_histogram'),
+            'macd_histogram_prev': lc.get('macd_histogram_prev'),
+            'dist_ema20':          lc.get('dist_ema20'),
+            'ema20_slope':         lc.get('ema20_slope'),
+            'days_above_ema20':    lc.get('days_above_ema20', 0),
+            'days_below_ema20':    lc.get('days_below_ema20', 0) if 'days_below_ema20' in lc else 0,
+            'peak_price':          lc.get('peak_price'),
+            'drawdown_from_peak':  lc.get('drawdown_from_peak', 0.0),
+            'pct_change_1d':       lc.get('pct_1d'),
+            'pct_change_1w':       lc.get('pct_1w'),
+            'pct_change_1m':       lc.get('pct_1m'),
+            'partial_exit':        lc.get('partial_exit', False),
+            'suggested_level':     level['suggested_level'],
+            'level_change':        level['level_change'],
+            'level_reason':        level['reason'],
+            'conditions':          lc,
+            'buy_count':           level.get('buy_count', 0),
+            'l0_entry':            l0.get('l0_entry', False),
+            'l0_exit_rule':        l0.get('l0_exit_rule'),
+            'l0_data':             l0,
+            'data_status':         'ok',
+            'analysis_date':       datetime.now().strftime('%Y-%m-%d %H:%M'),
         }
 
     # ── Utility ────────────────────────────────────────────────────────────────
 
     @staticmethod
     def category_to_etf_type(categoria: str) -> str:
-        """Mappa la categoria Excel al tipo ETF per il profilo di analisi."""
+        """Mappa la categoria Excel al tipo ETF per il profilo di analisi.
+
+        Ordine di priorità critico:
+          1. bond     — prima di tutto: 'Obbligazionari - Emergenti' contiene 'emer'
+                        ma è bond, non equity emerging.
+          2. sector   — prima di commodity: 'Settoriale - Energia/Materie Prime'
+                        è equity settoriale, non commodity future.
+          3. emerging — dopo aver escluso bond e settoriali.
+          4. commodity — solo ETF su materie prime fisiche/future.
+          5. thematic — strategie speciali, volatilità, leveraged, opzioni.
+          6. default  — equity_developed (azionario sviluppato, short, style, ecc.)
+
+        Short ETF rimangono equity_developed: il filtro SMA200 li blocca in bear market,
+        che è il comportamento più prudente per strumenti speculativi inversi.
+        """
         if not categoria:
             return 'equity_developed'
         cat = categoria.lower()
-        if any(k in cat for k in ('emer', 'asia', 'cina', 'india', 'brasile', 'paesi em')):
-            return 'equity_emerging'
-        if any(k in cat for k in ('materie', 'gold', 'oro', 'petrolio', 'commodit', 'metal')):
-            return 'commodity'
-        if any(k in cat for k in ('obblig', 'bond', 'reddito', 'treasury', 'government', 'corporate', 'credit')):
+
+        # 1. BOND — controlla prima per evitare che 'Obbligazionari - Emergenti'
+        #    venga catturato dalla regola emerging (contiene 'emer')
+        if any(k in cat for k in ('obblig', 'bond', 'reddito', 'treasury', 'government',
+                                   'corporate', 'credit', 'liquidit', 'monetar',
+                                   'titoli di stato', 'titoli stato', 'inflation',
+                                   'governativ', 'aggregati', 'high yield')):
             return 'bond'
-        if any(k in cat for k in ('tematic', 'clean', 'biotech', 'robot', 'innov', 'megatr')):
-            return 'thematic'
-        if any(k in cat for k in ('settori', 'sector', 'tech', 'health', 'finanz', 'energia', 'real estate')):
+
+        # 2. SETTORIALI — controlla prima di commodity per evitare che
+        #    'Settoriale - Energia' e 'Settoriale - Materie Prime' vadano a commodity
+        if any(k in cat for k in ('settori', 'sector', 'real estate', 'reit',
+                                   'infrastruttur', 'finanz', 'tech')):
             return 'equity_sector'
+
+        # 3. MERCATI EMERGENTI
+        if any(k in cat for k in ('emer', 'cina', 'india', 'brasile', 'vietnam',
+                                   'africa', 'latin', "dell'est", 'middle east',
+                                   'sudamerica', 'paesi em')):
+            return 'equity_emerging'
+
+        # 4. COMMODITY — materie prime fisiche e future (non settori azionari)
+        if any(k in cat for k in ('materie', 'gold', 'oro', 'petrolio', 'commodit',
+                                   'metall', 'energia', 'indice di comm')):
+            return 'commodity'
+
+        # 5. TEMATICI e strategie speciali
+        if any(k in cat for k in ('tematic', 'clean', 'biotech', 'robot', 'innov',
+                                   'megatr', 'buywrite', 'covered call', 'protective',
+                                   'private equity', 'leveraged', 'leva',
+                                   'volat', 'struttur')):
+            return 'thematic'
+
+        # 6. Default: azionario sviluppato
+        #    (include Short, Style, Fondamentali, Mid/Small Cap, Far East, gestione attiva)
         return 'equity_developed'

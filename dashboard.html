@@ -117,11 +117,12 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .buy-dot   { width:7px; height:7px; border-radius:50%; background:#30363d; }
 .buy-dot.on { background:#3fb950; }
 .buy-count { font-weight:700; font-size:0.85em; }
-.buy-count.bc5 { color:#fff; text-shadow:0 0 8px #3fb950,0 0 16px #1a7a30; }
-.buy-count.bc4 { color:#3fb950; text-shadow:0 0 6px #3fb950; }
-.buy-count.bc3 { color:#7fff00; }
-.buy-count.bc2 { color:#d29922; }
-.buy-count.bc1 { color:#ff9966; }
+.buy-count.bc6 { color:#fff; text-shadow:0 0 8px #3fb950,0 0 16px #1a7a30; }
+.buy-count.bc5 { color:#3fb950; text-shadow:0 0 6px #3fb950; }
+.buy-count.bc4 { color:#7fff00; }
+.buy-count.bc3 { color:#d29922; }
+.buy-count.bc2 { color:#ff9966; }
+.buy-count.bc1 { color:#f85149; }
 .buy-count.bc0 { color:#555; }
 .cond-dots { font-size:0.7em; margin-left:3px; letter-spacing:1px; }
 
@@ -654,7 +655,8 @@ function renderL1Row(e) {
 
   const bc     = e.buy_count || 0;
   const c      = e.conditions || {};
-  const condHtml = `<span class="buy-count bc${bc}">${bc}/5</span> <span class="cond-dots">${condDot(c.allineamento_ok,'A','Allineamento')}${condDot(c.persistenza_ok,'P','Persistenza')}${condDot(c.rsi_ok,'R','RSI range')}${condDot(c.distance_ok,'D','Distanza EMA20')}${condDot(c.adx_ok,'X','ADX')}</span>`;
+  const partialBadge = c.partial_exit ? `<span title="Uscita Parziale D: RSI>78 — vendi 90%, tieni 10%" style="margin-left:4px;font-size:0.75em;color:#ff8c00;font-weight:700;">90%↓</span>` : '';
+  const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${condDot(c.allineamento_ok,'A','Allineamento')}${condDot(c.persistenza_ok,'P','Persistenza')}${condDot(c.rsi_ok,'R','RSI range')}${condDot(c.distance_ok,'D','Distanza EMA20')}${condDot(c.adx_ok,'X','ADX')}${condDot(c.macd_ok,'M','MACD momentum')}</span>${partialBadge}`;
 
   const fmtPct = v => {
     if (v == null) return '<td class="pct zero">—</td>';
@@ -696,8 +698,8 @@ function renderETFRow(e, lvl) {
   if (lvl === 0 && e.drawdown_from_peak != null) {
     extraCell = `<span class="dd-pill">-${fmtNum(e.drawdown_from_peak,1)}%</span>`;
   } else {
-    const dots = [0,1,2,3,4].map(i => `<div class="buy-dot ${i < bc ? 'on' : ''}"></div>`).join('');
-    extraCell = `<div class="buy-badge"><div class="buy-dots">${dots}</div><span class="buy-count bc${bc}" style="font-size:0.78em;color:#555">${bc}/5</span></div>`;
+    const dots = [0,1,2,3,4,5].map(i => `<div class="buy-dot ${i < bc ? 'on' : ''}"></div>`).join('');
+    extraCell = `<div class="buy-badge"><div class="buy-dots">${dots}</div><span class="buy-count bc${bc}" style="font-size:0.78em;color:#555">${bc}/6</span></div>`;
   }
   const reason = (e.level_reason || '').substring(0,60);
   const nome   = e.nome || ticker;
@@ -822,30 +824,41 @@ function renderParamRef() {
     <div class="param-ref-body" id="paramRefBody">
 
       <div class="param-section-title">L1 "Trend Sicuro" — 5 Condizioni di Entrata (tutte richieste)</div>
+      <div style="font-size:0.78em;color:#58a6ff;margin-bottom:6px;padding:3px 6px;background:rgba(88,166,255,0.07);border-radius:4px;">
+        &#9432; 6 condizioni tutte obbligatorie per l'ingresso L1
+      </div>
       <table class="param-table">
         <thead><tr>
           <th style="width:22%">Parametro</th>
-          <th class="cls-eq"  style="width:20%">&#9670; Equity / Settoriali</th>
+          <th class="cls-eq"  style="width:20%">&#9670; Equity / Tematici</th>
           <th class="cls-em"  style="width:18%">&#9670; Mercati Emergenti</th>
           <th class="cls-sec" style="width:18%">&#9670; Materie Prime</th>
-          <th class="cls-etf" style="width:22%">&#9670; Bond / High Yield</th>
+          <th class="cls-etf" style="width:22%">&#9670; Bond</th>
         </tr></thead>
         <tbody>
-          <tr><td class="param-name">RSI range entrata</td><td class="val-eq">50 – 65</td><td class="val-em">50 – 65</td><td class="val-sec">50 – 65</td><td class="val-na">N/A</td></tr>
+          <tr><td class="param-name">RSI range entrata</td><td class="val-eq">50 – 70</td><td class="val-em">50 – 65</td><td class="val-sec">50 – 65</td><td class="val-na">48 – 62</td></tr>
           <tr><td class="param-name">Persistenza EMA20</td><td class="val-eq">3 giorni</td><td class="val-em">3 giorni</td><td class="val-sec">3 giorni</td><td class="val-na">3 giorni</td></tr>
-          <tr><td class="param-name">Distanza max EMA20</td><td class="val-eq">4%</td><td class="val-em">4%</td><td class="val-sec">4%</td><td class="val-na">4%</td></tr>
-          <tr><td class="param-name">ADX(14) richiesto</td><td class="val-eq">&gt; 20</td><td class="val-em">&gt; 20</td><td class="val-sec">&gt; 20</td><td class="val-na">No</td></tr>
-          <tr><td class="param-name">Filtro bear market</td><td class="val-eq" colspan="4" style="color:#8b949e;">Prezzo &gt; SMA200 — blocca nuovi ingressi L1 in bear market</td></tr>
+          <tr><td class="param-name">Distanza max EMA20</td><td class="val-eq">4 – 6%*</td><td class="val-em">5%</td><td class="val-sec">5%</td><td class="val-na">2%</td></tr>
+          <tr><td class="param-name">ADX(14) richiesto</td><td class="val-eq">&gt; 20 – 22*</td><td class="val-em">&gt; 20</td><td class="val-sec">&gt; 22</td><td class="val-na">&gt; 15</td></tr>
+          <tr><td class="param-name">MACD momentum</td><td class="val-eq" colspan="4" style="color:#8b949e;">Histogram &gt; 0 e (in crescita oppure prezzo vicino EMA20 &lt; 2%)</td></tr>
+          <tr><td class="param-name">Filtro bear market</td><td class="val-eq" colspan="3" style="color:#8b949e;">Prezzo &gt; SMA200 — blocca nuovi ingressi L1</td><td class="val-na" style="color:#555;">Non applicato</td></tr>
         </tbody>
       </table>
+      <div style="font-size:0.74em;color:#555;margin-top:4px;padding:0 2px;">
+        * Equity sviluppati: dist 4%, ADX 20 — Settoriali: dist 5%, ADX 22 — Tematici: dist 6%, ADX 22
+      </div>
 
-      <div class="param-section-title" style="margin-top:16px;">L1 — Regole di Uscita</div>
+      <div class="param-section-title" style="margin-top:16px;">L1 — Regole di Uscita (priorità dall'alto)</div>
       <div class="exit-grid">
-        <div class="exit-item exit-l1"><span class="exit-label">A.</span> Stop Loss: Prezzo &lt; EMA20</div>
-        <div class="exit-item exit-l1"><span class="exit-label">B.</span> Trailing Stop: EMA10 &lt; EMA20</div>
-        <div class="exit-item exit-l1"><span class="exit-label">C.</span> Stanchezza: RSI era &gt;70 e scende sotto 70</div>
-        <div class="exit-item exit-l1"><span class="exit-label">D.</span> Strutturale: EMA20 &lt; SMA50</div>
-        <div class="exit-item exit-l1"><span class="exit-label">E.</span> ADX &lt; 20 (solo equity/commodities)</div>
+        <div class="exit-item exit-l1"><span class="exit-label">F.</span> Kill Switch: calo giornaliero &le; &minus;3% — uscita totale immediata</div>
+        <div class="exit-item exit-l1"><span class="exit-label">A.</span> Stop Loss: prezzo sotto EMA20 da &ge; <strong>3 giorni</strong> consecutivi</div>
+        <div class="exit-item exit-l1"><span class="exit-label">B.</span> Trailing Stop: EMA10 &lt; EMA20 — uscita totale</div>
+        <div class="exit-item exit-l1"><span class="exit-label">C.</span> Stanchezza: RSI era &ge;70 e scende sotto 70 — uscita totale (solo non-bond)</div>
+        <div class="exit-item exit-l1"><span class="exit-label">E.</span> ADX &lt; 18 <em>e</em> prezzo &lt; EMA20 — trend esaurito (solo equity/commodity)</div>
+        <div class="exit-item" style="background:rgba(255,140,0,0.08);border:1px solid rgba(255,140,0,0.3);border-radius:6px;padding:5px 8px;"><span class="exit-label" style="color:#ff8c00;">D.</span> <strong style="color:#ff8c00;">Uscita Parziale 90%</strong>: RSI &gt; 78 — vendi 90%, tieni 10% (piede dentro)</div>
+      </div>
+      <div style="font-size:0.76em;color:#555;margin-top:8px;padding:4px 6px;background:rgba(255,140,0,0.05);border-left:2px solid rgba(255,140,0,0.4);border-radius:0 4px 4px 0;">
+        <strong style="color:#ff8c00;">Logica "piede dentro" 90/10:</strong> su segnale D acquista XEON (monetario &euro;STR) con il 90% — il 10% rimasto &egrave; il sensore. Su segnale F/A/B/C/E vendi il 10% residuo. Al rientro L1 vendi XEON e rientra 100%.
       </div>
 
       <div class="param-section-title" style="border-left:3px solid #ff8c00;padding-left:8px;border-bottom:none;margin-top:20px;">L0 "Deep Recovery" — Recupero dopo Forte Deprezzamento</div>
@@ -1189,23 +1202,29 @@ function renderDetailModal(e, days) {
     document.getElementById('detailL0').innerHTML = '';
   }
 
-  // Exit rule
+  // Exit rule e segnale parziale
   const cond = e.conditions || {};
+  let exitHtml = '';
   if (cond.exit_rule) {
-    document.getElementById('detailExit').innerHTML = `<div class="reason-box" style="border-left-color:#f85149;margin-bottom:14px">Uscita imminente — Regola ${cond.exit_rule}: ${cond.exit_trigger||''}</div>`;
-  } else {
-    document.getElementById('detailExit').innerHTML = '';
+    exitHtml += `<div class="reason-box" style="border-left-color:#f85149;margin-bottom:8px">Uscita imminente — ${cond.exit_rule}: ${cond.exit_trigger||''}</div>`;
   }
+  if (cond.partial_exit) {
+    exitHtml += `<div class="reason-box" style="border-left-color:#ff8c00;margin-bottom:8px;background:rgba(255,140,0,0.07)"><strong style="color:#ff8c00;">Regola D — Uscita Parziale 90%:</strong> RSI ${cond.rsi!=null?cond.rsi.toFixed(0):'—'} &gt; 78 — vendi 90%, mantieni 10% (piede dentro), acquista XEON</div>`;
+  }
+  document.getElementById('detailExit').innerHTML = exitHtml;
 
   // KPIs
+  const macdColor = v => v == null ? '' : v > 0 ? 'color:#3fb950' : 'color:#f85149';
   const kpis = [
     ['Livello',    lvlBadge, ''],
     ['Prezzo',     e.price   != null ? fmtNum(e.price,4)   : '—', ''],
+    ['EMA10',      e.ema10   != null ? fmtNum(e.ema10,4)   : '—', 'color:#79c0ff'],
     ['EMA20',      e.ema20   != null ? fmtNum(e.ema20,4)   : '—', 'color:#58a6ff'],
     ['SMA50',      e.sma50   != null ? fmtNum(e.sma50,4)   : '—', 'color:#a5d6ff'],
     ['SMA200',     e.sma200  != null ? fmtNum(e.sma200,4)  : '—', e.price>e.sma200?'color:#3fb950':'color:#f85149'],
     ['RSI14',      e.rsi     != null ? e.rsi.toFixed(1)    : '—', rsiColor(e.rsi)],
     ['ADX14',      e.adx     != null ? e.adx.toFixed(1)    : '—', adxColor(e.adx)],
+    ['MACD Hist',  e.macd_histogram != null ? e.macd_histogram.toFixed(4) : '—', macdColor(e.macd_histogram)],
     ['Dist EMA20', e.dist_ema20 != null ? `${e.dist_ema20.toFixed(2)}%` : '—', ''],
     ['%1G',        fmtPctRaw(e.pct_1d), pctColor(e.pct_1d)],
     ['%1W',        fmtPctRaw(e.pct_1w), pctColor(e.pct_1w)],
@@ -1217,12 +1236,14 @@ function renderDetailModal(e, days) {
   ).join('');
 
   // Conditions
+  const macdNote = cond.macd_histogram != null ? ` (hist ${cond.macd_histogram>0?'+':''}${cond.macd_histogram!=null?cond.macd_histogram.toFixed(3):'—'})` : '';
   const condMap = [
-    ['allineamento_ok', 'Allineamento: Prezzo>EMA20>SMA50'],
+    ['allineamento_ok', 'Allineamento: Prezzo > EMA20 > SMA50'],
     ['persistenza_ok',  'Persistenza: ≥3gg sopra EMA20 + slope↑'],
     ['rsi_ok',          `RSI nel range target (${cond.rsi!=null?cond.rsi.toFixed(0):'—'})`],
-    ['distance_ok',     `Distanza EMA20 ≤ 4% (${cond.dist_ema20!=null?cond.dist_ema20.toFixed(1)+'%':'—'})`],
-    ['adx_ok',          `ADX ≥ 20 (${cond.adx!=null?cond.adx.toFixed(0):'—'})`],
+    ['distance_ok',     `Distanza EMA20 entro limite (${cond.dist_ema20!=null?cond.dist_ema20.toFixed(1)+'%':'—'})`],
+    ['adx_ok',          `ADX ≥ soglia (${cond.adx!=null?cond.adx.toFixed(0):'—'})`],
+    ['macd_ok',         `MACD momentum${macdNote}`],
   ];
   const condHtml = condMap.map(([k, label]) => {
     const ok = cond[k];
