@@ -1,16 +1,13 @@
 """
-alerts.py - Sistema di notifiche email per alert ETF
-=====================================================
-Gestisce l'invio di email per:
-- Alert di acquisto (segnali BUY)
-- Alert di vendita (segnali SELL)
-- Report giornaliero
-
-Email via Resend API (HTTPS) — non bloccato da Railway/hosting.
+alerts.py - Notifiche email ETF Monitor
+=========================================
+3 email, inviate solo quando c'è qualcosa da dire:
+  1. send_new_entries      → nuovi ingressi L1 (+ nuovi L0)
+  2. send_l1_exit          → uscita da L1 con regola e risultato %
+  3. send_portfolio_signals → segnali operativi (Piede Dentro, Attenzione)
+  4. send_health_report    → solo se ci sono errori tecnici
 """
-
 from datetime import datetime
-from typing import Dict
 import os
 
 try:
@@ -18,596 +15,347 @@ try:
     RESEND_AVAILABLE = True
 except ImportError:
     RESEND_AVAILABLE = False
-    print("Libreria 'resend' non installata. Installa con: pip install resend")
+
+REGOLE = {
+    'A': ('A — Stop Loss',       '#6c757d', 'Prezzo sotto EMA20 per ≥3 giorni consecutivi'),
+    'B': ('B — Trailing Stop',   '#fd7e14', 'EMA10 ha incrociato EMA20 al ribasso'),
+    'C': ('C — Stanchezza RSI',  '#dc3545', 'RSI era ≥70, ora sceso sotto 70'),
+    'D': ('D — Piede Dentro',    '#E65100', 'RSI > 78 — Uscita parziale 90%'),
+    'E': ('E — ADX Debole',      '#6c757d', 'ADX < 18 con prezzo sotto EMA20'),
+    'F': ('F — Kill Switch',     '#b71c1c', 'Calo giornaliero ≤ −3%'),
+}
+
+_BODY_STYLE = 'font-family:Arial,sans-serif;max-width:680px;margin:0 auto;background:#f0f2f5;'
+_FOOTER = '<div style="padding:12px;background:#333;color:#999;text-align:center;font-size:12px">ETF Monitor · {ts}</div>'
 
 
 class AlertSystem:
-    """Sistema di alert via email (Resend API)"""
 
-    def __init__(self, sender_email: str = None, sender_password: str = None,
-                 recipient_email: str = None):
-        """
-        Args:
-            sender_email:    Indirizzo mittente (dominio verificato Resend).
-                             Default: EMAIL_SENDER dall'env.
-            sender_password: Ignorato (legacy, mantenuto per compatibilita').
-            recipient_email: Email destinatario. Default: EMAIL_RECIPIENT dall'env.
-        """
-        self.sender_email = sender_email or os.getenv('EMAIL_SENDER', 'onboarding@resend.dev')
+    def __init__(self, sender_email=None, sender_password=None, recipient_email=None):
+        self.sender_email    = sender_email    or os.getenv('EMAIL_SENDER', 'onboarding@resend.dev')
         self.recipient_email = recipient_email or os.getenv('EMAIL_RECIPIENT', 'andreapavan67@gmail.com')
-        self.resend_api_key = os.getenv('RESEND_API_KEY', '')
-
+        self.resend_api_key  = os.getenv('RESEND_API_KEY', '')
         if RESEND_AVAILABLE and self.resend_api_key:
             _resend.api_key = self.resend_api_key
 
-    def _send_email(self, subject: str, body_html: str, body_text: str = None) -> bool:
-        """Invia email tramite Resend API"""
+    def _send_email(self, subject: str, body_html: str) -> bool:
         if not RESEND_AVAILABLE:
-            print("Resend non disponibile — installa con: pip install resend")
-            print(f"   Subject: {subject}")
-            return False
-
+            print(f'⚠️  Resend non disponibile — {subject}'); return False
         if not self.resend_api_key:
-            print("RESEND_API_KEY non configurata — email non inviata")
-            print(f"   Subject: {subject}")
-            return False
-
-        if not self.recipient_email:
-            print("EMAIL_RECIPIENT non configurata — email non inviata")
-            return False
-
+            print(f'⚠️  RESEND_API_KEY mancante — {subject}'); return False
         try:
-            params: _resend.Emails.SendParams = {
-                "from": f"ETF Monitor <{self.sender_email}>",
-                "to": [self.recipient_email],
-                "subject": subject,
-                "html": body_html,
-            }
-            if body_text:
-                params["text"] = body_text
-
-            _resend.Emails.send(params)
-            print(f"Email inviata via Resend: {subject}")
+            _resend.Emails.send({
+                'from': f'ETF Monitor <{self.sender_email}>',
+                'to':   [self.recipient_email],
+                'subject': subject,
+                'html': body_html,
+            })
+            print(f'✅ Email inviata: {subject}')
             return True
-
         except Exception as e:
-            print(f"Errore invio email (Resend): {e}")
-            return False
+            print(f'❌ Errore email: {e}'); return False
 
-    def send_l1_digest(self, l1_etfs: list) -> bool:
-        """
-        Email giornaliera: lista di tutti gli ETF in Livello 1 con tracking entrata.
-
-        Args:
-            l1_etfs: Lista di dict con campi:
-                nome, isin, ticker, categoria,
-                entry_date, entry_price, price, days_in_l1, pct_gain
-        """
+    # ── 1. Nuovi ingressi ─────────────────────────────────────────────────
+    def send_new_entries(self, new_l1: list, new_l0: list = None) -> bool:
+        """Una email con tutti i nuovi ingressi in L1 (e opzionalmente L0)."""
         today = datetime.now().strftime('%d/%m/%Y')
-        n = len(l1_etfs)
-        subject = f"📊 Portfolio ETF L1 — {n} ETF — {today}"
+        n1, n0 = len(new_l1), len(new_l0 or [])
+        parts = []
+        if n1: parts.append(f'{n1} nuovo{"i" if n1 > 1 else ""} in L1')
+        if n0: parts.append(f'{n0} in L0')
+        subject = f'🟢 {" · ".join(parts)} — {today}'
 
-        def ind_cell(label, ref, value_str, ok):
-            """Cella indicatore compatta: verde=ok, rosso=ko"""
-            bg  = '#d4edda' if ok else '#f8d7da'
-            col = '#155724' if ok else '#721c24'
-            icon = '✅' if ok else '❌'
-            return (f'<td style="padding:4px 6px;border:1px solid #ddd;background:{bg};'
-                    f'color:{col};font-size:11px;text-align:center;">'
-                    f'<div style="font-weight:bold;">{icon} {label}</div>'
-                    f'<div style="font-size:10px;color:#555;">{ref}</div>'
-                    f'<div style="font-weight:bold;">{value_str}</div>'
-                    f'</td>')
-
-        rows_html = ""
-        for i, f in enumerate(l1_etfs, start=1):
-            entry_date_str = (
-                f['entry_date'].strftime('%d/%m/%Y')
-                if hasattr(f['entry_date'], 'strftime')
-                else str(f['entry_date'])
-            )
-            entry_price = f.get('entry_price')
+        # ── Sezione L1 ────────────────────────────────────────────────────
+        l1_rows = ''
+        for i, f in enumerate(new_l1):
+            rsi   = f.get('rsi')
+            adx   = f.get('adx')
+            bc    = f.get('buy_count', 6)
             price = f.get('price')
-            pct = f.get('pct_gain')
-            days = f.get('days_in_l1', 0)
-
-            pct_color = '#00B050' if pct and pct >= 0 else '#DC3545'
-            pct_str = f"{pct:+.2f}%" if pct is not None else '–'
-            bg = '#f9f9f9' if i % 2 == 0 else 'white'
-
-            # Valori indicatori del giorno
-            ema20    = f.get('ema20')
-            sma50    = f.get('sma50')
-            rsi      = f.get('rsi')
-            adx      = f.get('adx')
-            bc       = f.get('conditions', f.get('buy_conditions', {}))
-
-            align_ok  = bool(bc.get('allineamento_ok'))
-            persist_ok= bool(bc.get('persistenza_ok'))
-            rsi_ok    = bool(bc.get('rsi_ok') or bc.get('rsi_optimal'))
-            dist_ok   = bool(bc.get('distance_ok'))
-            adx_ok    = bool(bc.get('adx_ok'))
-
-            ema20_str  = f"{ema20:.4f}" if ema20 else '–'
-            sma50_str  = f"{sma50:.4f}" if sma50 else '–'
-            rsi_str    = f"{rsi:.1f}" if rsi else '–'
-            adx_str    = f"{adx:.1f}" if adx else '–'
-
-            ind_row = (
-                ind_cell('Allineamento', f'EMA20>SMA50', f'EMA20={ema20_str}', align_ok) +
-                ind_cell('Persistenza 3gg+slope', f'EMA20={ema20_str}', f'SMA50={sma50_str}', persist_ok) +
-                ind_cell('RSI range target', 'range: 50–65', rsi_str, rsi_ok) +
-                ind_cell('Distanza EMA20', 'dist ≤ max%', f'EMA={ema20_str}', dist_ok) +
-                ind_cell('ADX trend', f'ADX ≥ 20', adx_str, adx_ok)
+            sma200 = f.get('sma200')
+            regime = '🟢 Rialzista' if (price and sma200 and price > sma200) else ('🔴 Ribassista' if sma200 else '—')
+            bg    = '#f9f9f9' if i % 2 else 'white'
+            l1_rows += (
+                f'<tr style="background:{bg}">'
+                f'<td style="padding:8px;border:1px solid #ddd">'
+                f'<strong>{f["nome"][:45]}</strong><br>'
+                f'<small style="color:#888">{f.get("ticker","")} · {f.get("isin","")}</small></td>'
+                f'<td style="padding:8px;border:1px solid #ddd;font-size:11px;color:#666">{f.get("categoria","")[:28]}</td>'
+                f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:bold">'
+                f'{"€{:.4f}".format(price) if price else "—"}</td>'
+                f'<td style="padding:8px;border:1px solid #ddd;text-align:center">'
+                f'{"{:.0f}".format(rsi) if rsi else "—"}</td>'
+                f'<td style="padding:8px;border:1px solid #ddd;text-align:center">'
+                f'{"{:.0f}".format(adx) if adx else "—"}</td>'
+                f'<td style="padding:8px;border:1px solid #ddd;text-align:center;font-size:11px">{regime}</td>'
+                f'<td style="padding:8px;border:1px solid #ddd;text-align:center;font-weight:bold;color:#00B050">'
+                f'{bc}/6</td></tr>'
             )
 
-            rows_html += f"""
-            <tr style="background:{bg};">
-              <td style="padding:8px;border:1px solid #ddd;text-align:center;color:#666;">{i}</td>
-              <td style="padding:8px;border:1px solid #ddd;">
-                <strong>{f['nome'][:45]}</strong><br>
-                <span style="font-size:11px;color:#888;">{f['ticker']} · {f['isin']}</span>
-              </td>
-              <td style="padding:8px;border:1px solid #ddd;text-align:center;font-size:12px;color:#666;">{f.get('categoria','')[:30]}</td>
-              <td style="padding:8px;border:1px solid #ddd;text-align:center;">{entry_date_str}</td>
-              <td style="padding:8px;border:1px solid #ddd;text-align:center;">{days}</td>
-              <td style="padding:8px;border:1px solid #ddd;text-align:right;">{"€{:.4f}".format(entry_price) if entry_price else '–'}</td>
-              <td style="padding:8px;border:1px solid #ddd;text-align:right;">{"€{:.4f}".format(price) if price else '–'}</td>
-              <td style="padding:8px;border:1px solid #ddd;text-align:center;font-weight:bold;color:{pct_color};">{pct_str}</td>
-            </tr>
-            <tr style="background:{bg};">
-              <td style="padding:4px;border:1px solid #ddd;"></td>
-              <td colspan="7" style="padding:4px 8px;border:1px solid #ddd;">
-                <table style="width:100%;border-collapse:collapse;">
-                  <tr>{ind_row}</tr>
-                </table>
-              </td>
-            </tr>"""
+        l1_section = (
+            f'<h2 style="color:#00B050;margin:0 0 12px">🟢 Nuovi in L1 — {n1} ETF</h2>'
+            f'<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px">'
+            f'<thead><tr style="background:#00B050;color:white">'
+            f'<th style="padding:8px;border:1px solid #ddd;text-align:left">ETF</th>'
+            f'<th style="padding:8px;border:1px solid #ddd">Categoria</th>'
+            f'<th style="padding:8px;border:1px solid #ddd">Prezzo</th>'
+            f'<th style="padding:8px;border:1px solid #ddd">RSI</th>'
+            f'<th style="padding:8px;border:1px solid #ddd">ADX</th>'
+            f'<th style="padding:8px;border:1px solid #ddd">Regime</th>'
+            f'<th style="padding:8px;border:1px solid #ddd">Cond.</th>'
+            f'</tr></thead><tbody>{l1_rows}</tbody></table>'
+        ) if n1 else ''
 
-        body_html = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; max-width: 860px; margin: 0 auto; background: #f0f2f5;">
-          <div style="background: linear-gradient(135deg, #00B050, #007A36); color: white; padding: 25px; text-align: center;">
-            <h1 style="margin: 0; font-size: 22px;">📊 Portfolio ETF Livello 1</h1>
-            <p style="margin: 6px 0 0 0; opacity: 0.9; font-size: 14px;">
-              {datetime.now().strftime('%A %d %B %Y')} &nbsp;·&nbsp; {n} ETF in portafoglio
-            </p>
-          </div>
+        # ── Sezione L0 ────────────────────────────────────────────────────
+        l0_section = ''
+        if new_l0:
+            l0_rows = ''
+            for i, f in enumerate(new_l0):
+                bg    = '#f9f9f9' if i % 2 else 'white'
+                dist  = f.get('distance_from_peak')
+                rsi   = f.get('rsi')
+                price = f.get('price')
+                pl    = f.get('panic_low')
+                l0_rows += (
+                    f'<tr style="background:{bg}">'
+                    f'<td style="padding:8px;border:1px solid #ddd">'
+                    f'<strong>{f["nome"][:45]}</strong><br>'
+                    f'<small style="color:#888">{f.get("ticker","")} · {f.get("isin","")}</small></td>'
+                    f'<td style="padding:8px;border:1px solid #ddd;text-align:right">'
+                    f'{"€{:.4f}".format(price) if price else "—"}</td>'
+                    f'<td style="padding:8px;border:1px solid #ddd;text-align:center;color:#DC3545;font-weight:bold">'
+                    f'{"{:.1f}%".format(dist) if dist is not None else "—"}</td>'
+                    f'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:#DC3545">'
+                    f'{"€{:.4f}".format(pl) if pl else "—"}</td>'
+                    f'<td style="padding:8px;border:1px solid #ddd;text-align:center">'
+                    f'{"{:.0f}".format(rsi) if rsi else "—"}</td>'
+                    f'</tr>'
+                )
+            l0_section = (
+                f'<h2 style="color:#E65100;margin:0 0 8px">🟠 Nuovi in L0 — Deep Recovery</h2>'
+                f'<p style="color:#666;font-size:12px;margin:0 0 10px">ETF in forte calo con segnali di recupero. Stop loss = Panic Low.</p>'
+                f'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+                f'<thead><tr style="background:#E65100;color:white">'
+                f'<th style="padding:8px;border:1px solid #ddd;text-align:left">ETF</th>'
+                f'<th style="padding:8px;border:1px solid #ddd">Prezzo</th>'
+                f'<th style="padding:8px;border:1px solid #ddd">Dist. Picco</th>'
+                f'<th style="padding:8px;border:1px solid #ddd">Panic Low</th>'
+                f'<th style="padding:8px;border:1px solid #ddd">RSI</th>'
+                f'</tr></thead><tbody>{l0_rows}</tbody></table>'
+            )
 
-          <div style="padding: 20px; background: white;">
-            <table style="width:100%;border-collapse:collapse;font-size:13px;">
-              <thead>
-                <tr style="background:#00B050;color:white;">
-                  <th style="padding:8px;border:1px solid #ddd;">#</th>
-                  <th style="padding:8px;border:1px solid #ddd;text-align:left;">ETF</th>
-                  <th style="padding:8px;border:1px solid #ddd;">Categoria</th>
-                  <th style="padding:8px;border:1px solid #ddd;">Entrato il</th>
-                  <th style="padding:8px;border:1px solid #ddd;">Giorni in L1</th>
-                  <th style="padding:8px;border:1px solid #ddd;">Prezzo entrata</th>
-                  <th style="padding:8px;border:1px solid #ddd;">Prezzo attuale</th>
-                  <th style="padding:8px;border:1px solid #ddd;">Guadagno %</th>
-                </tr>
-              </thead>
-              <tbody>{rows_html}</tbody>
-            </table>
-          </div>
-
-          <div style="padding: 15px; background: #333; color: #999; text-align: center; font-size: 12px;">
-            ETF Monitor System &nbsp;·&nbsp; Prossimo aggiornamento ore 18:00
-          </div>
-        </body>
-        </html>
-        """
+        ts = datetime.now().strftime('%d/%m/%Y %H:%M')
+        body_html = (
+            f'<html><body style="{_BODY_STYLE}">'
+            f'<div style="background:linear-gradient(135deg,#00B050,#007A36);color:white;padding:24px;text-align:center">'
+            f'<h1 style="margin:0;font-size:20px">🟢 NUOVI INGRESSI ETF</h1>'
+            f'<p style="margin:6px 0 0;opacity:.9;font-size:14px">{datetime.now().strftime("%A %d %B %Y")}</p>'
+            f'</div>'
+            f'<div style="padding:20px;background:white">{l1_section}{l0_section}</div>'
+            f'{_FOOTER.format(ts=ts)}</body></html>'
+        )
         return self._send_email(subject, body_html)
 
-    def send_sell_l1_exit(self, etf_info: dict) -> bool:
-        """
-        Email di uscita da L1: prezzo entrata, prezzo uscita, % guadagno/perdita
-        con dettaglio indicatori tecnici al momento dell'uscita.
-
-        Args:
-            etf_info: dict con nome, isin, ticker, categoria,
-                      entry_date, entry_price, exit_price, days_in_l1, pct_gain,
-                      analysis (dict con ema13, sma50, rsi, macd_histogram, bb_pct_b, level_reason)
-        """
-        pct = etf_info.get('pct_gain')
-        pct_str = f"{pct:+.2f}%" if pct is not None else 'N/D'
-        pct_color = '#00B050' if pct and pct >= 0 else '#DC3545'
-        result_label = 'GUADAGNO' if pct and pct >= 0 else 'PERDITA'
-
-        entry_date_str = (
-            etf_info['entry_date'].strftime('%d/%m/%Y')
-            if hasattr(etf_info.get('entry_date'), 'strftime')
-            else str(etf_info.get('entry_date', '–'))
-        )
+    # ── 2. Uscita L1 ──────────────────────────────────────────────────────
+    def send_l1_exit(self, etf_info: dict) -> bool:
+        """Email per uscita da L1: regola triggherata + risultato %."""
+        pct   = etf_info.get('pct_gain')
+        pct_s = f'{pct:+.2f}%' if pct is not None else '—'
+        pct_c = '#00B050' if (pct or 0) >= 0 else '#DC3545'
+        label = 'GUADAGNO' if (pct or 0) >= 0 else 'PERDITA'
         today = datetime.now().strftime('%d/%m/%Y')
-        subject = f"🔴 Uscita ETF L1 — {etf_info['nome'][:40]} — {today}"
+        nome  = etf_info.get('nome', etf_info.get('ticker', '?'))
 
-        # Indicatori tecnici al momento dell'uscita
+        entry_d = etf_info.get('entry_date')
+        if hasattr(entry_d, 'strftime'): entry_d = entry_d.strftime('%d/%m/%Y')
+        elif entry_d: entry_d = str(entry_d)[:10]
+        else: entry_d = '—'
+
         an = etf_info.get('analysis', {})
-        ema20         = an.get('ema20')
-        sma50         = an.get('sma50')
-        sma200        = an.get('sma200')
-        rsi           = an.get('rsi')
-        adx           = an.get('adx')
-        current_price = an.get('current_price')
-        level_reason  = an.get('level_reason', '–')
-        buy_count     = an.get('buy_count', 0)
-        bc            = an.get('conditions', an.get('buy_conditions', {}))
+        cond = an.get('conditions', an.get('buy_conditions', {}))
+        exit_rule_key = cond.get('exit_rule') or etf_info.get('exit_rule')
+        # exit_rule può essere intero (1-6) o lettera (A-F)
+        if isinstance(exit_rule_key, int):
+            key_map = {1:'A', 2:'B', 3:'C', 4:'D', 5:'E', 6:'F'}
+            exit_rule_key = key_map.get(exit_rule_key, str(exit_rule_key))
 
-        c1_ok = bool(bc.get('allineamento_ok'))
-        c2_ok = bool(bc.get('persistenza_ok'))
-        c3_ok = bool(bc.get('rsi_ok') or bc.get('rsi_optimal'))
-        c4_ok = bool(bc.get('distance_ok'))
-        c5_ok = bool(bc.get('adx_ok'))
+        rule_name, rule_color, rule_desc = REGOLE.get(
+            exit_rule_key, ('Uscita L1', '#555', 'Condizioni non più soddisfatte'))
 
-        ema20_str  = f"{ema20:.4f}" if ema20 else 'N/D'
-        sma50_str  = f"{sma50:.4f}" if sma50 else 'N/D'
-        price_str  = f"{current_price:.4f}" if current_price else 'N/D'
-        rsi_str    = f"{rsi:.1f}" if rsi else 'N/D'
-        adx_str    = f"{adx:.1f}" if adx else 'N/D'
+        ep    = etf_info.get('entry_price')
+        xp    = etf_info.get('exit_price')
+        ema20 = an.get('ema20')
+        ema10 = an.get('ema10')
+        sma50 = an.get('sma50')
+        rsi   = an.get('rsi')
+        adx   = an.get('adx')
+        price = an.get('current_price')
 
-        def ind_row(label, ref_str, value_str, ok, is_cause=False):
-            if is_cause:
-                color = '#DC3545'; text_color = 'white'; icon = '🔴'
-            elif ok:
-                color = '#d4edda'; text_color = '#155724'; icon = '✅'
-            else:
-                color = '#f8d7da'; text_color = '#721c24'; icon = '❌'
-            return (f'<tr style="background:{color};">'
-                    f'<td style="padding:8px 12px;border:1px solid #ddd;text-align:center;font-size:15px;">{icon}</td>'
-                    f'<td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;color:{text_color};font-size:12px;">{label}</td>'
-                    f'<td style="padding:8px 12px;border:1px solid #ddd;color:{text_color};font-size:12px;">{ref_str}</td>'
-                    f'<td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;color:{text_color};font-size:13px;">{value_str}</td>'
-                    f'</tr>')
+        def ind_row(lbl, val, ok):
+            bg = '#d4edda' if ok else '#f8d7da'
+            tc = '#155724' if ok else '#721c24'
+            ic = '✅' if ok else '❌'
+            return (f'<tr style="background:{bg}">'
+                    f'<td style="padding:7px 10px;border:1px solid #ddd">{ic} {lbl}</td>'
+                    f'<td style="padding:7px 10px;border:1px solid #ddd;color:{tc};font-weight:bold">{val}</td></tr>')
 
-        ind_rows = (
-            ind_row('1. Allineamento (Prezzo>EMA20>SMA50)',
-                    f'EMA20={ema20_str} · SMA50={sma50_str}',
-                    f'Prezzo={price_str}',
-                    c1_ok, is_cause=not c1_ok) +
-            ind_row('2. Persistenza ≥3gg + slope EMA20↑',
-                    'EMA20 deve salire',
-                    f'EMA20={ema20_str}',
-                    c2_ok, is_cause=not c2_ok) +
-            ind_row('3. RSI nel range target',
-                    'range: 50–65',
-                    f'RSI={rsi_str}',
-                    c3_ok, is_cause=not c3_ok) +
-            ind_row('4. Distanza EMA20 entro limite',
-                    'dist ≤ max%',
-                    f'EMA={ema20_str}',
-                    c4_ok, is_cause=not c4_ok) +
-            ind_row('5. ADX sopra soglia (trend presente)',
-                    'ADX ≥ 20',
-                    f'ADX={adx_str}',
-                    c5_ok, is_cause=not c5_ok)
+        ind_rows = ''
+        if price and ema20:
+            ind_rows += ind_row('Prezzo vs EMA20', f'Prezzo={price:.4f} · EMA20={ema20:.4f}', price > ema20)
+        if ema10 and ema20:
+            ind_rows += ind_row('Trailing Stop — EMA10 vs EMA20', f'EMA10={ema10:.4f} · EMA20={ema20:.4f}', ema10 >= ema20)
+        if rsi:
+            ind_rows += ind_row('RSI al momento dell\'uscita', f'RSI = {rsi:.1f}', 45 <= rsi <= 72)
+        if adx:
+            ind_rows += ind_row('ADX — forza del trend', f'ADX = {adx:.1f}', adx >= 18)
+
+        subject = f'🔴 Uscita ETF L1 — {nome[:30]} — {rule_name[:10]} — {pct_s}'
+        ts = datetime.now().strftime('%d/%m/%Y %H:%M')
+
+        body_html = (
+            f'<html><body style="{_BODY_STYLE}">'
+            f'<div style="background:linear-gradient(135deg,#DC3545,#AA0000);color:white;padding:24px;text-align:center">'
+            f'<h1 style="margin:0;font-size:20px">🔴 USCITA ETF DA L1</h1>'
+            f'<p style="margin:6px 0 0;opacity:.9;font-size:14px">{today}</p></div>'
+            f'<div style="padding:20px;background:white">'
+            f'<h2 style="margin:0 0 4px">{nome}</h2>'
+            f'<p style="color:#666;margin:0 0 18px;font-size:13px">'
+            f'{etf_info.get("ticker","")} · {etf_info.get("isin","")} · {etf_info.get("categoria","")}</p>'
+            f'<div style="background:{rule_color};color:white;padding:14px 18px;border-radius:8px;margin-bottom:18px">'
+            f'<div style="font-size:16px;font-weight:bold;margin-bottom:4px">📋 {rule_name}</div>'
+            f'<div style="font-size:13px;opacity:.9">{rule_desc}</div></div>'
+            f'<table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:18px">'
+            f'<tr style="background:#f5f5f5">'
+            f'<td style="padding:10px;border:1px solid #ddd"><strong>Entrato il</strong></td>'
+            f'<td style="padding:10px;border:1px solid #ddd">{entry_d} · {etf_info.get("days_in_l1","—")} giorni in L1</td></tr>'
+            f'<tr><td style="padding:10px;border:1px solid #ddd"><strong>Prezzo entrata</strong></td>'
+            f'<td style="padding:10px;border:1px solid #ddd">{"€{:.4f}".format(ep) if ep else "—"}</td></tr>'
+            f'<tr style="background:#f5f5f5">'
+            f'<td style="padding:10px;border:1px solid #ddd"><strong>Prezzo uscita</strong></td>'
+            f'<td style="padding:10px;border:1px solid #ddd">{"€{:.4f}".format(xp) if xp else "—"}</td></tr>'
+            f'<tr style="background:{pct_c};color:white">'
+            f'<td style="padding:12px;border:1px solid #ddd;font-weight:bold">{label}</td>'
+            f'<td style="padding:12px;border:1px solid #ddd;font-size:20px;font-weight:bold">{pct_s}</td></tr>'
+            f'</table>'
+            + (f'<div style="font-size:12px;font-weight:bold;color:#555;margin-bottom:8px;text-transform:uppercase">'
+               f'Indicatori al momento dell\'uscita</div>'
+               f'<table style="width:100%;border-collapse:collapse;font-size:13px">{ind_rows}</table>'
+               if ind_rows else '')
+            + f'</div>{_FOOTER.format(ts=ts)}</body></html>'
         )
-
-        body_html = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background: #f0f2f5;">
-          <div style="background: linear-gradient(135deg, #DC3545, #AA0000); color: white; padding: 25px; text-align: center;">
-            <h1 style="margin: 0; font-size: 22px;">🔴 USCITA ETF DA LIVELLO 1</h1>
-            <p style="margin: 6px 0 0 0; opacity: 0.9; font-size: 14px;">{today}</p>
-          </div>
-
-          <div style="padding: 20px; background: white;">
-            <h2 style="color:#333;margin-top:0;">{etf_info['nome']}</h2>
-            <p style="color:#666;margin-top:-10px;">{etf_info['ticker']} · {etf_info['categoria']} · {etf_info['isin']}</p>
-
-            <div style="margin-bottom:18px;padding:14px 18px;background:#555;border-radius:8px;color:white;">
-              <div style="font-size:15px;font-weight:bold;margin-bottom:4px;">📉 Motivo uscita</div>
-              <div style="font-size:13px;opacity:0.9;">{level_reason}</div>
-              <div style="font-size:12px;margin-top:6px;">Condizioni soddisfatte al momento dell'uscita: {buy_count}/5</div>
-            </div>
-
-            <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px;">
-              <tr style="background:#f5f5f5;">
-                <td style="padding:12px;border:1px solid #ddd;"><strong>Data entrata in L1</strong></td>
-                <td style="padding:12px;border:1px solid #ddd;">{entry_date_str}</td>
-              </tr>
-              <tr>
-                <td style="padding:12px;border:1px solid #ddd;"><strong>Giorni in L1</strong></td>
-                <td style="padding:12px;border:1px solid #ddd;">{etf_info.get('days_in_l1', '–')} giorni</td>
-              </tr>
-              <tr style="background:#f5f5f5;">
-                <td style="padding:12px;border:1px solid #ddd;"><strong>Prezzo di entrata</strong></td>
-                <td style="padding:12px;border:1px solid #ddd;">{"€{:.4f}".format(etf_info['entry_price']) if etf_info.get('entry_price') else '–'}</td>
-              </tr>
-              <tr>
-                <td style="padding:12px;border:1px solid #ddd;"><strong>Prezzo di uscita</strong></td>
-                <td style="padding:12px;border:1px solid #ddd;">{"€{:.4f}".format(etf_info['exit_price']) if etf_info.get('exit_price') else '–'}</td>
-              </tr>
-              <tr style="background:{pct_color};color:white;">
-                <td style="padding:12px;border:1px solid #ddd;"><strong>{result_label}</strong></td>
-                <td style="padding:12px;border:1px solid #ddd;font-size:18px;font-weight:bold;">{pct_str}</td>
-              </tr>
-            </table>
-
-            <div style="font-size:13px;font-weight:bold;color:#333;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">
-              Stato 5 condizioni L1 al momento dell'uscita
-              <span style="font-weight:normal;font-size:12px;color:#DC3545;margin-left:8px;">🔴 = causa uscita</span>
-            </div>
-            <table style="width:100%;border-collapse:collapse;font-size:13px;">
-              <thead>
-                <tr style="background:#555;color:white;">
-                  <th style="padding:8px;border:1px solid #ddd;width:35px;"></th>
-                  <th style="padding:8px;border:1px solid #ddd;text-align:left;">Condizione</th>
-                  <th style="padding:8px;border:1px solid #ddd;text-align:left;">Riferimento</th>
-                  <th style="padding:8px;border:1px solid #ddd;text-align:left;">Valore reale</th>
-                </tr>
-              </thead>
-              <tbody>{ind_rows}</tbody>
-            </table>
-          </div>
-
-          <div style="padding: 15px; background: #333; color: #999; text-align: center; font-size: 12px;">
-            ETF Monitor System &nbsp;·&nbsp; {datetime.now().strftime('%d/%m/%Y %H:%M')}
-          </div>
-        </body>
-        </html>
-        """
         return self._send_email(subject, body_html)
 
-    def send_buy_alert(self, etf: Dict, analysis: Dict) -> bool:
-        """Invia alert di acquisto ETF"""
-        subject = f"ALERT BUY - ETF {etf['nome'][:40]}"
+    # ── 3. Segnali portafoglio ─────────────────────────────────────────────
+    def send_portfolio_signals(self, signals: list) -> bool:
+        """Email con segnali operativi per ETF ancora in L1."""
+        today = datetime.now().strftime('%d/%m/%Y')
+        n = len(signals)
+        subject = f'⚠️ {n} segnale{"i" if n > 1 else ""} portafoglio ETF — {today}'
 
-        ema13_str = f"{analysis['ema13']:.2f}" if analysis.get('ema13') else 'N/A'
-        sma50_str = f"{analysis['sma50']:.2f}" if analysis.get('sma50') else 'N/A'
-        rsi_str = f"{analysis['rsi']:.1f}" if analysis.get('rsi') else 'N/A'
-        adx_str = f"{analysis['adx']:.1f}" if analysis.get('adx') else 'N/A'
-        vol_str = f"{analysis['volume_ratio']:.2f}x" if analysis.get('volume_ratio') else 'N/A'
-        price_str = f"{analysis.get('current_price', 0):.2f}"
+        TYPE_CFG = {
+            'piede_dentro': ('#E65100', '🦶', 'PIEDE DENTRO',
+                             'RSI > 78: zona ipercomprata. Valuta vendita 90% e parcheggio su XEON (€STR).'),
+            'stanchezza':   ('#fd7e14', '😮', 'STANCHEZZA RSI',
+                             'RSI > 72: possibile inversione imminente. Tieni il dito sul grilletto.'),
+            'attenzione':   ('#FFC000', '⚠️', 'CONDIZIONI IN DETERIORAMENTO',
+                             'Meno di 5/6 condizioni L1 soddisfatte. Monitora attentamente.'),
+        }
 
-        body_html = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #00B050, #00D060); color: white; padding: 20px; text-align: center;">
-                <h1 style="margin: 0;">SEGNALE BUY - ETF</h1>
-            </div>
+        cards = ''
+        for s in signals:
+            cfg = TYPE_CFG.get(s.get('signal_type', 'attenzione'), TYPE_CFG['attenzione'])
+            bg, icon, title, desc = cfg
+            text_c = 'white' if bg != '#FFC000' else '#333'
 
-            <div style="padding: 20px; background: #f5f5f5;">
-                <h2 style="color: #333; margin-top: 0;">{etf['nome']}</h2>
+            pct = s.get('pct_gain')
+            pct_s = f'{pct:+.2f}%' if pct is not None else '—'
+            pct_c = '#00B050' if (pct or 0) >= 0 else '#DC3545'
 
-                <table style="width: 100%; border-collapse: collapse; background: white;">
-                    <tr style="background: #e8e8e8;">
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>Ticker</strong></td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{etf['ticker']}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>Categoria</strong></td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{etf['categoria']}</td>
-                    </tr>
-                    <tr style="background: #e8e8e8;">
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>Livello</strong></td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">L{etf['livello']}</td>
-                    </tr>
-                </table>
+            entry_d = s.get('entry_date')
+            if hasattr(entry_d, 'strftime'): entry_d = entry_d.strftime('%d/%m/%Y')
+            elif entry_d: entry_d = str(entry_d)[:10]
+            else: entry_d = '—'
 
-                <h3 style="color: #00B050; margin-top: 20px;">Analisi Tecnica</h3>
+            rsi = s.get('rsi')
+            adx = s.get('adx')
+            det = s.get('signal_detail', '')
 
-                <table style="width: 100%; border-collapse: collapse; background: white;">
-                    <tr style="background: #00B050; color: white;">
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>Prezzo</strong></td>
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>{price_str}</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px; border: 1px solid #ddd;">EMA 13</td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{ema13_str}</td>
-                    </tr>
-                    <tr style="background: #e8e8e8;">
-                        <td style="padding: 10px; border: 1px solid #ddd;">SMA 50</td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{sma50_str}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px; border: 1px solid #ddd;">RSI (14)</td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{rsi_str}</td>
-                    </tr>
-                    <tr style="background: #e8e8e8;">
-                        <td style="padding: 10px; border: 1px solid #ddd;">ADX</td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{adx_str}</td>
-                    </tr>
-                    <tr style="background: #00B050; color: white;">
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>Volume Ratio</strong></td>
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>{vol_str}</strong></td>
-                    </tr>
-                </table>
+            cards += (
+                f'<div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;margin-bottom:16px">'
+                f'<div style="background:{bg};color:{text_c};padding:12px 16px">'
+                f'<div style="font-size:15px;font-weight:bold">{icon} {title}</div>'
+                f'<div style="font-size:12px;opacity:.85;margin-top:3px">{desc}</div></div>'
+                f'<div style="padding:14px 16px;background:white">'
+                f'<div style="font-weight:bold;font-size:14px">{s.get("nome","")[:50]}</div>'
+                f'<div style="font-size:12px;color:#888;margin:2px 0 10px">'
+                f'{s.get("ticker","")} · {s.get("isin","")} · {s.get("categoria","")[:28]}</div>'
+                f'<table style="width:100%;border-collapse:collapse;font-size:13px"><tr>'
+                f'<td style="padding:5px 8px;border:1px solid #eee;color:#666">Entrato il</td>'
+                f'<td style="padding:5px 8px;border:1px solid #eee">{entry_d} ({s.get("days_in_l1","?")} gg)</td>'
+                f'<td style="padding:5px 8px;border:1px solid #eee;color:#666">Performance</td>'
+                f'<td style="padding:5px 8px;border:1px solid #eee;font-weight:bold;color:{pct_c}">{pct_s}</td>'
+                f'</tr><tr>'
+                f'<td style="padding:5px 8px;border:1px solid #eee;color:#666">RSI</td>'
+                f'<td style="padding:5px 8px;border:1px solid #eee;font-weight:bold">'
+                f'{"{:.1f}".format(rsi) if rsi else "—"}</td>'
+                f'<td style="padding:5px 8px;border:1px solid #eee;color:#666">ADX</td>'
+                f'<td style="padding:5px 8px;border:1px solid #eee">'
+                f'{"{:.1f}".format(adx) if adx else "—"}</td>'
+                f'</tr></table>'
+                + (f'<div style="margin-top:8px;padding:7px 10px;background:#fff3e0;'
+                   f'border-left:3px solid {bg};font-size:12px;color:#555">{det}</div>'
+                   if det else '')
+                + f'</div></div>'
+            )
 
-                <div style="margin-top: 20px; padding: 15px; background: #d4edda; border-left: 4px solid #00B050;">
-                    <strong>Tutte le 5 condizioni BUY sono soddisfatte!</strong><br>
-                    EMA13 &gt; SMA50, Prezzo sopra MA, RSI ottimale, Volume alto, ADX forte
-                </div>
-            </div>
-
-            <div style="padding: 15px; background: #333; color: #999; text-align: center; font-size: 12px;">
-                ETF Monitor System - {datetime.now().strftime('%d/%m/%Y %H:%M')}
-            </div>
-        </body>
-        </html>
-        """
-
+        ts = datetime.now().strftime('%d/%m/%Y %H:%M')
+        body_html = (
+            f'<html><body style="{_BODY_STYLE}">'
+            f'<div style="background:linear-gradient(135deg,#FF8F00,#E65100);color:white;padding:24px;text-align:center">'
+            f'<h1 style="margin:0;font-size:20px">⚠️ SEGNALI PORTAFOGLIO ETF</h1>'
+            f'<p style="margin:6px 0 0;opacity:.9;font-size:14px">'
+            f'{datetime.now().strftime("%A %d %B %Y")} · {n} segnale{"i" if n > 1 else ""}</p></div>'
+            f'<div style="padding:20px;background:#f8f9fa">{cards}</div>'
+            f'{_FOOTER.format(ts=ts)}</body></html>'
+        )
         return self._send_email(subject, body_html)
 
-    def send_sell_alert(self, etf: Dict, analysis: Dict) -> bool:
-        """Invia alert di vendita ETF"""
-        subject = f"ALERT SELL - ETF {etf['nome'][:40]}"
+    # ── 4. Health report (solo se errori) ─────────────────────────────────
+    def send_health_report(self, health: dict) -> bool:
+        errors_count = health.get('etfs_error', health.get('funds_error', 0))
+        no_price     = health.get('etfs_no_price', health.get('funds_no_price', 0))
+        db_ok        = health.get('db_available', True)
+        if errors_count == 0 and no_price == 0 and db_ok:
+            print('✅ Health OK — email non necessaria'); return True
 
-        ema13_str = f"{analysis['ema13']:.2f}" if analysis.get('ema13') else 'N/A'
-        sma50_str = f"{analysis['sma50']:.2f}" if analysis.get('sma50') else 'N/A'
-        rsi_str = f"{analysis['rsi']:.1f}" if analysis.get('rsi') else 'N/A'
-        adx_str = f"{analysis['adx']:.1f}" if analysis.get('adx') else 'N/A'
-        price_str = f"{analysis.get('current_price', 0):.2f}"
+        errors = health.get('errors', [])
+        today  = datetime.now().strftime('%d/%m/%Y %H:%M')
+        subject = f'🔴 Errori monitor ETF — {today}'
 
-        body_html = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #DC3545, #FF4444); color: white; padding: 20px; text-align: center;">
-                <h1 style="margin: 0;">SEGNALE SELL - ETF</h1>
-            </div>
+        rows = ''.join(
+            f'<tr><td style="padding:7px;border:1px solid #ddd;font-family:monospace">{e.get("ticker",e.get("isin","?"))}</td>'
+            f'<td style="padding:7px;border:1px solid #ddd;color:#DC3545">{str(e.get("error",""))[:80]}</td></tr>'
+            for e in errors
+        )
+        table = (
+            f'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+            f'<tr style="background:#DC3545;color:white">'
+            f'<th style="padding:7px;border:1px solid #ddd">Ticker</th>'
+            f'<th style="padding:7px;border:1px solid #ddd">Errore</th></tr>'
+            f'{rows}</table>'
+        ) if errors else ''
 
-            <div style="padding: 20px; background: #f5f5f5;">
-                <h2 style="color: #333; margin-top: 0;">{etf['nome']}</h2>
-
-                <table style="width: 100%; border-collapse: collapse; background: white;">
-                    <tr style="background: #e8e8e8;">
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>Ticker</strong></td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{etf['ticker']}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>Categoria</strong></td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{etf['categoria']}</td>
-                    </tr>
-                    <tr style="background: #e8e8e8;">
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>Livello</strong></td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">L{etf['livello']}</td>
-                    </tr>
-                </table>
-
-                <h3 style="color: #DC3545; margin-top: 20px;">Analisi Tecnica</h3>
-
-                <table style="width: 100%; border-collapse: collapse; background: white;">
-                    <tr style="background: #DC3545; color: white;">
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>Prezzo</strong></td>
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>{price_str}</strong></td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px; border: 1px solid #ddd;">EMA 13</td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{ema13_str}</td>
-                    </tr>
-                    <tr style="background: #e8e8e8;">
-                        <td style="padding: 10px; border: 1px solid #ddd;">SMA 50</td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{sma50_str}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px; border: 1px solid #ddd;">RSI (14)</td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{rsi_str}</td>
-                    </tr>
-                    <tr style="background: #e8e8e8;">
-                        <td style="padding: 10px; border: 1px solid #ddd;">ADX</td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{adx_str}</td>
-                    </tr>
-                </table>
-
-                <div style="margin-top: 20px; padding: 15px; background: #f8d7da; border-left: 4px solid #DC3545;">
-                    <strong>Attenzione:</strong> {'Considera la vendita immediata!' if etf['livello'] == 1 else 'Monitora attentamente questo ETF.'}
-                </div>
-            </div>
-
-            <div style="padding: 15px; background: #333; color: #999; text-align: center; font-size: 12px;">
-                ETF Monitor System - {datetime.now().strftime('%d/%m/%Y %H:%M')}
-            </div>
-        </body>
-        </html>
-        """
-
+        ts = datetime.now().strftime('%d/%m/%Y %H:%M')
+        body_html = (
+            f'<html><body style="{_BODY_STYLE}">'
+            f'<div style="background:#DC3545;color:white;padding:20px;text-align:center">'
+            f'<h1 style="margin:0;font-size:18px">🔴 ERRORI MONITOR ETF</h1>'
+            f'<p style="margin:4px 0 0;font-size:13px">{today}</p></div>'
+            f'<div style="padding:20px;background:white">'
+            f'<p>ETF con errore: <strong>{errors_count}</strong> · '
+            f'Senza prezzo: <strong>{no_price}</strong> · '
+            f'DB: <strong>{"OK" if db_ok else "NON DISPONIBILE"}</strong></p>'
+            f'{table}</div>'
+            f'{_FOOTER.format(ts=ts)}</body></html>'
+        )
         return self._send_email(subject, body_html)
-
-    def send_daily_report(self, summary: Dict) -> bool:
-        """Invia report giornaliero con riepilogo ETF per livello"""
-        subject = f"Report Giornaliero ETF - {datetime.now().strftime('%d/%m/%Y')}"
-        today   = datetime.now().strftime('%A %d %B %Y')
-
-        def etf_table(etfs, bg_color, title):
-            if not etfs:
-                return ''
-            rows = ''
-            for f in etfs[:15]:
-                price_str = f"{f['price']:.4f}" if f.get('price') else '-'
-                rsi_str   = f"{f['rsi']:.0f}"   if f.get('rsi')   else '-'
-                adx_str   = f"{f['adx']:.0f}"   if f.get('adx')   else '-'
-                bc        = f.get('buy_count', 0)
-                rows += f"""
-                <tr>
-                  <td style="padding:7px 10px;border:1px solid #ddd;">{f.get('nome', f.get('ticker',''))[:40]}</td>
-                  <td style="padding:7px 10px;border:1px solid #ddd;text-align:center;">{f.get('ticker','')}</td>
-                  <td style="padding:7px 10px;border:1px solid #ddd;text-align:right;">{price_str}</td>
-                  <td style="padding:7px 10px;border:1px solid #ddd;text-align:center;">{rsi_str}</td>
-                  <td style="padding:7px 10px;border:1px solid #ddd;text-align:center;">{adx_str}</td>
-                  <td style="padding:7px 10px;border:1px solid #ddd;text-align:center;">{bc}/5</td>
-                </tr>"""
-            return f"""
-            <h3 style="color:#333;margin-top:18px;">{title} ({len(etfs)} ETF)</h3>
-            <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px;">
-              <tr style="background:{bg_color};color:white;">
-                <th style="padding:7px;border:1px solid #ddd;text-align:left;">ETF</th>
-                <th style="padding:7px;border:1px solid #ddd;">Ticker</th>
-                <th style="padding:7px;border:1px solid #ddd;">Prezzo</th>
-                <th style="padding:7px;border:1px solid #ddd;">RSI</th>
-                <th style="padding:7px;border:1px solid #ddd;">ADX</th>
-                <th style="padding:7px;border:1px solid #ddd;">Cond.</th>
-              </tr>{rows}
-            </table>"""
-
-        l0_html = etf_table(summary.get('l0_etfs', []), '#CC5500', 'L0 — Deep Recovery')
-        l1_html = etf_table(summary.get('l1_etfs', []), '#00B050', 'L1 — Trend Sicuro')
-        l2_html = etf_table(summary.get('l2_etfs', []), '#CC8800', 'L2 — Watchlist')
-        total   = summary.get('total', 0)
-
-        body_html = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; max-width: 720px; margin: 0 auto;">
-          <div style="background: linear-gradient(135deg, #0d1117, #1c2e4a); color: white; padding: 22px; text-align: center;">
-            <h1 style="margin: 0; font-size: 20px;">ETF Monitor — Report Giornaliero</h1>
-            <p style="margin: 6px 0 0 0; opacity: 0.75; font-size: 13px;">{today} &nbsp;·&nbsp; {total} ETF monitorati</p>
-          </div>
-          <div style="padding: 20px; background: #f8f9fa;">
-            <div style="display:flex;gap:10px;margin-bottom:18px;">
-              <div style="flex:1;background:#CC5500;color:white;padding:12px;text-align:center;border-radius:7px;">
-                <div style="font-size:22px;font-weight:bold;">{len(summary.get('l0_etfs',[]))}</div><div>L0 Recovery</div>
-              </div>
-              <div style="flex:1;background:#00B050;color:white;padding:12px;text-align:center;border-radius:7px;">
-                <div style="font-size:22px;font-weight:bold;">{len(summary.get('l1_etfs',[]))}</div><div>L1 Trend</div>
-              </div>
-              <div style="flex:1;background:#CC8800;color:white;padding:12px;text-align:center;border-radius:7px;">
-                <div style="font-size:22px;font-weight:bold;">{len(summary.get('l2_etfs',[]))}</div><div>L2 Watchlist</div>
-              </div>
-            </div>
-            {l0_html}{l1_html}{l2_html}
-          </div>
-          <div style="padding:14px;background:#333;color:#999;text-align:center;font-size:12px;">
-            ETF Monitor System &nbsp;·&nbsp; Prossimo aggiornamento ore 18:00
-          </div>
-        </body>
-        </html>"""
-
-        return self._send_email(subject, body_html)
-
-    def send_test_email(self) -> bool:
-        """Invia email di test"""
-        subject = "Test ETF Monitor System"
-
-        body_html = """
-        <html>
-        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: #4472C4; color: white; padding: 20px; text-align: center; border-radius: 8px;">
-                <h1>Sistema Configurato Correttamente!</h1>
-            </div>
-            <div style="padding: 20px; background: #f5f5f5; margin-top: 20px; border-radius: 8px;">
-                <p>Questa e' un'email di test dal ETF Monitor System.</p>
-                <p>Se la ricevi, significa che il sistema di alert e' configurato correttamente.</p>
-                <p><strong>Indicatori monitorati:</strong></p>
-                <ul>
-                    <li>EMA 13 (Exponential Moving Average veloce)</li>
-                    <li>SMA 50 (Simple Moving Average lenta)</li>
-                    <li>RSI 14 (Relative Strength Index)</li>
-                    <li>ADX 14 (Average Directional Index)</li>
-                    <li>Volume Ratio (vs media 20 giorni)</li>
-                </ul>
-            </div>
-        </body>
-        </html>
-        """
-
-        return self._send_email(subject, body_html)
-
-
-if __name__ == "__main__":
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-    except ImportError:
-        pass
-    alert = AlertSystem()
-    alert.send_test_email()

@@ -46,7 +46,7 @@ def run_monitor():
     try:
         print(f"\nScheduler: avvio monitoraggio programmato - {datetime.now()}")
         monitor = ETFMonitor()
-        monitor.run(send_daily_report=True)
+        monitor.run()
     except Exception as e:
         print(f"Errore durante monitoraggio: {e}")
     finally:

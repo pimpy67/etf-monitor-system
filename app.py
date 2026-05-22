@@ -337,7 +337,7 @@ def l1_tracking_api():
             'current_price': current_price,
             'pct_gain':     pct_gain,
             'days_in_l1':   days_in_l1,
-            'is_new':       delta_calendar <= 1,
+            'is_new':       days_in_l1 <= 2,
         })
 
     return jsonify({'tracking': result})
@@ -404,21 +404,24 @@ def get_portfolio():
             perf_pct = round((float(ref_price) - float(entry['entry_price'])) / float(entry['entry_price']) * 100, 2)
 
         result.append({
-            'isin':          isin,
-            'fund_name':     entry['fund_name'],
-            'entry_date':    str(entry['entry_date']) if entry['entry_date'] else None,
-            'entry_price':   float(entry['entry_price']) if entry['entry_price'] else None,
-            'current_price': current_price,
-            'perf_pct':      perf_pct,
-            'exit_date':     str(entry['exit_date']) if entry.get('exit_date') else None,
-            'exit_price':    float(exit_price) if exit_price else None,
-            'status':        status,
-            'level':         analysis.get('level') or analysis.get('suggested_level'),
-            'rsi':           analysis.get('rsi'),
-            'adx':           analysis.get('adx'),
-            'ema20':         analysis.get('ema20'),
-            'dist_ema20':    analysis.get('dist_ema20'),
-            'etf_type':      analysis.get('etf_type', ''),
+            'isin':                isin,
+            'fund_name':           entry['fund_name'],
+            'entry_date':          str(entry['entry_date']) if entry['entry_date'] else None,
+            'entry_price':         float(entry['entry_price']) if entry['entry_price'] else None,
+            'current_price':       current_price,
+            'perf_pct':            perf_pct,
+            'exit_date':           str(entry['exit_date']) if entry.get('exit_date') else None,
+            'exit_price':          float(exit_price) if exit_price else None,
+            'status':              status,
+            'is_partial':          bool(entry.get('is_partial', False)),
+            'partial_exit_date':   str(entry['partial_exit_date']) if entry.get('partial_exit_date') else None,
+            'partial_exit_price':  float(entry['partial_exit_price']) if entry.get('partial_exit_price') else None,
+            'level':               analysis.get('level') or analysis.get('suggested_level'),
+            'rsi':                 analysis.get('rsi'),
+            'adx':                 analysis.get('adx'),
+            'ema20':               analysis.get('ema20'),
+            'dist_ema20':          analysis.get('dist_ema20'),
+            'etf_type':            analysis.get('etf_type', ''),
         })
 
     return jsonify({'portfolio': result, 'count': len(result)})
@@ -488,6 +491,26 @@ def exit_portfolio_route(isin):
     ok = db.exit_portfolio_entry(isin, exit_date, exit_price)
     if ok:
         db.add_portfolio_event(isin, 'exit', exit_date, exit_price)
+        return jsonify({'status': 'ok', 'isin': isin})
+    return jsonify({'error': 'Errore salvataggio'}), 503
+
+
+@app.route('/api/portfolio/<isin>/partial-exit', methods=['POST'])
+def partial_exit_portfolio_route(isin):
+    """Registra vendita parziale 90% — Piede Dentro. L'ETF rimane active in portafoglio."""
+    isin = isin.strip().upper()
+    data = request.get_json() or {}
+    exit_date  = data.get('exit_date', '')
+    exit_price = data.get('exit_price')
+    if not exit_date or exit_price is None:
+        return jsonify({'error': 'exit_date e exit_price obbligatori'}), 400
+    try:
+        exit_price = float(exit_price)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'exit_price deve essere un numero'}), 400
+    ok = db.partial_exit_portfolio_entry(isin, exit_date, exit_price)
+    if ok:
+        db.add_portfolio_event(isin, 'partial_exit', exit_date, exit_price, notes='Piede Dentro 90%')
         return jsonify({'status': 'ok', 'isin': isin})
     return jsonify({'error': 'Errore salvataggio'}), 503
 

@@ -230,6 +230,14 @@ class PriceDatabase:
                     )
                 """)
 
+                # Colonne piede dentro (idempotente — ADD COLUMN IF NOT EXISTS)
+                for col_sql in [
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS is_partial BOOLEAN DEFAULT FALSE",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS partial_exit_date DATE",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS partial_exit_price DECIMAL(12,4)",
+                ]:
+                    cur.execute(col_sql)
+
                 conn.commit()
                 print("Tabelle ETF pronte (price_history, l1_tracking, l0_tracking, l1_exit_history, portfolio)")
         except Exception as e:
@@ -733,7 +741,8 @@ class PriceDatabase:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
                     SELECT isin, fund_name, entry_date, entry_price,
-                           exit_date, exit_price, status
+                           exit_date, exit_price, status,
+                           is_partial, partial_exit_date, partial_exit_price
                     FROM etf_portfolio_entries
                     ORDER BY entry_date DESC
                 """)
@@ -832,6 +841,26 @@ class PriceDatabase:
                 return True
         except Exception as e:
             logging.error(f"Errore exit_portfolio_entry {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def partial_exit_portfolio_entry(self, isin: str, exit_date: str, exit_price: float) -> bool:
+        """Segna il 90% come venduto — l'ETF rimane active con is_partial=True."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE etf_portfolio_entries
+                    SET is_partial=TRUE, partial_exit_date=%s, partial_exit_price=%s
+                    WHERE isin=%s
+                """, (exit_date, exit_price, isin))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore partial_exit_portfolio_entry {isin}: {e}")
             return False
         finally:
             conn.close()

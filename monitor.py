@@ -330,9 +330,9 @@ class ETFMonitor:
     def send_alerts(self, results: list):
         """
         Invia alert giornalieri:
-        - Digest giornaliero con tutti gli ETF in L1
-        - Alert individuale per ogni uscita da L1
-        - Alert per nuovi ingressi L0
+        - send_new_entries: solo nuovi ingressi in L1 (+ nuovi L0)
+        - send_l1_exit: ogni uscita da L1
+        - send_portfolio_signals: RSI > 72 o condizioni in deterioramento
         """
         today     = datetime.now().date()
         today_str = today.strftime('%Y-%m-%d')
@@ -340,9 +340,11 @@ class ETFMonitor:
         existing_l1 = self.db.get_all_l1_entries()
         existing_l0 = self.db.get_all_l0_entries()
 
-        current_l1_isins = set()
-        current_l0_isins = set()
-        l1_etfs_data     = []
+        current_l1_isins  = set()
+        current_l0_isins  = set()
+        new_l1_entries    = []
+        new_l0_entries    = []
+        portfolio_signals = []
 
         for r in results:
             a         = r['analysis']
@@ -358,6 +360,15 @@ class ETFMonitor:
                         panic_low = a.get('l0_data', {}).get('panic_low')
                         self.db.set_l0_entry(isin, today_str, price, panic_low)
                     add_log(f"  NUOVO L0: {r['nome'][:40]}")
+                    new_l0_entries.append({
+                        'isin':              isin,
+                        'ticker':            r['ticker'],
+                        'nome':              r['nome'],
+                        'price':             float(price) if price else None,
+                        'panic_low':         a.get('l0_data', {}).get('panic_low'),
+                        'rsi':               a.get('rsi'),
+                        'distance_from_peak': a.get('l0_data', {}).get('distance_from_peak'),
+                    })
 
             # ── L1 tracking ──────────────────────────────────────────────────
             if suggested == 1:
@@ -369,39 +380,62 @@ class ETFMonitor:
                     entry_price = float(price) if price else None
                     add_log(f"  NUOVO L1: {r['nome'][:40]}" +
                             (f" — entrato a {entry_price:.4f}" if entry_price else ''))
+                    new_l1_entries.append({
+                        'isin':      isin,
+                        'ticker':    r['ticker'],
+                        'nome':      r['nome'],
+                        'categoria': r['categoria'],
+                        'price':     float(price) if price else None,
+                        'rsi':       a.get('rsi'),
+                        'adx':       a.get('adx'),
+                        'sma200':    a.get('sma200'),
+                        'buy_count': a.get('buy_count', 0),
+                    })
                 else:
                     entry       = existing_l1[isin]
                     entry_date  = entry['entry_date']
                     entry_price = entry['entry_price']
 
-                try:
-                    ed = entry_date if isinstance(entry_date, date_type) \
-                        else datetime.fromisoformat(str(entry_date)).date()
-                    days_in_l1 = max(1, int(np.busday_count(ed, today)) + 1)
-                except Exception:
-                    days_in_l1 = 1
+                    try:
+                        ed = entry_date if isinstance(entry_date, date_type) \
+                            else datetime.fromisoformat(str(entry_date)).date()
+                        days_in_l1 = max(1, int(np.busday_count(ed, today)) + 1)
+                    except Exception:
+                        days_in_l1 = 1
 
-                pct_gain = None
-                if price and entry_price:
-                    pct_gain = round((float(price) - float(entry_price)) / float(entry_price) * 100, 2)
+                    pct_gain = None
+                    if price and entry_price:
+                        pct_gain = round((float(price) - float(entry_price)) / float(entry_price) * 100, 2)
 
-                l1_etfs_data.append({
-                    'isin':        isin,
-                    'ticker':      r['ticker'],
-                    'nome':        r['nome'],
-                    'categoria':   r['categoria'],
-                    'entry_date':  entry_date,
-                    'entry_price': entry_price,
-                    'price':       float(price) if price else None,
-                    'days_in_l1':  days_in_l1,
-                    'pct_gain':    pct_gain,
-                    'ema20':       a.get('ema20'),
-                    'sma50':       a.get('sma50'),
-                    'rsi':         a.get('rsi'),
-                    'adx':         a.get('adx'),
-                    'buy_count':   a.get('buy_count', 0),
-                    'conditions':  a.get('conditions', {}),
-                })
+                    rsi = a.get('rsi') or 0
+                    bc  = a.get('buy_count', 6)
+
+                    signal_type   = None
+                    signal_detail = None
+                    if rsi >= 78:
+                        signal_type   = 'piede_dentro'
+                        signal_detail = f'RSI attuale: {rsi:.1f} (soglia Piede Dentro: 78). Valuta XEON.'
+                    elif rsi >= 72:
+                        signal_type   = 'stanchezza'
+                        signal_detail = f'RSI attuale: {rsi:.1f} — zona di stanchezza in arrivo'
+                    elif bc <= 4 and days_in_l1 > 5:
+                        signal_type   = 'attenzione'
+                        signal_detail = f'Condizioni soddisfatte: {bc}/6'
+
+                    if signal_type:
+                        portfolio_signals.append({
+                            'isin':          isin,
+                            'ticker':        r['ticker'],
+                            'nome':          r['nome'],
+                            'categoria':     r['categoria'],
+                            'entry_date':    entry_date,
+                            'days_in_l1':    days_in_l1,
+                            'pct_gain':      pct_gain,
+                            'rsi':           rsi,
+                            'adx':           a.get('adx'),
+                            'signal_type':   signal_type,
+                            'signal_detail': signal_detail,
+                        })
 
         # ── Uscite da L1 ──────────────────────────────────────────────────────
         for isin, entry in existing_l1.items():
@@ -425,7 +459,7 @@ class ETFMonitor:
                 if exit_price and ep else None
             pct_str = f'{pct:+.2f}%' if pct is not None else 'N/D'
             add_log(f"  USCITA L1: {fr['nome'][:40]} — {pct_str}")
-            self.alert_system.send_sell_l1_exit({
+            self.alert_system.send_l1_exit({
                 'isin': isin, 'ticker': fr['ticker'], 'nome': fr['nome'],
                 'categoria': fr['categoria'],
                 'entry_date': ed_raw, 'entry_price': ep,
@@ -441,14 +475,20 @@ class ETFMonitor:
                 add_log(f"  USCITA L0: {isin}")
                 self.db.remove_l0_entry(isin)
 
-        # ── Digest L1 ─────────────────────────────────────────────────────────
-        if l1_etfs_data:
-            add_log(f"  Invio digest L1: {len(l1_etfs_data)} ETF")
-            self.alert_system.send_l1_digest(l1_etfs_data)
+        # ── Invio email ────────────────────────────────────────────────────────
+        if new_l1_entries or new_l0_entries:
+            add_log(f"  Email nuovi ingressi: L1={len(new_l1_entries)} L0={len(new_l0_entries)}")
+            self.alert_system.send_new_entries(new_l1_entries, new_l0_entries)
         else:
-            add_log("  Nessun ETF in L1 — digest non inviato")
+            add_log("  Nessun nuovo ingresso oggi")
 
-    def run(self, send_daily_report: bool = True):
+        if portfolio_signals:
+            add_log(f"  Email segnali portafoglio: {len(portfolio_signals)}")
+            self.alert_system.send_portfolio_signals(portfolio_signals)
+        else:
+            add_log("  Nessun segnale portafoglio oggi")
+
+    def run(self):
         """Esegue il ciclo completo di monitoraggio."""
         add_log("=" * 50)
         add_log(f"ETF MONITOR — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
@@ -525,20 +565,6 @@ class ETFMonitor:
             self.send_alerts(results)
         except Exception as e:
             add_log(f"ERRORE Alert: {e}")
-
-        # 6. Report giornaliero
-        if send_daily_report:
-            try:
-                add_log("Invio report giornaliero...")
-                summary = {
-                    'l0_etfs': dashboard['levels'].get(0, []),
-                    'l1_etfs': dashboard['levels'].get(1, []),
-                    'l2_etfs': dashboard['levels'].get(2, []),
-                    'total':   len(results),
-                }
-                self.alert_system.send_daily_report(summary)
-            except Exception as e:
-                add_log(f"ERRORE Report: {e}")
 
         add_log(f"Completato — {datetime.now().strftime('%H:%M')}")
         add_log("=" * 50)

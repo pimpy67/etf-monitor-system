@@ -7,20 +7,20 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1117,#161b22); min-height:100vh; color:#e6edf3; }
+body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1a2e,#16213e); min-height:100vh; color:#e6edf3; }
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
-.header { position:sticky; top:0; z-index:200; background:rgba(13,17,23,0.97); backdrop-filter:blur(10px); padding:8px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.08); }
-.header h1 { font-size:1.05em; font-weight:700; color:#58a6ff; white-space:nowrap; }
+.header { position:sticky; top:0; z-index:200; background:rgba(22,33,62,0.95); backdrop-filter:blur(10px); padding:8px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.1); }
+.header h1 { font-size:1.05em; font-weight:700; color:#fff; white-space:nowrap; }
 .header-left { display:flex; align-items:center; gap:18px; }
 .summary-bar { display:flex; gap:14px; align-items:center; }
 .sitem { display:flex; flex-direction:column; align-items:center; font-size:0.72em; }
 .sitem .num { font-weight:700; font-size:1.4em; line-height:1; }
 .sitem .lbl { color:#8b949e; margin-top:1px; }
-.sitem.l0 .num { color:#ff8c00; }
-.sitem.l1 .num { color:#3fb950; }
-.sitem.l2 .num { color:#d29922; }
-.sitem.l3 .num { color:#58a6ff; }
+.sitem.l0 .num { color:#FF8F00; }
+.sitem.l1 .num { color:#00B050; }
+.sitem.l2 .num { color:#FFC000; }
+.sitem.l3 .num { color:#4472C4; }
 .sitem.tot .num { color:#e6edf3; }
 .last-update { color:#8b949e; font-size:0.72em; }
 
@@ -28,12 +28,12 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .health-badge { display:flex; align-items:center; cursor:pointer; padding:4px 10px; border-radius:12px; background:rgba(255,255,255,0.08); font-size:0.75em; gap:4px; }
 .health-badge:hover { background:rgba(255,255,255,0.15); }
 .health-dot { width:10px; height:10px; border-radius:50%; display:inline-block; animation:pulse 2s infinite; }
-.health-dot.green  { background:#3fb950; box-shadow:0 0 6px #3fb950; }
-.health-dot.yellow { background:#d29922; box-shadow:0 0 6px #d29922; }
-.health-dot.red    { background:#f85149; box-shadow:0 0 6px #f85149; }
+.health-dot.green  { background:#00B050; box-shadow:0 0 6px #00B050; }
+.health-dot.yellow { background:#FFC000; box-shadow:0 0 6px #FFC000; }
+.health-dot.red    { background:#DC3545; box-shadow:0 0 6px #DC3545; }
 .health-dot.grey   { background:#555; box-shadow:none; animation:none; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
-.health-panel { display:none; position:fixed; top:50px; right:20px; width:360px; background:rgba(22,27,34,0.98); border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:16px; z-index:300; box-shadow:0 8px 32px rgba(0,0,0,0.5); backdrop-filter:blur(12px); }
+.health-panel { display:none; position:fixed; top:50px; right:20px; width:360px; background:rgba(22,33,62,0.98); border:1px solid rgba(255,255,255,0.15); border-radius:12px; padding:16px; z-index:300; box-shadow:0 8px 32px rgba(0,0,0,0.5); backdrop-filter:blur(12px); }
 .health-panel.open { display:block; }
 .health-panel h3 { margin:0 0 12px; font-size:0.95em; color:#e6edf3; }
 .hp-close { position:absolute; top:8px; right:12px; cursor:pointer; color:#555; font-size:1.2em; }
@@ -41,9 +41,9 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .hp-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.07); font-size:0.82em; }
 .hp-label { color:#8b949e; }
 .hp-value { font-weight:bold; }
-.hp-value.ok   { color:#3fb950; }
-.hp-value.warn { color:#d29922; }
-.hp-value.err  { color:#f85149; }
+.hp-value.ok   { color:#00B050; }
+.hp-value.warn { color:#FFC000; }
+.hp-value.err  { color:#DC3545; }
 .hp-errors { margin-top:10px; max-height:120px; overflow-y:auto; }
 .hp-error-item { padding:4px 6px; background:rgba(248,81,73,0.12); border-radius:4px; margin-bottom:4px; font-size:0.75em; color:#f07070; font-family:monospace; }
 
@@ -57,9 +57,9 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .search-clear.visible { display:block; }
 
 /* ── Column header (sticky below main header) ─────────────────────────── */
-.col-header { position:sticky; top:42px; z-index:199; background:rgba(13,17,23,0.97); backdrop-filter:blur(10px); border-bottom:2px solid rgba(255,255,255,0.12); padding:0 20px; }
+.col-header { position:sticky; top:42px; z-index:199; background:rgba(10,15,30,0.97); backdrop-filter:blur(10px); border-bottom:2px solid rgba(255,255,255,0.15); padding:0 20px; }
 .col-header table { width:100%; max-width:1640px; margin:0 auto; border-collapse:collapse; table-layout:fixed; }
-.col-header th { padding:7px 8px; text-align:left; font-size:0.75em; font-weight:600; color:#8b949e; text-transform:uppercase; letter-spacing:.03em; overflow:hidden; }
+.col-header th { padding:7px 8px; text-align:left; font-size:0.75em; font-weight:600; color:#aaa; text-transform:uppercase; letter-spacing:.03em; overflow:hidden; }
 
 /* Column widths */
 .col-nome   { width:22%; } .col-ticker { width:6%; }
@@ -72,19 +72,21 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .container { max-width:1640px; margin:0 auto; padding:14px 20px; }
 
 /* ── Level sections ─────────────────────────────────────────────────────── */
-.level-section { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:10px; margin-bottom:16px; overflow:hidden; }
-.level-header { padding:10px 18px; font-weight:700; font-size:0.9em; display:flex; justify-content:space-between; align-items:center; }
+.level-section { background:rgba(255,255,255,0.05); border-radius:12px; margin-bottom:20px; overflow:hidden; }
+.level-header { padding:12px 20px; font-weight:700; font-size:0.9em; display:flex; justify-content:space-between; align-items:center; }
 .level-header .count { font-size:0.75em; font-weight:400; opacity:.8; margin-left:6px; }
-.level-0 .level-header { background:linear-gradient(90deg,#7c3c00,#a35200); }
-.level-1 .level-header { background:linear-gradient(90deg,#145a23,#1a7a30); }
-.level-2 .level-header { background:linear-gradient(90deg,#7c5a00,#a37800); color:#fff; }
-.level-3 .level-header { background:linear-gradient(90deg,#1c2e4a,#243d63); }
+.level-0 .level-header { background:linear-gradient(90deg,#E65100,#FF8F00); }
+.level-1 .level-header { background:linear-gradient(90deg,#00B050,#00D060); }
+.level-2 .level-header { background:linear-gradient(90deg,#FFC000,#FFD000); color:#333; }
+.level-3 .level-header { background:linear-gradient(90deg,#4472C4,#5A8FD4); }
 
 /* ── Table ───────────────────────────────────────────────────────────────── */
 .etf-table { width:100%; border-collapse:collapse; table-layout:fixed; }
 .etf-table thead { display:none; }
-.etf-table td { padding:8px 8px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.83em; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
-.etf-table tr:hover { background:rgba(88,166,255,0.05); }
+.etf-colheader { display:table-header-group !important; background:rgba(10,15,30,0.7); border-bottom:1px solid rgba(255,255,255,0.12); }
+.etf-colheader th { padding:6px 8px; text-align:left; font-size:0.75em; font-weight:700; color:#888; text-transform:uppercase; letter-spacing:0.04em; overflow:hidden; }
+.etf-table td { padding:8px 8px; border-bottom:1px solid rgba(255,255,255,0.1); font-size:0.85em; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
+.etf-table tr:hover { background:rgba(255,255,255,0.05); }
 
 /* L1 table with visible header */
 .l1-table thead { display:table-header-group !important; background:rgba(10,15,25,0.7); border-bottom:1px solid rgba(255,255,255,0.1); }
@@ -92,53 +94,56 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 
 /* ── Value colors ─────────────────────────────────────────────────────────── */
 .pct { font-weight:600; }
-.pct.pos { color:#3fb950; }
-.pct.neg { color:#f85149; }
-.pct.zero { color:#8b949e; }
+.pct.pos { color:#00B050; }
+.pct.neg { color:#DC3545; }
+.pct.zero { color:#aaa; }
 
 .rsi-val { font-weight:700; }
-.rsi-val.oversold   { color:#58a6ff; }
-.rsi-val.optimal    { color:#3fb950; }
-.rsi-val.mid        { color:#d29922; }
-.rsi-val.overbought { color:#f85149; }
+.rsi-val.oversold   { color:#00B050; }
+.rsi-val.optimal    { color:#00D060; }
+.rsi-val.mid        { color:#FFC000; }
+.rsi-val.overbought { color:#DC3545; }
 
 .adx-val { font-weight:600; }
-.adx-val.strong { color:#3fb950; }
-.adx-val.weak   { color:#f85149; }
-.adx-val.mid    { color:#d29922; }
+.adx-val.strong { color:#00B050; }
+.adx-val.weak   { color:#DC3545; }
+.adx-val.mid    { color:#FFC000; }
 
-.regime-bull { color:#3fb950; font-size:0.75em; font-weight:600; }
-.regime-bear { color:#f85149; font-size:0.75em; font-weight:600; }
+.regime-bull { color:#00B050; font-size:0.75em; font-weight:600; }
+.regime-bear { color:#DC3545; font-size:0.75em; font-weight:600; }
 .regime-na   { color:#8b949e; font-size:0.75em; }
 
 /* Buy count badge */
 .buy-badge { display:inline-flex; align-items:center; gap:4px; }
 .buy-dots  { display:flex; gap:2px; }
 .buy-dot   { width:7px; height:7px; border-radius:50%; background:#30363d; }
-.buy-dot.on { background:#3fb950; }
+.buy-dot.on { background:#00B050; }
 .buy-count { font-weight:700; font-size:0.85em; }
-.buy-count.bc6 { color:#fff; text-shadow:0 0 8px #3fb950,0 0 16px #1a7a30; }
-.buy-count.bc5 { color:#3fb950; text-shadow:0 0 6px #3fb950; }
-.buy-count.bc4 { color:#7fff00; }
-.buy-count.bc3 { color:#d29922; }
+.buy-count.bc6 { color:#fff; text-shadow:0 0 8px #00ff88,0 0 16px #00B050; }
+.buy-count.bc5 { color:#00ff88; text-shadow:0 0 6px #00ff88; }
+.buy-count.bc4 { color:#00ff88; }
+.buy-count.bc3 { color:#FFC000; }
 .buy-count.bc2 { color:#ff9966; }
-.buy-count.bc1 { color:#f85149; }
-.buy-count.bc0 { color:#555; }
+.buy-count.bc1 { color:#DC3545; }
+.buy-count.bc0 { color:#888; }
 .cond-dots { font-size:0.7em; margin-left:3px; letter-spacing:1px; }
 
 /* Badge NUOVO */
 @keyframes pulse-nuovo { 0%,100%{opacity:1} 50%{opacity:0.35} }
-.badge-nuovo { display:inline-block; background:#3fb950; color:#fff; font-size:0.58em; font-weight:bold; padding:1px 5px; border-radius:3px; margin-left:5px; vertical-align:middle; animation:pulse-nuovo 1.1s ease-in-out infinite; letter-spacing:0.5px; }
+.badge-nuovo { display:inline-block; background:#00B050; color:#fff; font-size:0.58em; font-weight:bold; padding:1px 5px; border-radius:3px; margin-left:5px; vertical-align:middle; animation:pulse-nuovo 1.1s ease-in-out infinite; letter-spacing:0.5px; }
+
+/* Badge Ex-L1 */
+.badge-exl1 { display:inline-block; background:rgba(248,81,73,0.15); color:#f87070; font-size:0.6em; font-weight:bold; padding:1px 5px; border-radius:3px; margin-left:4px; vertical-align:middle; border:1px solid rgba(248,81,73,0.3); white-space:nowrap; flex-shrink:0; }
 
 /* Drawdown pill (L0) */
-.dd-pill { display:inline-block; padding:2px 7px; border-radius:10px; font-size:0.75em; font-weight:700; background:#7c3c0044; color:#ff8c00; border:1px solid #7c3c00; }
+.dd-pill { display:inline-block; padding:2px 7px; border-radius:10px; font-size:0.75em; font-weight:700; background:rgba(230,81,0,0.18); color:#FF8F00; border:1px solid rgba(230,81,0,0.5); }
 
 /* Level badge */
 .lv-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:0.72em; font-weight:700; }
-.lv0 { background:#7c3c0066; color:#ff8c00; }
-.lv1 { background:#14532d66; color:#3fb950; }
-.lv2 { background:#7c5a0066; color:#d29922; }
-.lv3 { background:#1c2e4a66; color:#58a6ff; }
+.lv0 { background:rgba(230,81,0,0.2); color:#FF8F00; }
+.lv1 { background:rgba(0,176,80,0.2); color:#00B050; }
+.lv2 { background:rgba(255,192,0,0.2); color:#FFC000; }
+.lv3 { background:rgba(68,114,196,0.2); color:#4472C4; }
 
 .etf-nome { font-weight:600; display:flex; align-items:center; gap:4px; overflow:hidden; }
 .etf-nome-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; }
@@ -146,13 +151,13 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .empty-msg { padding:28px; text-align:center; color:#8b949e; }
 
 /* +Port. button */
-.btn-portfolio-add { background:none; border:1px solid rgba(88,166,255,0.4); color:#58a6ff; border-radius:4px; cursor:pointer; font-size:0.68em; padding:1px 5px; line-height:1.4; transition:all .15s; white-space:nowrap; margin-left:5px; flex-shrink:0; }
-.btn-portfolio-add:hover { background:rgba(88,166,255,0.15); border-color:#58a6ff; color:#fff; }
-.btn-portfolio-add.in-portfolio { border-color:rgba(63,185,80,0.5); color:#3fb950; }
+.btn-portfolio-add { background:none; border:1px solid rgba(68,114,196,0.5); color:#4472C4; border-radius:4px; cursor:pointer; font-size:0.68em; padding:1px 5px; line-height:1.4; transition:all .15s; white-space:nowrap; margin-left:5px; flex-shrink:0; }
+.btn-portfolio-add:hover { background:rgba(68,114,196,0.18); border-color:#5A8FD4; color:#fff; }
+.btn-portfolio-add.in-portfolio { border-color:rgba(0,176,80,0.5); color:#00B050; }
 .btn-portfolio-add.in-portfolio:hover { background:rgba(63,185,80,0.1); }
 .btn-pf-action { background:none; border:1px solid rgba(255,255,255,0.15); color:#8b949e; border-radius:4px; cursor:pointer; font-size:0.82em; padding:2px 6px; line-height:1.4; transition:all .15s; margin:0 2px; }
-.btn-edit:hover { border-color:#58a6ff; color:#58a6ff; background:rgba(88,166,255,0.1); }
-.btn-sell:hover { border-color:#f85149; color:#f85149; background:rgba(248,81,73,0.1); }
+.btn-edit:hover { border-color:#4472C4; color:#4472C4; background:rgba(68,114,196,0.12); }
+.btn-sell:hover { border-color:#DC3545; color:#DC3545; background:rgba(220,53,69,0.1); }
 
 /* Exit warning */
 .exit-warn { display:inline-block; font-size:0.72em; margin-left:4px; cursor:default; vertical-align:middle; }
@@ -160,32 +165,21 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 /* ── Category filters ─────────────────────────────────────────────────── */
 .cat-filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
 .cat-btn { padding:5px 14px; border:1px solid rgba(255,255,255,0.12); border-radius:14px; background:transparent; color:#8b949e; cursor:pointer; font-size:0.78em; transition:all .15s; }
-.cat-btn:hover,.cat-btn.active { background:#58a6ff22; border-color:#58a6ff; color:#58a6ff; }
-
-/* ── L1 exits section ─────────────────────────────────────────────────── */
-.l1-exits-section { margin-bottom:16px; background:rgba(248,81,73,0.04); border-radius:10px; border:1px solid rgba(248,81,73,0.18); overflow:hidden; }
-.l1-exits-header { padding:10px 18px; background:rgba(248,81,73,0.07); display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; }
-.l1-exits-header:hover { background:rgba(248,81,73,0.12); }
-.l1-exits-header h3 { font-size:0.88em; color:#f85149; font-weight:700; margin:0; letter-spacing:0.5px; }
-.l1-exits-table { width:100%; border-collapse:collapse; font-size:0.82em; }
-.l1-exits-table th { padding:7px 10px; text-align:left; color:#555; font-weight:bold; border-bottom:1px solid rgba(255,255,255,0.08); font-size:0.79em; background:rgba(10,15,25,0.5); white-space:nowrap; }
-.l1-exits-table td { padding:7px 10px; border-bottom:1px solid rgba(255,255,255,0.04); color:#8b949e; vertical-align:middle; }
-.l1-exits-table tr:hover > td { background:rgba(255,255,255,0.02); }
-.exit-rule-badge { display:inline-block; padding:1px 5px; border-radius:3px; font-size:0.75em; font-weight:bold; background:rgba(248,81,73,0.18); color:#f87070; border:1px solid rgba(248,81,73,0.35); white-space:nowrap; }
+.cat-btn:hover,.cat-btn.active { background:rgba(255,192,0,0.15); border-color:#FFC000; color:#FFC000; }
 
 /* ── Portfolio section ────────────────────────────────────────────────── */
 .portfolio-section { margin-top:24px; background:rgba(255,255,255,0.03); border-radius:10px; overflow:hidden; border:1px solid rgba(88,166,255,0.25); }
 .portfolio-header { padding:10px 18px; background:linear-gradient(90deg,rgba(88,166,255,0.18),rgba(88,166,255,0.06)); display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; }
 .portfolio-header:hover { background:linear-gradient(90deg,rgba(88,166,255,0.25),rgba(88,166,255,0.1)); }
-.portfolio-header h3 { font-size:0.88em; color:#58a6ff; font-weight:700; margin:0; letter-spacing:0.5px; }
+.portfolio-header h3 { font-size:0.88em; color:#4472C4; font-weight:700; margin:0; letter-spacing:0.5px; }
 .portfolio-table { width:100%; border-collapse:collapse; font-size:0.82em; }
 .portfolio-table th { padding:8px 10px; text-align:left; color:#555; font-weight:bold; border-bottom:1px solid rgba(255,255,255,0.1); font-size:0.8em; background:rgba(10,15,25,0.5); white-space:nowrap; }
 .portfolio-table td { padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.05); color:#ccc; vertical-align:middle; }
 .portfolio-table tr:hover > td { background:rgba(255,255,255,0.02); }
 .portfolio-empty { padding:24px; text-align:center; color:#555; font-size:0.85em; }
 .perf-badge { font-weight:bold; padding:2px 8px; border-radius:10px; font-size:0.9em; white-space:nowrap; }
-.perf-badge.pos  { background:rgba(63,185,80,0.15); color:#3fb950; }
-.perf-badge.neg  { background:rgba(248,81,73,0.15); color:#f85149; }
+.perf-badge.pos  { background:rgba(0,176,80,0.15); color:#00B050; }
+.perf-badge.neg  { background:rgba(220,53,69,0.15); color:#DC3545; }
 .perf-badge.zero { background:rgba(255,255,255,0.07); color:#8b949e; }
 .history-row td { padding:0 !important; border-bottom:2px solid rgba(88,166,255,0.15) !important; background:rgba(10,15,25,0.5) !important; }
 .history-table { width:100%; border-collapse:collapse; font-size:0.79em; }
@@ -193,7 +187,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .history-table th:first-child { text-align:left; }
 .history-table td { padding:5px 10px; text-align:right; border-bottom:1px solid rgba(255,255,255,0.03); color:#8b949e; }
 .history-table td:first-child { text-align:left; color:#666; font-family:monospace; font-size:0.93em; }
-.btn-remove { background:none; border:1px solid rgba(248,81,73,0.35); color:#f85149; border-radius:4px; cursor:pointer; font-size:0.75em; padding:2px 7px; transition:all .15s; }
+.btn-remove { background:none; border:1px solid rgba(220,53,69,0.35); color:#DC3545; border-radius:4px; cursor:pointer; font-size:0.75em; padding:2px 7px; transition:all .15s; }
 .btn-remove:hover { background:rgba(248,81,73,0.12); }
 .btn-toggle-hist { background:none; border:1px solid rgba(255,255,255,0.13); color:#666; border-radius:4px; cursor:pointer; font-size:0.75em; padding:2px 7px; transition:all .15s; }
 .btn-toggle-hist:hover { color:#e6edf3; border-color:rgba(255,255,255,0.28); }
@@ -225,18 +219,18 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .exit-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; margin-top:4px; }
 .exit-item { font-size:0.8em; color:#8b949e; padding:5px 10px; background:rgba(255,255,255,0.04); border-radius:6px; border-left:3px solid rgba(255,255,255,0.1); }
 .exit-item .exit-label { font-weight:bold; color:#e6edf3; display:inline-block; min-width:22px; }
-.exit-item.exit-l1 { border-left-color:#3fb950; }
-.exit-item.exit-l0 { border-left-color:#ff8c00; }
+.exit-item.exit-l1 { border-left-color:#00B050; }
+.exit-item.exit-l0 { border-left-color:#FF8F00; }
 
 /* ── Portfolio Modal ──────────────────────────────────────────────────── */
 .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:1000; backdrop-filter:blur(4px); align-items:center; justify-content:center; }
 .modal-overlay.open { display:flex; }
 .modal-box { background:#161b22; border:1px solid rgba(255,255,255,0.15); border-radius:14px; padding:24px 26px; width:380px; max-width:95vw; box-shadow:0 16px 48px rgba(0,0,0,0.6); }
-.modal-box h3 { margin:0 0 18px; font-size:0.98em; color:#58a6ff; }
+.modal-box h3 { margin:0 0 18px; font-size:0.98em; color:#4472C4; }
 .modal-field { margin-bottom:14px; }
 .modal-field label { display:block; font-size:0.75em; color:#666; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.5px; }
 .modal-field input { width:100%; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:8px 10px; color:#e6edf3; font-size:0.88em; outline:none; transition:border-color .15s; }
-.modal-field input:focus { border-color:#58a6ff; background:rgba(88,166,255,0.08); }
+.modal-field input:focus { border-color:#4472C4; background:rgba(68,114,196,0.08); }
 .modal-actions { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
 .btn-primary { background:#1f6feb; color:#fff; border:none; border-radius:6px; padding:8px 18px; cursor:pointer; font-size:0.85em; font-weight:bold; transition:background .15s; }
 .btn-primary:hover { background:#388bfd; }
@@ -262,8 +256,8 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 
 /* Regime bar */
 .regime-bar { padding:8px 12px; border-radius:8px; font-size:0.82em; margin-bottom:14px; }
-.regime-bar.bull { background:#145a2322; border:1px solid #145a23; color:#3fb950; }
-.regime-bar.bear { background:#3c000022; border:1px solid #5c0000; color:#f85149; }
+.regime-bar.bull { background:rgba(0,176,80,0.12); border:1px solid rgba(0,176,80,0.4); color:#00B050; }
+.regime-bar.bear { background:rgba(220,53,69,0.12); border:1px solid rgba(220,53,69,0.4); color:#DC3545; }
 
 /* L0 section in modal */
 .l0-section { background:rgba(122,58,0,0.12); border:1px solid rgba(122,58,0,0.3); border-radius:8px; padding:12px 14px; margin-bottom:14px; }
@@ -279,19 +273,19 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 .cond-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .cond-item { display:flex; align-items:center; gap:8px; font-size:0.82em; }
 .cond-dot  { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
-.cond-dot.ok { background:#3fb950; }
-.cond-dot.no { background:#f85149; }
+.cond-dot.ok { background:#00B050; }
+.cond-dot.no { background:#DC3545; }
 .cond-dot.na { background:#30363d; }
 
 /* Reason box */
-.reason-box { background:rgba(255,255,255,0.04); border-left:3px solid #58a6ff; padding:8px 12px; border-radius:4px; font-size:0.8em; color:#e6edf3; margin-bottom:14px; }
+.reason-box { background:rgba(255,255,255,0.04); border-left:3px solid #4472C4; padding:8px 12px; border-radius:4px; font-size:0.8em; color:#e6edf3; margin-bottom:14px; }
 
 /* Chart */
 .detail-chart-wrap { background:rgba(0,0,0,0.3); border-radius:10px; padding:12px; margin-bottom:16px; height:200px; position:relative; }
 
 /* Day selector */
 .detail-days-btn { background:none; border:1px solid rgba(255,255,255,0.12); color:#666; border-radius:4px; cursor:pointer; font-size:0.72em; padding:2px 8px; margin-left:4px; transition:all .15s; }
-.detail-days-btn:hover,.detail-days-btn.active { background:rgba(88,166,255,0.18); border-color:#58a6ff; color:#e6edf3; }
+.detail-days-btn:hover,.detail-days-btn.active { background:rgba(68,114,196,0.2); border-color:#4472C4; color:#e6edf3; }
 
 /* Historical table */
 .detail-hist-wrap { max-height:280px; overflow-y:auto; border-radius:8px; border:1px solid rgba(255,255,255,0.07); }
@@ -370,14 +364,24 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
 
 <div class="modal-overlay" id="sellModal" onclick="if(event.target===this)closeSellModal()">
   <div class="modal-box">
-    <h3>&#128184; Registra Vendita</h3>
+    <h3 id="sellModalTitle">&#128184; Registra Vendita</h3>
+    <div id="sellPartialInfo" style="display:none;margin-bottom:12px;padding:8px 12px;background:rgba(255,140,0,0.1);border:1px solid rgba(255,140,0,0.3);border-radius:6px;font-size:0.82em;color:#ff8c00;">
+      &#129463; <strong>Piede Dentro attivo</strong> — venduto 90% il <span id="sellPartialDate"></span> a <span id="sellPartialPrice"></span>. Qui chiudi il 10% residuo.
+    </div>
     <div class="modal-field"><label>ETF</label><input type="text" id="sellFundName" readonly style="color:#8b949e;cursor:default;"></div>
     <div class="modal-field"><label>ISIN</label><input type="text" id="sellIsin" readonly style="color:#555;cursor:default;font-family:monospace;font-size:0.82em;"></div>
-    <div class="modal-field"><label>Data Vendita</label><input type="date" id="sellExitDate"></div>
-    <div class="modal-field"><label>Prezzo Vendita</label><input type="number" id="sellExitPrice" step="0.0001" min="0" placeholder="es. 84.5200"></div>
-    <div class="modal-actions">
+    <div class="modal-field"><label>Data</label><input type="date" id="sellExitDate"></div>
+    <div class="modal-field"><label>Prezzo</label><input type="number" id="sellExitPrice" step="0.0001" min="0" placeholder="es. 84.5200"></div>
+    <!-- Azioni per posizione intera -->
+    <div id="sellActionsFull" class="modal-actions">
       <button class="btn-cancel" onclick="closeSellModal()">Annulla</button>
-      <button class="btn-primary" style="background:rgba(248,81,73,0.25);border-color:rgba(248,81,73,0.5);color:#f85149;" onclick="submitSell()">Conferma Vendita</button>
+      <button class="btn-primary" style="background:rgba(255,140,0,0.2);border-color:rgba(255,140,0,0.5);color:#ff8c00;" onclick="submitSell('partial')">&#129463; Piede Dentro (90%)</button>
+      <button class="btn-primary" style="background:rgba(248,81,73,0.25);border-color:rgba(248,81,73,0.5);color:#f85149;" onclick="submitSell('full')">Vendi 100%</button>
+    </div>
+    <!-- Azioni per posizione già parziale (chiudi 10%) -->
+    <div id="sellActionsPartial" class="modal-actions" style="display:none;">
+      <button class="btn-cancel" onclick="closeSellModal()">Annulla</button>
+      <button class="btn-primary" style="background:rgba(248,81,73,0.25);border-color:rgba(248,81,73,0.5);color:#f85149;" onclick="submitSell('full')">Chiudi Posizione (10%)</button>
     </div>
   </div>
 </div>
@@ -432,9 +436,9 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#0d1
     <tr>
       <th>ETF</th><th>Ticker</th><th>Prezzo</th>
       <th>%1G</th><th>%1W</th><th>%1M</th>
-      <th>EMA20</th><th>SMA50</th><th>SMA200</th>
+      <th>EMA20</th><th>SMA50</th><th>Regime</th>
       <th>RSI</th><th>ADX</th>
-      <th>Cond.</th><th>Segnale</th>
+      <th>Cond.</th><th>Info</th>
     </tr>
   </table>
 </div>
@@ -455,7 +459,7 @@ let portfolioMap   = {};     // isin → {entry_date, entry_price, fund_name} �
 let allEtfMap = {};          // isin → {nome, price}
 let l1TrackingMap = {};      // isin → {entry_date, entry_price, pct_gain, days_in_l1, is_new}
 let l1ExitsData = [];
-let l1ExitsOpen = false;
+let recentExitsMap = {};  // isin → {exit_date, days_ago}
 let portfolioSectionOpen = false;
 let historyCache = {};
 let pfEditMode = false;      // true = modifica, false = aggiunta
@@ -483,7 +487,7 @@ async function loadData() {
     const [dashRes, l1TrackRes, l1ExitRes] = await Promise.all([
       fetch('/data/dashboard_data.json'),
       fetch('/api/l1-tracking'),
-      fetch('/api/l1-exits'),
+      fetch('/api/l1-exits?days=60'),
     ]);
     allData = await dashRes.json();
     const l1Track = await l1TrackRes.json();
@@ -491,12 +495,27 @@ async function loadData() {
     l1TrackingMap = {};
     (l1Track.tracking || []).forEach(t => { l1TrackingMap[t.isin] = t; });
     l1ExitsData = l1Exit.exits || [];
+    buildRecentExitsMap();
     renderDashboard();
-    renderL1Exits();
   } catch(e) {
     document.getElementById('mainContent').innerHTML =
       `<div class="loader" style="color:#f85149">Errore: ${e.message} — <a href="/api/trigger-update" style="color:#58a6ff">Aggiorna</a></div>`;
   }
+}
+
+// ── Recent L1 exits map ───────────────────────────────────────────────────
+function buildRecentExitsMap() {
+  recentExitsMap = {};
+  const today = new Date(); today.setHours(0,0,0,0);
+  l1ExitsData.forEach(ex => {
+    if (!ex.isin || !ex.exit_date) return;
+    const exitDate = ex.exit_date.substring(0,10);
+    const existing = recentExitsMap[ex.isin];
+    if (!existing || exitDate > existing.exit_date) {
+      const daysAgo = Math.round((today - new Date(exitDate)) / (1000*60*60*24));
+      recentExitsMap[ex.isin] = { exit_date: exitDate, days_ago: daysAgo };
+    }
+  });
 }
 
 // ── Dashboard render ──────────────────────────────────────────────────────
@@ -539,10 +558,7 @@ function renderDashboard() {
 
   // L1
   const l1list = (levels['1'] || levels[1] || []).filter(applyFilters);
-  sections.push(renderL1Section(l1list));
-
-  // L1 exits placeholder
-  sections.push('<div id="l1ExitsContainer"></div>');
+  sections.push(renderLevelSection(1, 'L1 — Trend Sicuro', 'level-1', l1list));
 
   // L2 / L3
   for (const [lvl, label, cls] of [['2','L2 — Watchlist','level-2'],['3','L3 — Universo','level-3']]) {
@@ -556,8 +572,6 @@ function renderDashboard() {
 
   document.getElementById('mainContent').innerHTML = sections.join('');
 
-  // Re-render L1 exits into placeholder
-  renderL1Exits();
 }
 
 function applyFilters(e) {
@@ -585,9 +599,11 @@ function clearSearch() {
   filterSearch('');
 }
 
-// ── L0 + L2/L3 section render ─────────────────────────────────────────────
+// ── Unified level section (L0, L1, L2, L3) ───────────────────────────────
 function renderLevelSection(lvl, label, cls, list) {
   const count = list.length;
+  const infoHeader = lvl === 1 ? 'Gg L1 / vs Ent.' : lvl === 0 ? 'Drawdown' : 'Info';
+  const emptyMsg   = lvl === 1 ? 'Nessun ETF in L1' : 'Nessun ETF';
   return `
   <div class="level-section ${cls}">
     <div class="level-header">
@@ -601,112 +617,26 @@ function renderLevelSection(lvl, label, cls, list) {
         <col class="col-rsi"><col class="col-adx">
         <col class="col-buy"><col class="col-ragione">
       </colgroup>
+      <thead class="etf-colheader"><tr>
+        <th>ETF</th><th>Ticker</th><th>Prezzo</th>
+        <th>%1G</th><th>%1W</th><th>%1M</th>
+        <th>EMA20</th><th>SMA50</th><th>Regime</th>
+        <th>RSI</th><th>ADX</th><th>Cond.</th><th>${infoHeader}</th>
+      </tr></thead>
       <tbody>
-        ${count ? list.map(e => renderETFRow(e, lvl)).join('') : '<tr><td colspan="13" class="empty-msg">Nessun ETF</td></tr>'}
+        ${count ? list.map(e => renderETFRow(e, lvl)).join('') : `<tr><td colspan="13" class="empty-msg">${emptyMsg}</td></tr>`}
       </tbody>
     </table>
   </div>`;
 }
 
-// ── L1 section (dedicated, with header row + tracking columns) ────────────
-function renderL1Section(list) {
-  const count = list.length;
-  const rows = count ? list.map(e => renderL1Row(e)).join('') : '<tr><td colspan="10" class="empty-msg">Nessun ETF in L1</td></tr>';
-  return `
-  <div class="level-section level-1">
-    <div class="level-header">
-      <span>L1 — Trend Sicuro <span class="count">(${count} ETF)</span></span>
-    </div>
-    <table class="etf-table l1-table" style="table-layout:fixed;width:100%;">
-      <colgroup>
-        <col style="width:26%"><col style="width:6%">
-        <col style="width:5%"><col style="width:5%"><col style="width:5%">
-        <col style="width:6%"><col style="width:7%">
-        <col style="width:5%"><col style="width:16%"><col style="width:9%">
-      </colgroup>
-      <thead><tr>
-        <th>ETF</th><th>Prezzo</th>
-        <th>%1G</th><th>%1W</th><th>%1M</th>
-        <th>Gg L1</th><th>vs Ent.</th>
-        <th>RSI</th><th>Cond.</th><th>SMA200</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>`;
-}
-
-function renderL1Row(e) {
-  const isin   = e.isin || '';
-  const track  = l1TrackingMap[isin] || {};
-  const today  = new Date().toISOString().slice(0,10);
-  const ed     = track.entry_date;
-
-  // Giorni in L1
-  let daysHtml = '—';
-  if (ed) {
-    const days = tradingDays(ed, today);
-    const col  = days <= 5 ? '#3fb950' : days <= 15 ? '#d29922' : '#8b949e';
-    daysHtml = `<span style="font-weight:bold;color:${col}">${days}</span><span style="color:#555;font-size:0.78em"> gg</span>`;
-  }
-
-  // Badge NUOVO
-  const nuovoBadge = track.is_new ? `<span class="badge-nuovo">NUOVO</span>` : '';
-
-  // Exit warning
-  const exitRule = e.conditions && e.conditions.exit_rule;
-  const exitWarn = exitRule ? `<span class="exit-warn" title="Uscita imminente — regola ${exitRule}">⚠️</span>` : '';
-
-  // % vs entrata
-  const pg = track.pct_gain;
-  const pveCls = pg > 0 ? 'pos' : pg < 0 ? 'neg' : 'zero';
-  const pveStr = pg != null
-    ? `<span class="pct ${pveCls}">${pg > 0 ? '+' : ''}${pg.toFixed(2)}%</span>`
-    : '<span style="color:#555">—</span>';
-
-  // SMA200 regime
-  let sma200Html = '—';
-  if (e.sma200 != null) {
-    const isBull = e.price != null && e.price > e.sma200;
-    sma200Html = `<span class="${isBull?'regime-bull':'regime-bear'}">${isBull?'▲ Bull':'▼ Bear'}</span>`;
-  }
-
-  const inPf   = portfolioIsins.has(isin);
-  const pfBtn  = isin ? `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf?'&#10003;':'+ Port.'}</button>` : '';
-
-  const bc     = e.buy_count || 0;
-  const c      = e.conditions || {};
-  const partialBadge = c.partial_exit ? `<span title="Uscita Parziale D: RSI>78 — vendi 90%, tieni 10%" style="margin-left:4px;font-size:0.75em;color:#ff8c00;font-weight:700;">90%↓</span>` : '';
-  const condHtml = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${condDot(c.allineamento_ok,'A','Allineamento')}${condDot(c.persistenza_ok,'P','Persistenza')}${condDot(c.rsi_ok,'R','RSI range')}${condDot(c.distance_ok,'D','Distanza EMA20')}${condDot(c.adx_ok,'X','ADX')}${condDot(c.macd_ok,'M','MACD momentum')}</span>${partialBadge}`;
-
-  const fmtPct = v => {
-    if (v == null) return '<td class="pct zero">—</td>';
-    const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
-    return `<td class="pct ${cls}">${v > 0 ? '+' : ''}${v.toFixed(2)}%</td>`;
-  };
-
-  const nome = e.nome || e.ticker || isin;
-  return `<tr style="cursor:pointer;" onclick="openETFDetail('${encodeURIComponent(e.ticker||'')}','${isin}')">
-    <td style="overflow:hidden;">
-      <div class="etf-nome"><span class="etf-nome-text">${nome}${nuovoBadge}${exitWarn}</span>${pfBtn}</div>
-      <div style="font-size:0.7em;color:#555;font-family:monospace;">${isin}</div>
-    </td>
-    <td style="font-weight:600">${e.price != null ? fmtNum(e.price,4) : '—'}</td>
-    ${fmtPct(e.pct_1d)}${fmtPct(e.pct_1w)}${fmtPct(e.pct_1m)}
-    <td style="text-align:center">${daysHtml}</td>
-    <td style="text-align:center">${pveStr}</td>
-    <td>${fmtRsi(e.rsi)}</td>
-    <td>${condHtml}</td>
-    <td>${sma200Html}</td>
-  </tr>`;
-}
-
-// ── Generic ETF row (L0, L2, L3) ─────────────────────────────────────────
+// ── Unified ETF row (L0, L1, L2, L3) ─────────────────────────────────────
 function renderETFRow(e, lvl) {
   const ticker = e.ticker || '';
   const isin   = e.isin   || '';
   const price  = e.price != null ? fmtNum(e.price,4) : '—';
-  const ema20  = e.ema20  != null ? fmtNum(e.ema20,4)  : '—';
-  const sma50  = e.sma50  != null ? fmtNum(e.sma50,4)  : '—';
+  const ema20  = e.ema20  != null ? fmtNum(e.ema20,4) : '—';
+  const sma50  = e.sma50  != null ? fmtNum(e.sma50,4) : '—';
   let sma200Html = '—';
   if (e.sma200 != null) {
     const isBull = e.price != null && e.price > e.sma200;
@@ -714,104 +644,80 @@ function renderETFRow(e, lvl) {
   }
   const bc = e.buy_count || 0;
   const c  = e.conditions || {};
-  let extraCell;
-  if (lvl === 0 && e.drawdown_from_peak != null) {
-    extraCell = `<span class="dd-pill">-${fmtNum(e.drawdown_from_peak,1)}%</span>`;
+
+  // Condition cell
+  let condCell;
+  if (lvl === 1) {
+    const partialBadge = c.partial_exit
+      ? `<span title="Regola D: RSI>78 — vendi 90%, tieni 10%" style="margin-left:4px;font-size:0.75em;color:#ff8c00;font-weight:700;">90%↓</span>` : '';
+    condCell = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${condDot(c.allineamento_ok,'A','Allineamento')}${condDot(c.persistenza_ok,'P','Persistenza')}${condDot(c.rsi_ok,'R','RSI range')}${condDot(c.distance_ok,'D','Distanza EMA20')}${condDot(c.adx_ok,'X','ADX')}${condDot(c.macd_ok,'M','MACD momentum')}</span>${partialBadge}`;
+  } else if (lvl === 0 && e.drawdown_from_peak != null) {
+    condCell = `<span class="dd-pill">-${fmtNum(e.drawdown_from_peak,1)}%</span>`;
   } else {
     const dots = [0,1,2,3,4,5].map(i => `<div class="buy-dot ${i < bc ? 'on' : ''}"></div>`).join('');
-    extraCell = `<div class="buy-badge"><div class="buy-dots">${dots}</div><span class="buy-count bc${bc}" style="font-size:0.78em;color:#555">${bc}/6</span></div>`;
+    condCell = `<div class="buy-badge"><div class="buy-dots">${dots}</div><span class="buy-count bc${bc}" style="font-size:0.78em;color:#555">${bc}/6</span></div>`;
   }
-  const reason = (e.level_reason || '').substring(0,60);
-  const nome   = e.nome || ticker;
-  const typeTag = e.etf_type ? `<span class="etf-type-tag">${e.etf_type.replace('equity_','').replace('_',' ')}</span>` : '';
-  const inPf   = portfolioIsins.has(isin);
-  const pfBtn  = isin ? `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf?'&#10003;':'+ Port.'}</button>` : '';
+
+  // Info column: Gg L1 + vs Ent. per L1, level_reason per gli altri
+  let infoCell;
+  if (lvl === 1) {
+    const track = l1TrackingMap[isin] || {};
+    let daysStr = '—';
+    if (track.entry_date) {
+      const today = new Date().toISOString().slice(0,10);
+      const days  = tradingDays(track.entry_date, today);
+      const col   = days <= 5 ? '#00B050' : days <= 15 ? '#FFC000' : '#888';
+      daysStr = `<span style="color:${col};font-weight:bold">${days}gg</span>`;
+    }
+    const pg = track.pct_gain;
+    const pgSpan = pg != null
+      ? `<span class="pct ${pg>0?'pos':pg<0?'neg':'zero'}">${pg>0?'+':''}${pg.toFixed(2)}%</span>`
+      : '<span style="color:#555">—</span>';
+    infoCell = `${daysStr} &nbsp;|&nbsp; ${pgSpan}`;
+  } else {
+    infoCell = (e.level_reason || '').replace(/\s*\(\d+gg sopra EMA\d+\)/g, '').substring(0, 60);
+  }
+
+  // Nome cell badges
+  const nome = e.nome || ticker;
+  let nomeBadges;
+  if (lvl === 1) {
+    const track    = l1TrackingMap[isin] || {};
+    const nuovoBadge = track.is_new ? `<span class="badge-nuovo">NUOVO</span>` : '';
+    const exitRule = c.exit_rule;
+    const exitWarn = exitRule ? `<span class="exit-warn" title="Uscita imminente — regola ${exitRule}">⚠️</span>` : '';
+    nomeBadges = nuovoBadge + exitWarn;
+  } else {
+    const typeTag = e.etf_type ? `<span class="etf-type-tag">${e.etf_type.replace('equity_','').replace('_',' ')}</span>` : '';
+    const exl1    = (lvl === 2 || lvl === 3) && recentExitsMap[isin]
+      ? `<span class="badge-exl1">Ex-L1 ${recentExitsMap[isin].days_ago}gg</span>` : '';
+    nomeBadges = typeTag + exl1;
+  }
+
+  const inPf = portfolioIsins.has(isin);
+  const pfBtn = isin ? `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf?'&#10003;':'+ Port.'}</button>` : '';
 
   return `<tr style="cursor:pointer;" onclick="openETFDetail('${encodeURIComponent(ticker)}','${isin}')">
     <td class="col-nome">
-      <div class="etf-nome"><span class="etf-nome-text">${nome}${typeTag}</span>${pfBtn}</div>
+      <div class="etf-nome"><span class="etf-nome-text">${nome}</span>${nomeBadges}${pfBtn}</div>
+      <div style="font-size:0.7em;color:#555;font-family:monospace">${isin}</div>
     </td>
     <td class="col-ticker" style="color:#8b949e">${ticker}</td>
     <td class="col-prezzo" style="font-weight:600">${price}</td>
     <td class="col-pct">${fmtPct(e.pct_1d)}</td>
     <td class="col-pct">${fmtPct(e.pct_1w)}</td>
     <td class="col-pct">${fmtPct(e.pct_1m)}</td>
-    <td class="col-ema20" style="color:#58a6ff">${ema20}</td>
-    <td class="col-sma50" style="color:#a5d6ff">${sma50}</td>
+    <td class="col-ema20" style="color:#4472C4">${ema20}</td>
+    <td class="col-sma50" style="color:#5A8FD4">${sma50}</td>
     <td class="col-sma200">${sma200Html}</td>
     <td class="col-rsi">${fmtRsi(e.rsi)}</td>
     <td class="col-adx">${fmtAdx(e.adx)}</td>
-    <td class="col-buy">${extraCell}</td>
-    <td class="col-ragione" style="color:#8b949e;font-size:0.78em">${reason}</td>
+    <td class="col-buy">${condCell}</td>
+    <td class="col-ragione" style="color:#8b949e;font-size:0.78em">${infoCell}</td>
   </tr>`;
 }
 
 // ── L1 exits render ───────────────────────────────────────────────────────
-function renderL1Exits() {
-  const container = document.getElementById('l1ExitsContainer');
-  if (!container) return;
-  if (!l1ExitsData || l1ExitsData.length === 0) {
-    container.innerHTML = '';
-    return;
-  }
-  const ruleNames = {1:'A — Stop Loss',2:'B — Trailing Stop',3:'C — Stanchezza RSI',4:'D — Strutturale',5:'E — ADX debole',6:'F — Storico insuff.'};
-  const rows = l1ExitsData.map(ex => {
-    const perf = ex.pct_gain;
-    const perfCol = perf > 0 ? '#3fb950' : perf < 0 ? '#f85149' : '#8b949e';
-    const perfStr = perf != null ? `<span style="font-weight:bold;color:${perfCol}">${perf > 0 ? '+' : ''}${perf.toFixed(2)}%</span>` : '—';
-    const ruleName = ruleNames[ex.exit_rule] || (ex.exit_rule ? `Regola ${ex.exit_rule}` : '—');
-    return `<tr style="cursor:pointer;" onclick="openETFDetail('','${ex.isin}')">
-      <td style="font-weight:600">${ex.fund_name}<br><span style="font-family:monospace;font-size:0.75em;color:#555">${ex.isin}</span></td>
-      <td style="color:#8b949e;font-size:0.85em">${ex.entry_date||'—'}</td>
-      <td style="color:#8b949e;font-size:0.85em">${ex.exit_date}</td>
-      <td style="text-align:center;color:#8b949e">${ex.days_in_l1??'—'}</td>
-      <td style="font-family:monospace;font-size:0.85em">${ex.entry_price?ex.entry_price.toFixed(4):'—'}</td>
-      <td style="font-family:monospace;font-size:0.85em">${ex.exit_price?ex.exit_price.toFixed(4):'—'}</td>
-      <td style="text-align:center">${perfStr}</td>
-      <td><span class="exit-rule-badge">${ruleName}</span></td>
-    </tr>`;
-  }).join('');
-
-  container.innerHTML = `
-  <div class="l1-exits-section">
-    <div class="l1-exits-header" onclick="toggleL1Exits()">
-      <h3>📤 Usciti da L1 — ultimi 30 giorni</h3>
-      <div style="display:flex;align-items:center;gap:12px;">
-        <span style="font-size:0.78em;color:#8b949e">${l1ExitsData.length} uscit${l1ExitsData.length===1?'a':'e'}</span>
-        <span id="l1ExitsToggle" style="color:#555;font-size:0.75em">&#9660;</span>
-      </div>
-    </div>
-    <div id="l1ExitsBody" style="display:none;">
-      <table class="l1-exits-table">
-        <thead><tr>
-          <th style="width:25%">ETF</th>
-          <th style="width:9%">Entrato il</th>
-          <th style="width:9%">Uscito il</th>
-          <th style="width:6%">Gg L1</th>
-          <th style="width:8%">Pr. Ent.</th>
-          <th style="width:8%">Pr. Usc.</th>
-          <th style="width:7%">Perf %</th>
-          <th style="width:28%">Motivo</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  </div>`;
-
-  if (l1ExitsOpen) {
-    document.getElementById('l1ExitsBody').style.display = 'block';
-    document.getElementById('l1ExitsToggle').innerHTML = '&#9650;';
-  }
-}
-
-function toggleL1Exits() {
-  l1ExitsOpen = !l1ExitsOpen;
-  const body = document.getElementById('l1ExitsBody');
-  const tog  = document.getElementById('l1ExitsToggle');
-  if (body) body.style.display = l1ExitsOpen ? 'block' : 'none';
-  if (tog)  tog.innerHTML = l1ExitsOpen ? '&#9650;' : '&#9660;';
-}
-
 // ── Portfolio section HTML builder ────────────────────────────────────────
 function renderPortfolioSection() {
   return `
@@ -917,7 +823,12 @@ async function loadPortfolio() {
     portfolioIsins = new Set(pf.filter(p => p.status === 'active').map(p => p.isin));
     portfolioMap   = {};
     pf.filter(p => p.status === 'active').forEach(p => {
-      portfolioMap[p.isin] = { entry_date: p.entry_date, entry_price: p.entry_price, fund_name: p.fund_name };
+      portfolioMap[p.isin] = {
+        entry_date: p.entry_date, entry_price: p.entry_price, fund_name: p.fund_name,
+        is_partial: p.is_partial || false,
+        partial_exit_date: p.partial_exit_date || null,
+        partial_exit_price: p.partial_exit_price || null,
+      };
     });
     const countEl = document.getElementById('portfolioCount');
     if (countEl) countEl.textContent = pf.length + ' ETF';
@@ -961,8 +872,11 @@ function renderPortfolio(portfolio) {
     const lv = p.level;
     const levBadge = lv != null ? `<span class="lv-badge lv${lv}">L${lv}</span>` : '-';
     const isin = p.isin;
+    const partialBadgePf = p.is_partial
+      ? `<span style="display:inline-block;background:rgba(255,140,0,0.18);color:#ff8c00;font-size:0.62em;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;border:1px solid rgba(255,140,0,0.4);vertical-align:middle;" title="Piede Dentro: 90% venduto il ${p.partial_exit_date||'?'} a ${p.partial_exit_price||'?'}">&#129463; 10%</span>`
+      : '';
     return `<tr id="pf-row-${isin}" style="cursor:pointer;" onclick="openETFDetail('${(allEtfMap[isin]?.ticker||'').replace(/'/g,"\\'")}','${isin}')">
-      <td style="font-weight:600">${p.fund_name||isin}<br><span style="font-family:monospace;font-size:0.7em;color:#555">${isin}</span></td>
+      <td style="font-weight:600">${p.fund_name||isin}${partialBadgePf}<br><span style="font-family:monospace;font-size:0.7em;color:#555">${isin}</span></td>
       <td style="color:#8b949e;font-size:0.83em">${p.entry_date||'-'}</td>
       <td style="font-family:monospace;font-size:0.85em">${prAcq}</td>
       <td style="font-family:monospace;font-size:0.85em">${prAtt}</td>
@@ -1103,10 +1017,30 @@ async function submitPortfolioEntry() {
 
 function openSellModal(isin) {
   const etf = allEtfMap[isin] || {};
+  const pfEntry = portfolioMap[isin] || {};
+  const isPartial = pfEntry.is_partial || false;
+
   document.getElementById('sellIsin').value      = isin;
   document.getElementById('sellFundName').value  = etf.nome || isin;
   document.getElementById('sellExitDate').value  = new Date().toISOString().split('T')[0];
   document.getElementById('sellExitPrice').value = etf.price ? etf.price.toFixed(4) : '';
+
+  document.getElementById('sellModalTitle').textContent = isPartial
+    ? '🦶 Chiudi Posizione (10% residuo)' : '💰 Registra Vendita';
+
+  // Info piede dentro
+  const infoEl = document.getElementById('sellPartialInfo');
+  infoEl.style.display = isPartial ? 'block' : 'none';
+  if (isPartial) {
+    document.getElementById('sellPartialDate').textContent  = pfEntry.partial_exit_date  || '?';
+    document.getElementById('sellPartialPrice').textContent = pfEntry.partial_exit_price != null
+      ? parseFloat(pfEntry.partial_exit_price).toFixed(4) : '?';
+  }
+
+  // Bottoni: se già partial → solo "Chiudi 10%"; altrimenti full/partial
+  document.getElementById('sellActionsFull').style.display    = isPartial ? 'none'  : 'flex';
+  document.getElementById('sellActionsPartial').style.display = isPartial ? 'flex'  : 'none';
+
   document.getElementById('sellModal').classList.add('open');
   setTimeout(() => document.getElementById('sellExitPrice').focus(), 100);
 }
@@ -1115,7 +1049,7 @@ function closeSellModal() {
   document.getElementById('sellModal').classList.remove('open');
 }
 
-async function submitSell() {
+async function submitSell(mode) {
   const isin      = document.getElementById('sellIsin').value;
   const exitDate  = document.getElementById('sellExitDate').value;
   const exitPrice = parseFloat(document.getElementById('sellExitPrice').value);
@@ -1123,8 +1057,11 @@ async function submitSell() {
     alert('Compila tutti i campi correttamente (Prezzo deve essere > 0)');
     return;
   }
+  const endpoint = mode === 'partial'
+    ? `/api/portfolio/${isin}/partial-exit`
+    : `/api/portfolio/${isin}/exit`;
   try {
-    const res = await fetch('/api/portfolio/' + isin + '/exit', {
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({exit_date:exitDate, exit_price:exitPrice})
@@ -1132,8 +1069,17 @@ async function submitSell() {
     const data = await res.json();
     if (res.ok) {
       closeSellModal();
-      portfolioIsins.delete(isin);
-      delete portfolioMap[isin];
+      if (mode === 'full') {
+        portfolioIsins.delete(isin);
+        delete portfolioMap[isin];
+      } else {
+        // Piede Dentro: ETF rimane in portfolio, aggiorna stato locale
+        if (portfolioMap[isin]) {
+          portfolioMap[isin].is_partial = true;
+          portfolioMap[isin].partial_exit_date  = exitDate;
+          portfolioMap[isin].partial_exit_price = exitPrice;
+        }
+      }
       historyCache = {};
       renderDashboard();
       if (portfolioSectionOpen) loadPortfolio();
@@ -1388,7 +1334,7 @@ function renderDetailChart(history, days) {
   if (pfIdx === -1 && pfDate && labels.length > 0 && pfDate > labels[labels.length - 1])
     pfIdx = labels.length - 1;
 
-  // Uscite e relative entrate dagli ultimi 30gg (stessa fonte della sezione "Usciti da L1")
+  // Uscite e relative entrate dagli ultimi 60gg (stessa fonte della sezione "Usciti da L1")
   const isinExits = l1ExitsData.filter(e => e.isin === isin);
   const exitMarkers = isinExits
     .filter(e => e.exit_date)
@@ -1450,7 +1396,7 @@ function renderDetailChart(history, days) {
         c.restore();
       }
 
-      // Linee verdi — entrate di cicli L1 passati (dai record di uscita 30gg)
+      // Linee verdi — entrate di cicli L1 passati (dai record di uscita 60gg)
       pastEntryMarkers.forEach(m => {
         const xPos = x.getPixelForValue(m.idx);
         c.save();
@@ -1466,7 +1412,7 @@ function renderDetailChart(history, days) {
         c.restore();
       });
 
-      // Linee rosse — uscite da L1 (ultimi 30gg)
+      // Linee rosse — uscite da L1 (ultimi 60gg)
       exitMarkers.forEach(m => {
         const xPos = x.getPixelForValue(m.idx);
         c.save();
