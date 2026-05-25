@@ -38,6 +38,21 @@ def _get_dashboard_data():
 def _should_run_today():
     now          = datetime.now()
     monitor_hour = int(os.environ.get('MONITOR_HOUR', 18))
+
+    # Controlla se oggi è un giorno previsto da MONITOR_DAYS (default lun-ven)
+    monitor_days_str = os.environ.get('MONITOR_DAYS', '1-5')
+    today_isoweekday = now.isoweekday()  # 1=lun, 7=dom
+    try:
+        if '-' in monitor_days_str:
+            start, end = monitor_days_str.split('-')
+            is_work_day = int(start) <= today_isoweekday <= int(end)
+        else:
+            is_work_day = today_isoweekday in [int(d) for d in monitor_days_str.split(',')]
+    except Exception:
+        is_work_day = today_isoweekday <= 5
+    if not is_work_day:
+        return False
+
     try:
         data         = _get_dashboard_data()
         if not data:
@@ -165,9 +180,52 @@ def etf_detail():
                     'sma200': _fmt(row['sma200']),
                 })
 
+        # Price date: data reale dell'ultimo prezzo disponibile
+        price_date = price_hist[-1]['date'] if price_hist else None
+
+        # L1 conditions con valori reali e soglie per tipo ETF
+        cond     = etf_info.get('conditions', {})
+        etf_type = etf_info.get('etf_type', 'equity_developed')
+        from technical_analysis import ETFTechnicalAnalyzer
+        analyzer = ETFTechnicalAnalyzer(etf_type)
+        p = analyzer.p
+
+        l1_conditions = {
+            'allineamento_ok': bool(cond.get('allineamento_ok', False)),
+            'persistenza_ok':  bool(cond.get('persistenza_ok', False)),
+            'rsi_ok':          bool(cond.get('rsi_ok', False)),
+            'distance_ok':     bool(cond.get('distance_ok', False)),
+            'adx_ok':          bool(cond.get('adx_ok', False)),
+            'macd_ok':         bool(cond.get('macd_ok', False)),
+            'values': {
+                'price':            etf_info.get('price'),
+                'price_date':       price_date,
+                'ema20':            cond.get('ema20_current'),
+                'sma50':            cond.get('sma50_current'),
+                'sma200':           cond.get('sma200_current'),
+                'rsi':              cond.get('rsi'),
+                'adx':              cond.get('adx'),
+                'dist_ema20':       cond.get('dist_ema20'),
+                'days_above_ema20': cond.get('days_above_ema20'),
+                'ema20_slope':      cond.get('ema20_slope'),
+                'regime_ok':        cond.get('regime_ok'),
+                'macd_histogram':   cond.get('macd_histogram'),
+            },
+            'thresholds': {
+                'rsi_min':        p['rsi_entry_low'],
+                'rsi_max':        p['rsi_entry_high'],
+                'max_dist_ema20': p['ema_dist_max'],
+                'adx_threshold':  p['adx_entry'],
+                'days_above_ema': p['days_above_ema'],
+            },
+            'buy_count': etf_info.get('buy_count', 0),
+        }
+
         return jsonify({
             **etf_info,
-            'price_history': price_hist,
+            'price_history':  price_hist,
+            'price_date':     price_date,
+            'l1_conditions':  l1_conditions,
         })
 
     except Exception as e:
@@ -314,15 +372,23 @@ def l1_tracking_api():
         entry_date  = entry['entry_date']
         entry_price = entry['entry_price']
         ed = entry_date if isinstance(entry_date, date_type) else date_type.fromisoformat(str(entry_date))
-        try:
-            days_in_l1 = max(1, int(np.busday_count(ed, today)) + 1)
-        except Exception:
-            days_in_l1 = 1
 
         df_p = db.get_close_by_isin(isin, days=3)
-        current_price = None
+        current_price   = None
+        last_price_date = today
         if not df_p.empty:
             current_price = float(df_p.iloc[-1]['Close'])
+            # Usa data reale ultimo prezzo (evita conteggio errato nei weekend)
+            try:
+                idx = df_p.index[-1]
+                last_price_date = idx.date() if hasattr(idx, 'date') else idx.to_pydatetime().date()
+            except Exception:
+                last_price_date = today
+
+        try:
+            days_in_l1 = max(1, int(np.busday_count(ed, last_price_date)) + 1)
+        except Exception:
+            days_in_l1 = 1
 
         pct_gain = None
         if current_price and entry_price:

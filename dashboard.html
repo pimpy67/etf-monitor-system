@@ -302,6 +302,20 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 /* Loader */
 .loader { text-align:center; padding:60px; color:#8b949e; }
 
+/* ── Pannello Condizioni L1 Dettagliato ── */
+.l1-cond-panel { background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 14px; margin-top:8px; }
+.l1-cond-title { font-size:0.72em; color:#8b949e; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+.l1-cond-score { background:rgba(255,255,255,0.07); border-radius:10px; padding:2px 8px; font-size:1.1em; font-weight:bold; letter-spacing:0; text-transform:none; }
+.l1-cond-row { display:flex; align-items:flex-start; gap:8px; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.04); font-size:0.8em; }
+.l1-cond-row:last-child { border-bottom:none; }
+.l1-cond-icon { font-size:1em; width:18px; flex-shrink:0; margin-top:1px; }
+.l1-cond-name { color:#8b949e; width:120px; flex-shrink:0; }
+.l1-cond-detail { color:#ccc; flex:1; }
+.l1-cond-detail .ok { color:#3fb950; }
+.l1-cond-detail .ko { color:#f85149; }
+.l1-cond-detail .na { color:#555; font-style:italic; }
+.price-date-sub { font-size:0.65em; color:#555; margin-top:2px; }
+
 @media(max-width:900px){ .col-ragione,.col-sma200 { display:none; } }
 @media(max-width:600px){ .etf-table td,.col-header th { font-size:0.72em; padding:6px 5px; } }
 </style>
@@ -1265,44 +1279,31 @@ function renderDetailModal(e, days) {
 
   // KPIs
   const macdColor = v => v == null ? '' : v > 0 ? 'color:#3fb950' : 'color:#f85149';
+  const priceDateRaw = e.price_date || e.l1_conditions?.values?.price_date;
+  const priceDateFmt = priceDateRaw ? priceDateRaw.substring(0,10).split('-').reverse().join('/') : null;
+  const priceDateSub = priceDateFmt ? `<div class="price-date-sub">al ${priceDateFmt}</div>` : '';
   const kpis = [
-    ['Livello',    lvlBadge, ''],
-    ['Prezzo',     e.price   != null ? fmtNum(e.price,4)   : '—', ''],
-    ['EMA10',      e.ema10   != null ? fmtNum(e.ema10,4)   : '—', 'color:#79c0ff'],
-    ['EMA20',      e.ema20   != null ? fmtNum(e.ema20,4)   : '—', 'color:#58a6ff'],
-    ['SMA50',      e.sma50   != null ? fmtNum(e.sma50,4)   : '—', 'color:#a5d6ff'],
-    ['SMA200',     e.sma200  != null ? fmtNum(e.sma200,4)  : '—', e.price>e.sma200?'color:#3fb950':'color:#f85149'],
-    ['RSI14',      e.rsi     != null ? e.rsi.toFixed(1)    : '—', rsiColor(e.rsi)],
-    ['ADX14',      e.adx     != null ? e.adx.toFixed(1)    : '—', adxColor(e.adx)],
-    ['MACD Hist',  e.macd_histogram != null ? e.macd_histogram.toFixed(4) : '—', macdColor(e.macd_histogram)],
-    ['Dist EMA20', e.dist_ema20 != null ? `${e.dist_ema20.toFixed(2)}%` : '—', ''],
-    ['%1G',        fmtPctRaw(e.pct_1d), pctColor(e.pct_1d)],
-    ['%1W',        fmtPctRaw(e.pct_1w), pctColor(e.pct_1w)],
-    ['%1M',        fmtPctRaw(e.pct_1m), pctColor(e.pct_1m)],
-    ['Drawdown',   e.drawdown_from_peak != null ? `-${e.drawdown_from_peak.toFixed(2)}%` : '—', e.drawdown_from_peak>10?'color:#f85149':'color:#8b949e'],
+    ['Livello',    lvlBadge, '', ''],
+    ['Prezzo',     e.price   != null ? fmtNum(e.price,4)   : '—', '', priceDateSub],
+    ['EMA10',      e.ema10   != null ? fmtNum(e.ema10,4)   : '—', 'color:#79c0ff', ''],
+    ['EMA20',      e.ema20   != null ? fmtNum(e.ema20,4)   : '—', 'color:#58a6ff', ''],
+    ['SMA50',      e.sma50   != null ? fmtNum(e.sma50,4)   : '—', 'color:#a5d6ff', ''],
+    ['SMA200',     e.sma200  != null ? fmtNum(e.sma200,4)  : '—', e.price>e.sma200?'color:#3fb950':'color:#f85149', ''],
+    ['RSI14',      e.rsi     != null ? e.rsi.toFixed(1)    : '—', rsiColor(e.rsi), ''],
+    ['ADX14',      e.adx     != null ? e.adx.toFixed(1)    : '—', adxColor(e.adx), ''],
+    ['MACD Hist',  e.macd_histogram != null ? e.macd_histogram.toFixed(4) : '—', macdColor(e.macd_histogram), ''],
+    ['Dist EMA20', e.dist_ema20 != null ? `${e.dist_ema20.toFixed(2)}%` : '—', '', ''],
+    ['%1G',        fmtPctRaw(e.pct_1d), pctColor(e.pct_1d), ''],
+    ['%1W',        fmtPctRaw(e.pct_1w), pctColor(e.pct_1w), ''],
+    ['%1M',        fmtPctRaw(e.pct_1m), pctColor(e.pct_1m), ''],
+    ['Drawdown',   e.drawdown_from_peak != null ? `-${e.drawdown_from_peak.toFixed(2)}%` : '—', e.drawdown_from_peak>10?'color:#f85149':'color:#8b949e', ''],
   ];
-  document.getElementById('detailKpis').innerHTML = kpis.map(([l,v,s]) =>
-    `<div class="kpi-box"><div class="kpi-label">${l}</div><div class="kpi-value" style="${s}">${v}</div></div>`
+  document.getElementById('detailKpis').innerHTML = kpis.map(([l,v,s,sub]) =>
+    `<div class="kpi-box"><div class="kpi-label">${l}</div><div class="kpi-value" style="${s}">${v}</div>${sub||''}</div>`
   ).join('');
 
-  // Conditions
-  const macdNote = cond.macd_histogram != null ? ` (hist ${cond.macd_histogram>0?'+':''}${cond.macd_histogram!=null?cond.macd_histogram.toFixed(3):'—'})` : '';
-  const condMap = [
-    ['allineamento_ok', 'Allineamento: Prezzo > EMA20 > SMA50'],
-    ['persistenza_ok',  'Persistenza: ≥3gg sopra EMA20 + slope↑'],
-    ['rsi_ok',          `RSI nel range target (${cond.rsi!=null?cond.rsi.toFixed(0):'—'})`],
-    ['distance_ok',     `Distanza EMA20 entro limite (${cond.dist_ema20!=null?cond.dist_ema20.toFixed(1)+'%':'—'})`],
-    ['adx_ok',          `ADX ≥ soglia (${cond.adx!=null?cond.adx.toFixed(0):'—'})`],
-    ['macd_ok',         `MACD momentum${macdNote}`],
-  ];
-  const condHtml = condMap.map(([k, label]) => {
-    const ok = cond[k];
-    const dc = ok===true?'ok':ok===false?'no':'na';
-    return `<div class="cond-item"><div class="cond-dot ${dc}"></div><span>${label}</span></div>`;
-  }).join('');
-  document.getElementById('detailConds').innerHTML = `
-    <div class="cond-title">Condizioni L1 Trend Sicuro (${e.buy_count||0}/5)</div>
-    <div class="cond-grid">${condHtml}</div>`;
+  // Conditions — pannello dettagliato con valori reali e soglie
+  document.getElementById('detailConds').innerHTML = renderL1CondPanel(e);
 
   // Reason
   const reasonText = e.level_reason || cond.level_reason || '';
@@ -1314,6 +1315,102 @@ function renderDetailModal(e, days) {
   // Chart + table
   renderDetailChart(e.price_history || [], days);
   renderDetailHistTable(e.price_history || [], days);
+}
+
+function renderL1CondPanel(e) {
+  const lc = e.l1_conditions;
+  if (!lc) {
+    // Fallback dots (quando dati arrivano da allData senza API)
+    const cond = e.conditions || {};
+    const macdNote = cond.macd_histogram != null ? ` (${cond.macd_histogram>0?'+':''}${cond.macd_histogram.toFixed(3)})` : '';
+    const condMap = [
+      ['allineamento_ok', 'Allineamento: Prezzo > EMA20 > SMA50'],
+      ['persistenza_ok',  'Persistenza: ≥3gg sopra EMA20 + slope↑'],
+      ['rsi_ok',          `RSI nel range target (${cond.rsi!=null?cond.rsi.toFixed(0):'—'})`],
+      ['distance_ok',     `Distanza EMA20 entro limite (${cond.dist_ema20!=null?cond.dist_ema20.toFixed(1)+'%':'—'})`],
+      ['adx_ok',          `ADX ≥ soglia (${cond.adx!=null?cond.adx.toFixed(0):'—'})`],
+      ['macd_ok',         `MACD momentum${macdNote}`],
+    ];
+    return `<div class="cond-title">Condizioni L1 Trend Sicuro (${e.buy_count||0}/6)</div>
+      <div class="cond-grid">${condMap.map(([k,label]) => {
+        const ok = cond[k], dc = ok===true?'ok':ok===false?'no':'na';
+        return `<div class="cond-item"><div class="cond-dot ${dc}"></div><span>${label}</span></div>`;
+      }).join('')}</div>`;
+  }
+
+  const v = lc.values || {};
+  const t = lc.thresholds || {};
+  const icon = ok => ok ? '✅' : '❌';
+  const fmt  = (val, dec) => val != null ? Number(val).toFixed(dec) : '—';
+
+  const rows = [
+    {
+      key: 'allineamento_ok', label: 'Allineamento',
+      detail: () => {
+        const ok1 = v.price > v.ema20, ok2 = v.ema20 > v.sma50;
+        let s = `Prezzo <span class="${ok1?'ok':'ko'}">${fmt(v.price,4)}</span> &gt; EMA20 <span class="${ok1?'ok':'ko'}">${fmt(v.ema20,4)}</span> &gt; SMA50 <span class="${ok2?'ok':'ko'}">${fmt(v.sma50,4)}</span>`;
+        if (v.sma200 != null) {
+          const ok3 = v.price > v.sma200;
+          s += ` · SMA200 <span class="${ok3?'ok':'ko'}">${fmt(v.sma200,4)}</span>`;
+        }
+        return s;
+      }
+    },
+    {
+      key: 'persistenza_ok', label: 'Persistenza',
+      detail: () => {
+        const d = v.days_above_ema20, req = t.days_above_ema;
+        const sl = v.ema20_slope != null && v.ema20_slope > 0;
+        return `Giorni EMA20: <span class="${d>=req?'ok':'ko'}">${d??'—'}/${req}</span> · Slope: <span class="${sl?'ok':'ko'}">${sl?'↑':'→/↓'}</span>`;
+      }
+    },
+    {
+      key: 'rsi_ok', label: 'RSI target',
+      detail: () => {
+        const ok = v.rsi != null && v.rsi >= t.rsi_min && v.rsi <= t.rsi_max;
+        return `RSI <span class="${ok?'ok':'ko'}">${fmt(v.rsi,1)}</span> · range <span class="na">[${t.rsi_min}–${t.rsi_max}]</span>`;
+      }
+    },
+    {
+      key: 'distance_ok', label: 'Distanza EMA20',
+      detail: () => {
+        const ok = v.dist_ema20 > 0 && v.dist_ema20 <= t.max_dist_ema20;
+        return `Dist <span class="${ok?'ok':'ko'}">${fmt(v.dist_ema20,1)}%</span> · max <span class="na">${t.max_dist_ema20}%</span>`;
+      }
+    },
+    {
+      key: 'adx_ok', label: 'ADX',
+      detail: () => {
+        const ok = v.adx != null && v.adx >= t.adx_threshold;
+        return `ADX <span class="${ok?'ok':'ko'}">${fmt(v.adx,1)}</span> · soglia <span class="na">${t.adx_threshold}</span>`;
+      }
+    },
+    {
+      key: 'macd_ok', label: 'MACD',
+      detail: () => {
+        const mh = v.macd_histogram;
+        const pos = mh != null && mh > 0;
+        const sign = mh != null && mh > 0 ? '+' : '';
+        return `Hist <span class="${pos?'ok':'ko'}">${sign}${fmt(mh,4)}</span> · deve essere <span class="na">&gt;0 e in crescita</span>`;
+      }
+    }
+  ];
+
+  const passed = rows.filter(r => lc[r.key]).length;
+  const scoreColor = passed === 6 ? '#3fb950' : passed >= 4 ? '#d29922' : '#f85149';
+
+  let html = `<div class="l1-cond-panel">
+    <div class="l1-cond-title">Condizioni L1 Trend Sicuro
+      <span class="l1-cond-score" style="color:${scoreColor}">${passed}/6</span>
+    </div>`;
+  rows.forEach(r => {
+    html += `<div class="l1-cond-row">
+      <span class="l1-cond-icon">${icon(lc[r.key])}</span>
+      <span class="l1-cond-name">${r.label}</span>
+      <span class="l1-cond-detail">${r.detail()}</span>
+    </div>`;
+  });
+  return html + '</div>';
 }
 
 function renderDetailChart(history, days) {
