@@ -1,0 +1,17 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv
+venv
+env
+*.egg-info
+.env
+.env.*
+*.md
+deploy.sh
+fix_*.py
+migrate_*.py
+backfill_*.py
