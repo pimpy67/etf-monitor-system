@@ -20,8 +20,9 @@ else
 fi
 git push origin main
 
-# 2. VPS: salva Excel (il monitor lo modifica in-place), poi git reset --hard, poi ripristina
-#    Il bind mount mappa il file VPS direttamente nel container — il git reset lo sovrascriverebbe
+# 2. VPS: salva Excel (il monitor lo modifica in-place), poi git reset --hard, poi smart-restore
+#    smart_restore.py preserva solo il Livello (colonna 1) dal backup VPS, lasciando passare
+#    i nuovi ticker dalla versione git — così le correzioni dei ticker arrivano sul VPS.
 echo ""
 echo "=== [2/5] Sync VPS con GitHub ==="
 ssh -i "$SSH_KEY" "$VPS" "
@@ -29,8 +30,9 @@ ssh -i "$SSH_KEY" "$VPS" "
     cp etf_monitoraggio.xlsx /tmp/etf_monitoraggio_backup.xlsx 2>/dev/null || true
     git fetch origin main
     git reset --hard origin/main
-    cp /tmp/etf_monitoraggio_backup.xlsx etf_monitoraggio.xlsx 2>/dev/null || true
-    echo 'VPS allineato, Excel ripristinato.'
+    python3 smart_restore.py /tmp/etf_monitoraggio_backup.xlsx etf_monitoraggio.xlsx 2>/dev/null || \
+        cp /tmp/etf_monitoraggio_backup.xlsx etf_monitoraggio.xlsx 2>/dev/null || true
+    echo 'VPS allineato, Livelli ripristinati da backup.'
 "
 
 # 3. Rebuild immagine Docker
