@@ -30,7 +30,8 @@ ssh -i "$SSH_KEY" "$VPS" "
     cp etf_monitoraggio.xlsx /tmp/etf_monitoraggio_backup.xlsx 2>/dev/null || true
     git fetch origin main
     git reset --hard origin/main
-    python3 smart_restore.py /tmp/etf_monitoraggio_backup.xlsx etf_monitoraggio.xlsx 2>/dev/null || \
+    pip3 install openpyxl --break-system-packages -q 2>/dev/null || true
+    python3 smart_restore.py /tmp/etf_monitoraggio_backup.xlsx etf_monitoraggio.xlsx || \
         cp /tmp/etf_monitoraggio_backup.xlsx etf_monitoraggio.xlsx 2>/dev/null || true
     echo 'VPS allineato, Livelli ripristinati da backup.'
 "
