@@ -18,6 +18,7 @@ services:
       PYTHONUNBUFFERED: "1"
     volumes:
       - etf_data:/app/data
+      - /root/etf_monitor_system/etf_monitoraggio.xlsx:/app/etf_monitoraggio.xlsx
     depends_on:
       postgres:
         condition: service_healthy
