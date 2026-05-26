@@ -318,6 +318,8 @@ h2 { color: #90cdf4; font-size: 1rem; margin: 26px 0 10px;
 .card-value.pos { color: #68d391; }
 .card-value.neg { color: #fc8181; }
 .card-sub { font-size: 0.74rem; color: #718096; margin-top: 2px; }
+.card-sub.pos { color: #68d391; }
+.card-sub.neg { color: #fc8181; }
 
 /* Tables */
 .tbl-wrap { overflow-x: auto; margin-bottom: 10px; }
@@ -400,6 +402,8 @@ def generate_report(positions, signals, report_date):
     tot_pl   = sum(p['pl_eur']  for p in positions)
     etf_val  = sum(p['mkt_val'] for p in etfs)
     btp_val  = sum(p['mkt_val'] for p in btps)
+    etf_pl   = sum(p['pl_eur']  for p in etfs)
+    btp_pl   = sum(p['pl_eur']  for p in btps)
     etf_pct  = etf_val / tot_val * 100 if tot_val else 0
     btp_pct  = btp_val / tot_val * 100 if tot_val else 0
 
@@ -417,14 +421,14 @@ def generate_report(positions, signals, report_date):
     <div class="card-sub">vs costo acquisto</div>
   </div>
   <div class="card">
-    <div class="card-label">ETF ({etf_pct:.1f}%)</div>
+    <div class="card-label">ETF — Valore ({etf_pct:.1f}%)</div>
     <div class="card-value">€{etf_val:,.0f}</div>
-    <div class="card-sub">{len(etfs)} posizioni</div>
+    <div class="card-sub {pclass(etf_pl)}">{'+' if etf_pl >= 0 else ''}€{etf_pl:,.2f} P&amp;L · {len(etfs)} posizioni</div>
   </div>
   <div class="card">
-    <div class="card-label">BTP ({btp_pct:.1f}%)</div>
+    <div class="card-label">BTP — Valore ({btp_pct:.1f}%)</div>
     <div class="card-value">€{btp_val:,.0f}</div>
-    <div class="card-sub">{len(btps)} titoli</div>
+    <div class="card-sub {pclass(btp_pl)}">{'+' if btp_pl >= 0 else ''}€{btp_pl:,.2f} P&amp;L · {len(btps)} titoli</div>
   </div>
 </div>"""
 
