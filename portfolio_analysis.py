@@ -21,9 +21,10 @@ import urllib.error
 if sys.stdout.encoding and sys.stdout.encoding.lower() not in ('utf-8', 'utf8'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR       = Path(__file__).parent
 PORTAFOGLI_DIR = BASE_DIR / "portafogli"
 REPORTS_DIR    = PORTAFOGLI_DIR / "reports"
+HISTORY_FILE   = PORTAFOGLI_DIR / "stop_loss_history.json"
 ETF_API_BASE   = "https://etf.andreapavan.tech"
 
 # Indici colonne nel file XLS della banca (riga header = riga 2, indice 0-based)
@@ -55,6 +56,24 @@ def find_latest_xls():
         sys.exit(1)
     print(f"File: {files[0].name}")
     return files[0]
+
+
+def load_stop_history():
+    """Carica storico stop loss (max raggiunti) dal file JSON locale."""
+    if HISTORY_FILE.exists():
+        try:
+            return json.loads(HISTORY_FILE.read_text(encoding='utf-8'))
+        except Exception:
+            return {}
+    return {}
+
+
+def save_stop_history(history):
+    """Salva storico stop loss aggiornato."""
+    HISTORY_FILE.write_text(
+        json.dumps(history, indent=2, ensure_ascii=False),
+        encoding='utf-8'
+    )
 
 
 def safe_float(val, default=0.0):
@@ -135,20 +154,29 @@ def fetch_etf_data(isin):
         return None
 
 
-def build_signal(pos, api_data):
-    """Calcola segnale operativo + stop loss dinamici dagli indicatori."""
+def build_signal(pos, api_data, history=None):
+    """Calcola segnale operativo + stop loss dinamici dagli indicatori.
+    history: dict con max stop loss storico per ISIN — garantisce che lo stop non scenda mai.
+    """
+    isin = pos['isin']
+    prev = (history or {}).get(isin, {})
+    prev_stop    = prev.get('max_stop', 0.0)
+    prev_trail   = prev.get('max_trailing', 0.0)
+
     if not api_data:
         return {
-            'level':       '?',
-            'signal_txt':  '❓ Non monitorato',
-            'signal_cls':  'unknown',
-            'ema20':       None,
-            'rsi':         None,
-            'adx':         None,
-            'stop_loss':   None,
-            'trailing':    None,
-            'note':        'ISIN non presente nel monitor ETF',
-            'buy_count':   0,
+            'level':            '?',
+            'signal_txt':       '❓ Non monitorato',
+            'signal_cls':       'unknown',
+            'ema20':            None,
+            'rsi':              None,
+            'adx':              None,
+            'stop_loss':        prev_stop or None,
+            'trailing':         prev_trail or None,
+            'stop_change':      'EQ' if prev_stop else 'NEW',
+            'stop_change_val':  None,
+            'note':             'ISIN non presente nel monitor ETF',
+            'buy_count':        0,
         }
 
     # Indicatori tecnici: sono alle chiavi top-level della risposta API
@@ -171,10 +199,24 @@ def build_signal(pos, api_data):
     else:
         level = 3
 
-    # Stop loss dinamico: EMA20 è il livello trigger; -1.5% come buffer pratico
-    stop_loss = round(ema20 * 0.985, 3) if ema20 else None
-    # Trailing stop: il livello EMA20 stesso (se price scende qui → attenzione)
-    trailing  = round(ema20, 3) if ema20 else None
+    # Stop loss calcolato oggi da EMA20
+    stop_calc  = round(ema20 * 0.985, 3) if ema20 else None
+    trail_calc = round(ema20, 3)          if ema20 else None
+
+    # Regola fondamentale: lo stop non scende mai → prendi sempre il massimo storico
+    stop_loss = max(stop_calc, prev_stop)   if stop_calc else (prev_stop or None)
+    trailing  = max(trail_calc, prev_trail) if trail_calc else (prev_trail or None)
+
+    # Indicatore variazione rispetto a ieri
+    if not prev_stop:
+        stop_change     = 'NEW'
+        stop_change_val = None
+    elif stop_loss > prev_stop + 0.001:   # soglia 0.001 per evitare falsi positivi floating point
+        stop_change     = 'UP'
+        stop_change_val = round(stop_loss - prev_stop, 3)
+    else:
+        stop_change     = 'EQ'
+        stop_change_val = None
 
     # Segnale operativo
     if level == 1:
@@ -213,16 +255,18 @@ def build_signal(pos, api_data):
         note = 'Trend non confermato (L3) — valuta uscita se continua a peggiorare'
 
     return {
-        'level':      f'L{level}',
-        'signal_txt': signal_txt,
-        'signal_cls': signal_cls,
-        'ema20':      round(ema20, 3) if ema20 else None,
-        'rsi':        round(rsi, 1)   if rsi   else None,
-        'adx':        round(adx, 1)   if adx   else None,
-        'stop_loss':  stop_loss,
-        'trailing':   trailing,
-        'note':       note,
-        'buy_count':  buy_count,
+        'level':           f'L{level}',
+        'signal_txt':      signal_txt,
+        'signal_cls':      signal_cls,
+        'ema20':           round(ema20, 3) if ema20 else None,
+        'rsi':             round(rsi, 1)   if rsi   else None,
+        'adx':             round(adx, 1)   if adx   else None,
+        'stop_loss':       stop_loss,
+        'trailing':        trailing,
+        'stop_change':     stop_change,
+        'stop_change_val': stop_change_val,
+        'note':            note,
+        'buy_count':       buy_count,
     }
 
 
@@ -263,6 +307,9 @@ td.pos { color: #68d391; }
 td.neg { color: #fc8181; }
 td.stop-val { color: #fc8181; font-weight: 600; text-align: right; }
 td.trail-val { color: #f6ad55; font-weight: 600; text-align: right; }
+.chg-up  { color: #68d391; font-size: 0.72rem; font-weight: 700; }
+.chg-eq  { color: #4a5568; font-size: 0.72rem; }
+.chg-new { color: #63b3ed; font-size: 0.72rem; font-weight: 700; }
 td.note { font-size: 0.72rem; color: #a0aec0; font-style: italic;
           padding: 2px 9px 7px; border-bottom: 1px solid #2d3748; }
 
@@ -362,14 +409,27 @@ def generate_report(positions, signals, report_date):
         sc = s.get('signal_cls', 'unknown')
         pl_c    = pclass(p['pl_eur'])
         var_c   = pclass(p['var_pct'])
-        stop_s  = fmt_eur(s.get('stop_loss'), 3)
-        trail_s = fmt_eur(s.get('trailing'), 3)
         ema20_s = fmt_eur(s.get('ema20'), 3)
         rsi_s   = f"{s['rsi']:.1f}" if s.get('rsi') else '—'
         adx_s   = f"{s['adx']:.1f}" if s.get('adx') else '—'
         bc      = s.get('buy_count', 0)
         bc_s    = f"{bc}/6" if isinstance(bc, int) else '—'
         short   = p['titolo'][:38] + ('…' if len(p['titolo']) > 38 else '')
+
+        # Stop loss con indicatore variazione
+        sl = s.get('stop_loss')
+        chg = s.get('stop_change', 'EQ')
+        chg_val = s.get('stop_change_val')
+        if sl:
+            if chg == 'UP':
+                stop_s = f"€{sl:.3f} <span class='chg-up'>↑ +{chg_val}</span>"
+            elif chg == 'NEW':
+                stop_s = f"€{sl:.3f} <span class='chg-new'>NEW</span>"
+            else:
+                stop_s = f"€{sl:.3f} <span class='chg-eq'>=</span>"
+        else:
+            stop_s = '—'
+        trail_s = fmt_eur(s.get('trailing'), 3)
 
         etf_rows += f"""
     <tr class="s-{sc}">
@@ -542,16 +602,37 @@ def main():
     btps = [p for p in positions if p['is_btp']]
     print(f"Posizioni: {len(etfs)} ETF + {len(btps)} BTP")
 
+    history = load_stop_history()
+
     print("\nFetch dati tecnici ETF...")
     signals = {}
     for p in etfs:
         short = p['titolo'][:32]
         print(f"  {p['isin']} — {short}...")
         api_data = fetch_etf_data(p['isin'])
-        signals[p['isin']] = build_signal(p, api_data)
+        signals[p['isin']] = build_signal(p, api_data, history)
         s = signals[p['isin']]
         sig_txt = s['signal_txt'].encode('ascii', 'replace').decode('ascii')
-        print(f"    {s['level']} | {sig_txt} | Stop: {s['stop_loss']}")
+        chg = s.get('stop_change', 'EQ')
+        chg_str = f"alzato +{s['stop_change_val']}" if chg == 'UP' else ('NUOVO' if chg == 'NEW' else 'invariato')
+        print(f"    {s['level']} | {sig_txt} | Stop: {s['stop_loss']} ({chg_str})")
+
+    # Aggiorna history — salva il massimo stop raggiunto per ogni ETF
+    today = datetime.now().strftime('%Y-%m-%d')
+    for p in etfs:
+        isin = p['isin']
+        s    = signals.get(isin, {})
+        sl   = s.get('stop_loss')
+        tr   = s.get('trailing')
+        if sl:
+            history[isin] = {
+                'max_stop':     sl,
+                'max_trailing': tr or 0,
+                'last_updated': today,
+                'etf_name':     p['titolo'][:60],
+            }
+    save_stop_history(history)
+    print(f"Stop loss history salvata: {HISTORY_FILE.name}")
 
     report_date = datetime.now().strftime('%d/%m/%Y')
     html = generate_report(positions, signals, report_date)
