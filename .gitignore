@@ -9,3 +9,8 @@ venv/
 portafogli/*.xls
 portafogli/*.xlsx
 portafogli/reports/
+.DS_Store
+*.gsheet
+*_backup_*.xlsx
+*.xlsx.bak
+~$*.xlsx
