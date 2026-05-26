@@ -58,6 +58,32 @@ def find_latest_xls():
     return files[0]
 
 
+def _git_push_history():
+    """Commit e push automatico del file history su GitHub (silenzioso se git non disponibile)."""
+    import subprocess
+    repo = BASE_DIR
+    rel  = str(HISTORY_FILE.relative_to(repo))
+    try:
+        subprocess.run(['git', 'add', rel], cwd=repo, capture_output=True, timeout=10)
+        result = subprocess.run(
+            ['git', 'diff', '--cached', '--quiet'],
+            cwd=repo, capture_output=True, timeout=5
+        )
+        if result.returncode != 0:  # ci sono modifiche staged
+            today = datetime.now().strftime('%Y-%m-%d')
+            subprocess.run(
+                ['git', 'commit', '-m', f'Auto: stop_loss_history {today}'],
+                cwd=repo, capture_output=True, timeout=10
+            )
+            subprocess.run(['git', 'push', 'origin', 'main'],
+                           cwd=repo, capture_output=True, timeout=20)
+            print("History sincronizzata su GitHub.")
+        else:
+            print("History invariata, nessun push necessario.")
+    except Exception:
+        print("(git push history non riuscito — nessun problema, solo locale)")
+
+
 def load_stop_history():
     """Carica storico stop loss (max raggiunti) dal file JSON locale."""
     if HISTORY_FILE.exists():
@@ -633,6 +659,7 @@ def main():
             }
     save_stop_history(history)
     print(f"Stop loss history salvata: {HISTORY_FILE.name}")
+    _git_push_history()
 
     report_date = datetime.now().strftime('%d/%m/%Y')
     html = generate_report(positions, signals, report_date)
