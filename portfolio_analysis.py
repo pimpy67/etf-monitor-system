@@ -821,6 +821,176 @@ def generate_report(positions, signals, report_date):
 </html>"""
 
 
+# ── DIGEST EMAIL ───────────────────────────────────────────────────────────────
+
+def send_digest_email(positions, signals):
+    """Invia il digest giornaliero del portafoglio via email."""
+    etfs = [p for p in positions if p['is_etf']]
+    btps = [p for p in positions if p['is_btp']]
+
+    tot_val      = sum(p['mkt_val'] for p in positions)
+    tot_pl       = sum(p['pl_eur']  for p in positions)
+    etf_pl       = sum(p['pl_eur']  for p in etfs)
+    btp_pl       = sum(p['pl_eur']  for p in btps)
+    etf_acquisto = sum(p['acquisto'] for p in etfs if p['acquisto'])
+    btp_acquisto = sum(p['acquisto'] for p in btps if p['acquisto'])
+    tot_acquisto = etf_acquisto + btp_acquisto
+    etf_pl_pct   = etf_pl / etf_acquisto * 100 if etf_acquisto else 0
+    btp_pl_pct   = btp_pl / btp_acquisto * 100 if btp_acquisto else 0
+    tot_pl_pct   = tot_pl / tot_acquisto * 100  if tot_acquisto else 0
+
+    now_str = datetime.now().strftime('%d/%m/%Y %H:%M')
+
+    def _c(v):   return '#68d391' if v >= 0 else '#fc8181'
+    def _s(v):   return ('+' if v >= 0 else '') + f'€{v:,.2f}'
+    def _sp(v):  return ('+' if v >= 0 else '') + f'{v:.2f}%'
+
+    # ── Cards riepilogo ────────────────────────────────────────────────────────
+    cards = f"""
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+  <tr>
+    <td width="25%" style="padding:4px">
+      <div style="background:#1a2035;border-radius:8px;padding:14px 12px;text-align:center">
+        <div style="color:#90cdf4;font-size:11px;margin-bottom:4px">VALORE TOTALE</div>
+        <div style="font-size:18px;font-weight:700;color:#e2e8f0">€{tot_val:,.0f}</div>
+      </div>
+    </td>
+    <td width="25%" style="padding:4px">
+      <div style="background:#1a2035;border-radius:8px;padding:14px 12px;text-align:center">
+        <div style="color:#90cdf4;font-size:11px;margin-bottom:4px">P&amp;L TOTALE</div>
+        <div style="font-size:18px;font-weight:700;color:{_c(tot_pl)}">{_s(tot_pl)}</div>
+        <div style="font-size:11px;color:{_c(tot_pl_pct)}">{_sp(tot_pl_pct)} cap.</div>
+      </div>
+    </td>
+    <td width="25%" style="padding:4px">
+      <div style="background:#1a2035;border-radius:8px;padding:14px 12px;text-align:center">
+        <div style="color:#90cdf4;font-size:11px;margin-bottom:4px">ETF P&amp;L</div>
+        <div style="font-size:18px;font-weight:700;color:{_c(etf_pl)}">{_s(etf_pl)}</div>
+        <div style="font-size:11px;color:{_c(etf_pl_pct)}">{_sp(etf_pl_pct)} · {len(etfs)} pos.</div>
+      </div>
+    </td>
+    <td width="25%" style="padding:4px">
+      <div style="background:#1a2035;border-radius:8px;padding:14px 12px;text-align:center">
+        <div style="color:#90cdf4;font-size:11px;margin-bottom:4px">BTP P&amp;L</div>
+        <div style="font-size:18px;font-weight:700;color:{_c(btp_pl)}">{_s(btp_pl)}</div>
+        <div style="font-size:11px;color:{_c(btp_pl_pct)}">{_sp(btp_pl_pct)} · {len(btps)} tit.</div>
+      </div>
+    </td>
+  </tr>
+</table>"""
+
+    # ── Tabella ETF ────────────────────────────────────────────────────────────
+    etf_rows = ''
+    for p in etfs:
+        s     = signals.get(p['isin'], {})
+        sig   = s.get('signal_txt', '—')
+        stop  = s.get('stop_loss')
+        trail = s.get('trailing')
+        pl    = p['pl_eur']
+        pl_p  = p['pl_pct']
+        stop_str  = f"€{stop:.3f}"  if stop  else '—'
+        trail_str = f"€{trail:.3f}" if trail else '—'
+        chg = s.get('stop_change', 'EQ')
+        chg_badge = ''
+        if chg == 'UP':
+            chg_badge = f' <span style="color:#68d391;font-size:10px">▲+{s["stop_change_val"]}</span>'
+        elif chg == 'NEW':
+            chg_badge = ' <span style="color:#90cdf4;font-size:10px">NUOVO</span>'
+        etf_rows += f"""
+    <tr style="border-bottom:1px solid #2d3748">
+      <td style="padding:9px 8px;font-size:12px;color:#e2e8f0">{p['titolo'][:38]}</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:center">{sig}</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:right;color:#fc8181">{stop_str}{chg_badge}</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:right;color:#f6ad55">{trail_str}</td>
+      <td style="padding:9px 8px;font-size:12px;font-weight:700;text-align:right;color:{_c(pl)}">{_s(pl)}</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:right;color:{_c(pl_p)}">{_sp(pl_p)}</td>
+    </tr>"""
+
+    etf_table = f"""
+<h3 style="color:#90cdf4;font-size:13px;margin:20px 0 8px;text-transform:uppercase;letter-spacing:1px">
+  &#128200; ETF — Segnali Operativi
+</h3>
+<table width="100%" cellpadding="0" cellspacing="0"
+       style="border-collapse:collapse;background:#1a2035;border-radius:8px;overflow:hidden">
+  <thead>
+    <tr style="background:#0d1117">
+      <th style="padding:8px;text-align:left;color:#718096;font-size:11px;font-weight:600">ETF</th>
+      <th style="padding:8px;text-align:center;color:#718096;font-size:11px;font-weight:600">Segnale</th>
+      <th style="padding:8px;text-align:right;color:#718096;font-size:11px;font-weight:600">Stop Loss</th>
+      <th style="padding:8px;text-align:right;color:#718096;font-size:11px;font-weight:600">Trailing</th>
+      <th style="padding:8px;text-align:right;color:#718096;font-size:11px;font-weight:600">P&amp;L €</th>
+      <th style="padding:8px;text-align:right;color:#718096;font-size:11px;font-weight:600">P&amp;L %</th>
+    </tr>
+  </thead>
+  <tbody>{etf_rows}
+  </tbody>
+</table>"""
+
+    # ── Tabella BTP ────────────────────────────────────────────────────────────
+    btp_rows = ''
+    for p in btps:
+        pl   = p['pl_eur']
+        pl_p = p['pl_pct']
+        scad = p.get('scadenza', '—') or '—'
+        btp_rows += f"""
+    <tr style="border-bottom:1px solid #2d3748">
+      <td style="padding:9px 8px;font-size:12px;color:#e2e8f0">{p['titolo'][:45]}</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:center;color:#a0aec0">{scad}</td>
+      <td style="padding:9px 8px;font-size:12px;font-weight:700;text-align:right;color:{_c(pl)}">{_s(pl)}</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:right;color:{_c(pl_p)}">{_sp(pl_p)}</td>
+    </tr>"""
+
+    btp_table = f"""
+<h3 style="color:#90cdf4;font-size:13px;margin:20px 0 8px;text-transform:uppercase;letter-spacing:1px">
+  &#127963; BTP — Riepilogo
+</h3>
+<table width="100%" cellpadding="0" cellspacing="0"
+       style="border-collapse:collapse;background:#1a2035;border-radius:8px;overflow:hidden">
+  <thead>
+    <tr style="background:#0d1117">
+      <th style="padding:8px;text-align:left;color:#718096;font-size:11px;font-weight:600">Titolo</th>
+      <th style="padding:8px;text-align:center;color:#718096;font-size:11px;font-weight:600">Scadenza</th>
+      <th style="padding:8px;text-align:right;color:#718096;font-size:11px;font-weight:600">P&amp;L €</th>
+      <th style="padding:8px;text-align:right;color:#718096;font-size:11px;font-weight:600">P&amp;L %</th>
+    </tr>
+  </thead>
+  <tbody>{btp_rows}
+  </tbody>
+</table>"""
+
+    # ── Assembla email ─────────────────────────────────────────────────────────
+    pl_icon = '&#128994;' if tot_pl >= 0 else '&#128308;'
+    html = f"""
+<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;
+            background:#0f1117;color:#e0e0e0;padding:0">
+  <div style="background:linear-gradient(135deg,#1a2035 0%,#0d1117 100%);
+              padding:20px 24px;border-bottom:2px solid #2d3748">
+    <h2 style="margin:0;color:#e2e8f0;font-size:18px">
+      {pl_icon} Portfolio Monitor — {now_str}
+    </h2>
+    <p style="margin:4px 0 0;color:#718096;font-size:12px">
+      Digest giornaliero · {len(etfs)} ETF + {len(btps)} BTP
+    </p>
+  </div>
+  <div style="padding:20px 24px">
+    {cards}
+    {etf_table}
+    {btp_table}
+  </div>
+  <div style="padding:12px 24px;background:#0d1117;color:#4a5568;
+              font-size:11px;text-align:center;border-top:1px solid #2d3748">
+    Portfolio Monitor · <a href="{ETF_API_BASE}" style="color:#4a5568">{ETF_API_BASE}</a>
+    &nbsp;·&nbsp; I segnali sono informativi, non consulenza finanziaria.
+  </div>
+</div>"""
+
+    pl_str = ('+' if tot_pl >= 0 else '') + f'€{tot_pl:,.0f}'
+    subject = f"Portfolio {datetime.now().strftime('%d/%m/%Y')} — P&L {pl_str} ({_sp(tot_pl_pct)})"
+    ok = _send_email(subject, html)
+    if ok:
+        print(f"  Digest email inviato: {subject}")
+
+
 # ── MAIN ───────────────────────────────────────────────────────────────────────
 
 def main():
@@ -885,6 +1055,9 @@ def main():
 
     out.write_text(html, encoding='utf-8')
     print(f"\nReport salvato: {out}")
+
+    print("\nInvio digest email...")
+    send_digest_email(positions, signals)
 
     webbrowser.open(out.as_uri())
     print("Aperto nel browser.")
