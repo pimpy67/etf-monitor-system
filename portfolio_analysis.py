@@ -317,13 +317,14 @@ def save_portfolio_history(history):
     )
 
 
-def update_portfolio_history(positions):
+def update_portfolio_history(positions, fondi_positions=None):
     """Aggiunge/aggiorna il punto odierno nello storico portafoglio."""
     history  = load_portfolio_history()
     today    = datetime.now().strftime('%Y-%m-%d')
-    tot_val  = sum(p['mkt_val'] for p in positions)
-    tot_pl   = sum(p['pl_eur']  for p in positions)
-    acquisto = sum(p['acquisto'] for p in positions if p['acquisto'])
+    all_pos  = list(positions) + list(fondi_positions or [])
+    tot_val  = sum(p['mkt_val'] for p in all_pos)
+    tot_pl   = sum(p['pl_eur']  for p in all_pos)
+    acquisto = sum(p['acquisto'] for p in all_pos if p['acquisto'])
     pl_pct   = tot_pl / acquisto * 100 if acquisto else 0
 
     entry = {
@@ -728,6 +729,133 @@ def fetch_watchlist(portfolio_isins, top_n=5):
     return candidates[:top_n]
 
 
+FONDI_API_BASE = "https://fondi.andreapavan.tech"
+
+
+def find_latest_fondi_xls():
+    """Trova il file elencoFondi più recente in portafogli/. Ritorna None se assente."""
+    files = sorted(
+        list(PORTAFOGLI_DIR.glob("*elencoFondi*.xls")) +
+        list(PORTAFOGLI_DIR.glob("*elencoFondi*.xlsx")),
+        key=lambda f: f.stat().st_mtime, reverse=True
+    )
+    return files[0] if files else None
+
+
+def parse_fondi_portfolio(xls_path):
+    """Legge il file elencoFondi della banca.
+    Formato atteso: header riga 1, dati da riga 2.
+    Colonne: _ | ISIN | Nome | Divisa | Val.Quota | Num.Quote | CTV Acq | CTV Att | P&L EUR | P&L %
+    """
+    import xlrd
+    wb  = xlrd.open_workbook(str(xls_path))
+    sh  = wb.sheet_by_index(0)
+    positions = []
+    for r in range(2, sh.nrows):
+        isin = str(sh.cell_value(r, 1)).strip()
+        if not isin or len(isin) < 10:
+            continue
+        positions.append({
+            'isin':     isin,
+            'titolo':   str(sh.cell_value(r, 2)).strip(),
+            'divisa':   str(sh.cell_value(r, 3)).strip(),
+            'last':     safe_float(sh.cell_value(r, 4)),
+            'qty':      safe_float(sh.cell_value(r, 5)),
+            'acquisto': safe_float(sh.cell_value(r, 6)),
+            'mkt_val':  safe_float(sh.cell_value(r, 7)),
+            'pl_eur':   safe_float(sh.cell_value(r, 8)),
+            'pl_pct':   safe_float(sh.cell_value(r, 9)),
+        })
+    return positions
+
+
+def fetch_all_funds_data():
+    """Scarica tutti i fondi dal monitor fondi in un'unica chiamata.
+    Ritorna dict {isin: fund_info} con livello e indicatori.
+    """
+    url = f"{FONDI_API_BASE}/api/funds"
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'PortfolioAnalyzer/1.0'})
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+    except Exception as e:
+        print(f"  Fondi API non disponibile: {e}")
+        return {}
+
+    result = {}
+    level_map = {'0': 0, '1': 1, '2': 2, '3': 3}
+    for lv_str, lst in data.get('levels', {}).items():
+        lv = level_map.get(lv_str, 3)
+        for f in lst:
+            isin = f.get('isin', '')
+            if isin:
+                result[isin] = {**f, 'level': lv}
+    for f in data.get('l0_funds', []):
+        isin = f.get('isin', '')
+        if isin:
+            result[isin] = {**f, 'level': 0}
+    return result
+
+
+def build_fund_signal(pos, fund_info):
+    """Costruisce il segnale operativo per un fondo dal monitor fondi."""
+    if not fund_info:
+        return {
+            'level':      '?',
+            'signal_txt': '❓ Non monitorato',
+            'signal_cls': 'unknown',
+            'rsi':        None,
+            'ma':         None,
+            'dist_ma':    None,
+            'buy_count':  0,
+            'pct_1w':     None,
+            'pct_1m':     None,
+            'note':       'ISIN non presente nel monitor Fondi',
+        }
+
+    lv        = fund_info.get('level', 3)
+    rsi       = fund_info.get('rsi')
+    ma        = fund_info.get('ma')
+    price     = fund_info.get('price') or pos['last']
+    buy_count = fund_info.get('buy_count', 0) or 0
+    pct_1w    = fund_info.get('pct_1w')
+    pct_1m    = fund_info.get('pct_1m')
+    dist_ma   = round((price - ma) / ma * 100, 2) if ma and price else None
+
+    if lv == 1:
+        if buy_count >= 6:
+            signal_txt, signal_cls = '🟢 BUY / HOLD', 'buy'
+            note = f'Tutte {buy_count}/6 condizioni L1 soddisfatte'
+        elif buy_count >= 4:
+            signal_txt, signal_cls = '🟢 HOLD FORTE', 'buy'
+            note = f'{buy_count}/6 condizioni L1 ok — trend solido'
+        else:
+            signal_txt, signal_cls = '🟡 HOLD', 'hold'
+            note = f'L1 attivo, {buy_count}/6 condizioni'
+    elif lv == 2:
+        signal_txt, signal_cls = '🟡 WATCH', 'watch'
+        note = 'Trend parziale (L2) — mantieni, non aumentare'
+    elif lv == 0:
+        signal_txt, signal_cls = '🔵 RECOVERY', 'recovery'
+        note = 'In recupero da minimo (L0)'
+    else:
+        signal_txt, signal_cls = '⚠️ DEBOLE', 'weak'
+        note = 'Trend non confermato (L3)'
+
+    return {
+        'level':      f'L{lv}',
+        'signal_txt': signal_txt,
+        'signal_cls': signal_cls,
+        'rsi':        rsi,
+        'ma':         ma,
+        'dist_ma':    dist_ma,
+        'buy_count':  buy_count,
+        'pct_1w':     pct_1w,
+        'pct_1m':     pct_1m,
+        'note':       note,
+    }
+
+
 def fmt_eur(v, decimals=2):
     if v is None: return '—'
     return f"€{v:,.{decimals}f}"
@@ -741,26 +869,43 @@ def pclass(v):
     return 'pos' if v >= 0 else 'neg'
 
 
-def generate_report(positions, signals, report_date, portfolio_history=None, watchlist=None):
-    etfs = [p for p in positions if p['is_etf']]
-    btps = [p for p in positions if p['is_btp']]
+def generate_report(positions, signals, report_date, portfolio_history=None, watchlist=None,
+                    fondi_positions=None, fund_signals=None):
+    etfs  = [p for p in positions if p['is_etf']]
+    btps  = [p for p in positions if p['is_btp']]
+    fondi = fondi_positions or []
 
-    tot_val      = sum(p['mkt_val']  for p in positions)
-    tot_pl       = sum(p['pl_eur']   for p in positions)
+    all_pos      = list(positions) + fondi
+    tot_val      = sum(p['mkt_val']  for p in all_pos)
+    tot_pl       = sum(p['pl_eur']   for p in all_pos)
     etf_val      = sum(p['mkt_val']  for p in etfs)
     btp_val      = sum(p['mkt_val']  for p in btps)
+    fnd_val      = sum(p['mkt_val']  for p in fondi)
     etf_pl       = sum(p['pl_eur']   for p in etfs)
     btp_pl       = sum(p['pl_eur']   for p in btps)
+    fnd_pl       = sum(p['pl_eur']   for p in fondi)
     etf_acquisto = sum(p['acquisto'] for p in etfs  if p['acquisto'])
     btp_acquisto = sum(p['acquisto'] for p in btps  if p['acquisto'])
-    tot_acquisto = etf_acquisto + btp_acquisto
+    fnd_acquisto = sum(p['acquisto'] for p in fondi if p['acquisto'])
+    tot_acquisto = etf_acquisto + btp_acquisto + fnd_acquisto
     etf_pl_pct   = etf_pl / etf_acquisto * 100 if etf_acquisto else 0
     btp_pl_pct   = btp_pl / btp_acquisto * 100 if btp_acquisto else 0
-    tot_pl_pct   = tot_pl / tot_acquisto * 100  if tot_acquisto else 0
+    fnd_pl_pct   = fnd_pl / fnd_acquisto * 100  if fnd_acquisto else 0
+    tot_pl_pct   = tot_pl / tot_acquisto * 100   if tot_acquisto else 0
     etf_pct      = etf_val / tot_val * 100 if tot_val else 0
     btp_pct      = btp_val / tot_val * 100 if tot_val else 0
+    fnd_pct      = fnd_val / tot_val * 100 if tot_val else 0
 
     # ── Summary cards ──────────────────────────────────────────────────────────
+    fnd_card = ''
+    if fondi:
+        fnd_card = f"""
+  <div class="card">
+    <div class="card-label">Fondi — P&amp;L ({fnd_pct:.1f}% portaf.)</div>
+    <div class="card-value {pclass(fnd_pl)}">{'+' if fnd_pl >= 0 else ''}€{fnd_pl:,.2f}</div>
+    <div class="card-sub {pclass(fnd_pl)}">{'+' if fnd_pl_pct >= 0 else ''}{fnd_pl_pct:.2f}% · val. €{fnd_val:,.0f} · {len(fondi)} pos.</div>
+  </div>"""
+
     cards_html = f"""
 <div class="cards">
   <div class="card">
@@ -777,7 +922,7 @@ def generate_report(positions, signals, report_date, portfolio_history=None, wat
     <div class="card-label">ETF — P&amp;L ({etf_pct:.1f}% portaf.)</div>
     <div class="card-value {pclass(etf_pl)}">{'+' if etf_pl >= 0 else ''}€{etf_pl:,.2f}</div>
     <div class="card-sub {pclass(etf_pl)}">{'+' if etf_pl_pct >= 0 else ''}{etf_pl_pct:.2f}% · val. €{etf_val:,.0f} · {len(etfs)} pos.</div>
-  </div>
+  </div>{fnd_card}
   <div class="card">
     <div class="card-label">BTP — P&amp;L ({btp_pct:.1f}% portaf.)</div>
     <div class="card-value {pclass(btp_pl)}">{'+' if btp_pl >= 0 else ''}€{btp_pl:,.2f}</div>
@@ -872,6 +1017,77 @@ def generate_report(positions, signals, report_date, portfolio_history=None, wat
     <span class="rank-stop">{stop_disp}</span>
     <span class="rank-pl {plc}">{fmt_pct(p['pl_pct'])}</span>
   </div>"""
+
+    # ── Fondi table ────────────────────────────────────────────────────────────
+    fondi_html = ''
+    if fondi:
+        def _rsi_col(r):
+            if r is None: return '#718096'
+            if r > 68:    return '#f6ad55'
+            if r < 48:    return '#90cdf4'
+            return '#68d391'
+
+        fnd_rows = ''
+        fs = fund_signals or {}
+        for p in fondi:
+            sig   = fs.get(p['isin'], {})
+            sc    = sig.get('signal_cls', 'unknown')
+            bc    = sig.get('buy_count', 0)
+            rsi   = sig.get('rsi')
+            ma    = sig.get('ma')
+            dist  = sig.get('dist_ma')
+            p1w   = sig.get('pct_1w')
+            p1m   = sig.get('pct_1m')
+            pl_c  = pclass(p['pl_eur'])
+            cond_dots = ''.join(
+                f'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;'
+                f'background:{"#68d391" if j < bc else "#2d3748"};margin:0 1px"></span>'
+                for j in range(6)
+            )
+            p1w_s = (f"+{p1w:.1f}%" if p1w >= 0 else f"{p1w:.1f}%") if p1w is not None else '—'
+            p1m_s = (f"+{p1m:.1f}%" if p1m >= 0 else f"{p1m:.1f}%") if p1m is not None else '—'
+            p1w_c = 'pos' if (p1w or 0) >= 0 else 'neg'
+            p1m_c = 'pos' if (p1m or 0) >= 0 else 'neg'
+            fnd_rows += f"""
+    <tr>
+      <td class="l" style="font-size:0.82rem">{p['titolo'][:45]}</td>
+      <td class="c"><span class="lv-badge s-{sc}">{sig.get('level','?')}</span></td>
+      <td class="c">{sig.get('signal_txt','—')}</td>
+      <td class="c">{cond_dots}<br><span style="font-size:0.7rem;color:#a0aec0">{bc}/6</span></td>
+      <td class="r">{p['last']:.4f}</td>
+      <td class="c" style="color:{_rsi_col(rsi)};font-weight:700">{f"{rsi:.1f}" if rsi else "—"}</td>
+      <td class="r">{f"{dist:+.2f}%" if dist is not None else "—"}</td>
+      <td class="r {p1w_c}">{p1w_s}</td>
+      <td class="r {p1m_c}">{p1m_s}</td>
+      <td class="r {pl_c}">{'+' if p['pl_eur']>=0 else ''}€{p['pl_eur']:,.2f}</td>
+      <td class="r {pl_c}">{fmt_pct(p['pl_pct'])}</td>
+      <td class="r">€{p['mkt_val']:,.2f}</td>
+    </tr>"""
+
+        fondi_html = f"""
+<h2>📂 Fondi — Segnali Operativi</h2>
+<div class="tbl-wrap">
+<table>
+  <thead>
+    <tr>
+      <th class="l">Fondo</th>
+      <th class="c">Livello</th>
+      <th class="c">Segnale</th>
+      <th class="c">Cond.</th>
+      <th>NAV</th>
+      <th class="c">RSI</th>
+      <th class="c">Dist. MM20</th>
+      <th class="r">1 Sett.</th>
+      <th class="r">1 Mese</th>
+      <th>P&amp;L €</th>
+      <th>P&amp;L %</th>
+      <th>Valore</th>
+    </tr>
+  </thead>
+  <tbody>{fnd_rows}
+  </tbody>
+</table>
+</div>"""
 
     # ── BTP table ──────────────────────────────────────────────────────────────
     btp_rows = ''
@@ -1012,6 +1228,8 @@ def generate_report(positions, signals, report_date, portfolio_history=None, wat
 <div class="rank-box">{rank_html}
 </div>
 
+{fondi_html}
+
 <h2>🏛️ BTP — Riepilogo</h2>
 <div class="tbl-wrap">
 <table>
@@ -1052,21 +1270,26 @@ def generate_report(positions, signals, report_date, portfolio_history=None, wat
 
 # ── DIGEST EMAIL ───────────────────────────────────────────────────────────────
 
-def send_digest_email(positions, signals):
+def send_digest_email(positions, signals, fondi_positions=None, fund_signals=None):
     """Invia il digest giornaliero del portafoglio via email."""
-    etfs = [p for p in positions if p['is_etf']]
-    btps = [p for p in positions if p['is_btp']]
+    etfs  = [p for p in positions if p['is_etf']]
+    btps  = [p for p in positions if p['is_btp']]
+    fondi = fondi_positions or []
 
-    tot_val      = sum(p['mkt_val'] for p in positions)
-    tot_pl       = sum(p['pl_eur']  for p in positions)
+    all_pos      = list(positions) + fondi
+    tot_val      = sum(p['mkt_val'] for p in all_pos)
+    tot_pl       = sum(p['pl_eur']  for p in all_pos)
     etf_pl       = sum(p['pl_eur']  for p in etfs)
     btp_pl       = sum(p['pl_eur']  for p in btps)
-    etf_acquisto = sum(p['acquisto'] for p in etfs if p['acquisto'])
-    btp_acquisto = sum(p['acquisto'] for p in btps if p['acquisto'])
-    tot_acquisto = etf_acquisto + btp_acquisto
+    fnd_pl       = sum(p['pl_eur']  for p in fondi)
+    etf_acquisto = sum(p['acquisto'] for p in etfs  if p['acquisto'])
+    btp_acquisto = sum(p['acquisto'] for p in btps  if p['acquisto'])
+    fnd_acquisto = sum(p['acquisto'] for p in fondi if p['acquisto'])
+    tot_acquisto = etf_acquisto + btp_acquisto + fnd_acquisto
     etf_pl_pct   = etf_pl / etf_acquisto * 100 if etf_acquisto else 0
     btp_pl_pct   = btp_pl / btp_acquisto * 100 if btp_acquisto else 0
-    tot_pl_pct   = tot_pl / tot_acquisto * 100  if tot_acquisto else 0
+    fnd_pl_pct   = fnd_pl / fnd_acquisto * 100  if fnd_acquisto else 0
+    tot_pl_pct   = tot_pl / tot_acquisto * 100   if tot_acquisto else 0
 
     now_str = datetime.now().strftime('%d/%m/%Y %H:%M')
 
@@ -1169,6 +1392,43 @@ def send_digest_email(positions, signals):
       <td style="padding:9px 8px;font-size:12px;text-align:right;color:{_c(pl_p)}">{_sp(pl_p)}</td>
     </tr>"""
 
+    # ── Tabella Fondi (email) ──────────────────────────────────────────────────
+    fondi_table_email = ''
+    if fondi:
+        fs = fund_signals or {}
+        fnd_email_rows = ''
+        for p in fondi:
+            sig  = fs.get(p['isin'], {})
+            pl   = p['pl_eur']
+            pl_p = p['pl_pct']
+            sig_txt = sig.get('signal_txt', '—')
+            fnd_email_rows += f"""
+        <tr style="border-bottom:1px solid #2d3748">
+          <td style="padding:9px 8px;font-size:12px;color:#e2e8f0">{p['titolo'][:40]}</td>
+          <td style="padding:9px 8px;font-size:12px;text-align:center">{sig_txt}</td>
+          <td style="padding:9px 8px;font-size:12px;font-weight:700;text-align:right;
+                     color:{'#68d391' if pl >= 0 else '#fc8181'}">{_s(pl)}</td>
+          <td style="padding:9px 8px;font-size:12px;text-align:right;
+                     color:{'#68d391' if pl_p >= 0 else '#fc8181'}">{_sp(pl_p)}</td>
+        </tr>"""
+        fondi_table_email = f"""
+<h3 style="color:#90cdf4;font-size:13px;margin:20px 0 8px;text-transform:uppercase;letter-spacing:1px">
+  &#128194; Fondi — Segnali
+</h3>
+<table width="100%" cellpadding="0" cellspacing="0"
+       style="border-collapse:collapse;background:#1a2035;border-radius:8px;overflow:hidden">
+  <thead>
+    <tr style="background:#0d1117">
+      <th style="padding:8px;text-align:left;color:#718096;font-size:11px">Fondo</th>
+      <th style="padding:8px;text-align:center;color:#718096;font-size:11px">Segnale</th>
+      <th style="padding:8px;text-align:right;color:#718096;font-size:11px">P&amp;L €</th>
+      <th style="padding:8px;text-align:right;color:#718096;font-size:11px">P&amp;L %</th>
+    </tr>
+  </thead>
+  <tbody>{fnd_email_rows}
+  </tbody>
+</table>"""
+
     btp_table = f"""
 <h3 style="color:#90cdf4;font-size:13px;margin:20px 0 8px;text-transform:uppercase;letter-spacing:1px">
   &#127963; BTP — Riepilogo
@@ -1198,12 +1458,13 @@ def send_digest_email(positions, signals):
       {pl_icon} Portfolio Monitor — {now_str}
     </h2>
     <p style="margin:4px 0 0;color:#718096;font-size:12px">
-      Digest giornaliero · {len(etfs)} ETF + {len(btps)} BTP
+      Digest giornaliero · {len(etfs)} ETF{'  +  ' + str(len(fondi)) + ' Fondi' if fondi else ''} + {len(btps)} BTP
     </p>
   </div>
   <div style="padding:20px 24px">
     {cards}
     {etf_table}
+    {fondi_table_email}
     {btp_table}
   </div>
   <div style="padding:12px 24px;background:#0d1117;color:#4a5568;
@@ -1224,7 +1485,7 @@ def send_digest_email(positions, signals):
 
 def main():
     print("=" * 55)
-    print("  ANALISI PORTAFOGLIO ETF & BTP")
+    print("  ANALISI PORTAFOGLIO ETF, FONDI & BTP")
     print(f"  {datetime.now().strftime('%d/%m/%Y %H:%M')}")
     print("=" * 55)
 
@@ -1233,7 +1494,26 @@ def main():
 
     etfs = [p for p in positions if p['is_etf']]
     btps = [p for p in positions if p['is_btp']]
-    print(f"Posizioni: {len(etfs)} ETF + {len(btps)} BTP")
+
+    # ── Fondi ──────────────────────────────────────────────────────────────────
+    fondi_path      = find_latest_fondi_xls()
+    fondi_positions = []
+    fund_signals    = {}
+    if fondi_path:
+        print(f"\nFondi: {fondi_path.name}")
+        fondi_positions = parse_fondi_portfolio(fondi_path)
+        print(f"  {len(fondi_positions)} fondi trovati")
+        print("\nFetch dati tecnici Fondi...")
+        all_funds = fetch_all_funds_data()
+        for p in fondi_positions:
+            fund_signals[p['isin']] = build_fund_signal(p, all_funds.get(p['isin']))
+            sig = fund_signals[p['isin']]
+            sig_txt = sig['signal_txt'].encode('ascii', 'replace').decode('ascii')
+            print(f"  {p['isin']} — {p['titolo'][:32]}... {sig['level']} | {sig_txt}")
+    else:
+        print("\n(nessun file elencoFondi trovato in portafogli/ — sezione fondi saltata)")
+
+    print(f"\nPosizioni: {len(etfs)} ETF + {len(fondi_positions)} Fondi + {len(btps)} BTP")
 
     history = load_stop_history()
 
@@ -1276,7 +1556,7 @@ def main():
     _git_push_history()
 
     print("\nAggiornamento storico portafoglio...")
-    portfolio_history = update_portfolio_history(positions)
+    portfolio_history = update_portfolio_history(positions, fondi_positions)
     print(f"  {len(portfolio_history)} punti nello storico")
 
     print("\nFetch watchlist ETF L1...")
@@ -1285,7 +1565,8 @@ def main():
     print(f"  {len(watchlist)} candidati trovati")
 
     report_date = datetime.now().strftime('%d/%m/%Y')
-    html = generate_report(positions, signals, report_date, portfolio_history, watchlist)
+    html = generate_report(positions, signals, report_date, portfolio_history, watchlist,
+                           fondi_positions, fund_signals)
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     fname = f"report_{datetime.now().strftime('%Y%m%d_%H%M')}.html"
@@ -1295,7 +1576,7 @@ def main():
     print(f"\nReport salvato: {out}")
 
     print("\nInvio digest email...")
-    send_digest_email(positions, signals)
+    send_digest_email(positions, signals, fondi_positions, fund_signals)
 
     webbrowser.open(out.as_uri())
     print("Aperto nel browser.")
