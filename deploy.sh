@@ -49,7 +49,9 @@ echo ""
 echo "=== [4/5] Deploy container ==="
 ssh -i "$SSH_KEY" "$VPS" "
     cd $VPS_REPO
-    docker compose -p etf_monitor_system up -d --force-recreate app
+    # Rimuove tutti i container app (anche stale con hash nel nome) prima di ripartire
+    docker ps -a --filter name=etf_monitor_system-app --format '{{.Names}}' | xargs -r docker rm -f
+    docker compose -p etf_monitor_system up -d app
     echo 'Container aggiornato.'
 "
 
