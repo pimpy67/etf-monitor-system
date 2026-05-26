@@ -6,3 +6,6 @@ data/
 *.log
 venv/
 .venv/
+portafogli/*.xls
+portafogli/*.xlsx
+portafogli/reports/
