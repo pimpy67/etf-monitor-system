@@ -59,14 +59,16 @@ HEADER_ROW = 2  # riga 0-based con le intestazioni
 def find_latest_xls():
     files = sorted(
         list(PORTAFOGLI_DIR.glob("Portafoglio-*.xls")) +
-        list(PORTAFOGLI_DIR.glob("Portafoglio-*.xlsx")),
+        list(PORTAFOGLI_DIR.glob("Portafoglio-*.xlsx")) +
+        list(PORTAFOGLI_DIR.glob("*portafoglioEtf*.xls")) +
+        list(PORTAFOGLI_DIR.glob("*portafoglioEtf*.xlsx")),
         key=lambda f: f.stat().st_mtime,
         reverse=True
     )
     if not files:
-        print("ERRORE: nessun file Portafoglio-*.xls trovato in:", PORTAFOGLI_DIR)
+        print("ERRORE: nessun file portafoglioEtf*.xls trovato in:", PORTAFOGLI_DIR)
         sys.exit(1)
-    print(f"File: {files[0].name}")
+    print(f"File ETF: {files[0].name}")
     return files[0]
 
 
@@ -129,18 +131,21 @@ def _send_email(subject, html_body):
         return False
 
 
-def check_and_send_alerts(positions, signals, history):
+def check_and_send_alerts(positions, signals, history,
+                          fondi_positions=None, fund_signals=None):
     """
     Controlla stop loss e invia email se:
     - ROSSO: prezzo < stop_loss         → stop triggerato, azione immediata
     - GIALLO: prezzo < stop_loss * 1.02 → avvicinamento, tieniti pronto
     - ARANCIO: variazione giornaliera <= -3% → kill switch attivo
     Sopprime alert già inviati oggi per lo stesso ISIN.
+    Controlla sia ETF che Fondi.
     """
     today   = datetime.now().strftime('%Y-%m-%d')
     alerts  = []   # livello ROSSO
     warnings = []  # livello GIALLO/ARANCIO
 
+    # ── ETF ──────────────────────────────────────────────────────────────────
     for p in positions:
         if not p['is_etf']:
             continue
@@ -189,6 +194,48 @@ def check_and_send_alerts(positions, signals, history):
                 'already_sent': last_warning == today,
             })
             history[isin]['last_warning_date'] = today
+
+    # ── Fondi ─────────────────────────────────────────────────────────────────
+    for p in (fondi_positions or []):
+        isin  = p['isin']
+        s     = (fund_signals or {}).get(isin, {})
+        stop  = s.get('stop_loss')
+        price = p['last']
+        nome  = p['titolo'][:45]
+        pct1d = s.get('pct_1d')
+
+        prev         = history.get(isin, {})
+        last_alert   = prev.get('last_alert_date', '')
+        last_warning = prev.get('last_warning_date', '')
+
+        if stop and price:
+            if price < stop:
+                diff_pct = (stop - price) / stop * 100
+                alerts.append({
+                    'isin': isin, 'nome': nome,
+                    'price': price, 'stop': stop,
+                    'diff_pct': diff_pct,
+                    'already_sent': last_alert == today,
+                })
+                history.setdefault(isin, {})['last_alert_date'] = today
+            elif price < stop * 1.02:
+                diff_pct = (stop - price) / stop * 100
+                warnings.append({
+                    'isin': isin, 'nome': nome,
+                    'price': price, 'stop': stop,
+                    'diff_pct': diff_pct, 'tipo': 'avvicinamento',
+                    'already_sent': last_warning == today,
+                })
+                history.setdefault(isin, {})['last_warning_date'] = today
+
+        if pct1d is not None and pct1d <= -3.0:
+            warnings.append({
+                'isin': isin, 'nome': nome,
+                'price': price, 'stop': stop or 0,
+                'diff_pct': abs(pct1d), 'tipo': 'kill_switch',
+                'already_sent': last_warning == today,
+            })
+            history.setdefault(isin, {})['last_warning_date'] = today
 
     # ── Invia email ROSSO ────────────────────────────────────────────────────
     nuovi_alert = [a for a in alerts if not a['already_sent']]
@@ -731,6 +778,34 @@ def fetch_watchlist(portfolio_isins, top_n=5):
 
 FONDI_API_BASE = "https://fondi.andreapavan.tech"
 
+# Stop loss trailing per asset_type fondi: applicato a MM20, mai scende
+_FUND_STOP_MARGIN = {
+    'money_market':     0.002,
+    'bond_government':  0.010,
+    'bond_corporate':   0.012,
+    'high_yield':       0.025,
+    'equity_developed': 0.020,
+    'emerging_markets': 0.025,
+    'sector_thematic':  0.025,
+    'commodities':      0.020,
+}
+# RSI sopra questa soglia → segnale "RSI tirato / presa di beneficio"
+_FUND_RSI_EXIT = {
+    'money_market': 92,
+}
+_FUND_RSI_EXIT_DEFAULT = 70
+# Distanza massima da MM20 → "troppo esteso"
+_FUND_DIST_MAX = {
+    'money_market':     0.5,
+    'bond_government':  1.5,
+    'bond_corporate':   2.0,
+    'high_yield':       3.0,
+    'equity_developed': 2.5,
+    'emerging_markets': 3.0,
+    'sector_thematic':  3.5,
+    'commodities':      3.0,
+}
+
 
 def find_latest_fondi_xls():
     """Trova il file elencoFondi più recente in portafogli/. Ritorna None se assente."""
@@ -797,8 +872,12 @@ def fetch_all_funds_data():
     return result
 
 
-def build_fund_signal(pos, fund_info):
-    """Costruisce il segnale operativo per un fondo dal monitor fondi."""
+def build_fund_signal(pos, fund_info, history=None):
+    """Costruisce segnale operativo + stop loss trailing per un fondo."""
+    isin      = pos['isin']
+    prev      = (history or {}).get(isin, {})
+    prev_stop = prev.get('max_stop', 0.0)
+
     if not fund_info:
         return {
             'level':      '?',
@@ -810,19 +889,60 @@ def build_fund_signal(pos, fund_info):
             'buy_count':  0,
             'pct_1w':     None,
             'pct_1m':     None,
+            'pct_1d':     None,
+            'stop_loss':  prev_stop or None,
+            'stop_change': 'EQ' if prev_stop else 'NEW',
             'note':       'ISIN non presente nel monitor Fondi',
         }
 
-    lv        = fund_info.get('level', 3)
-    rsi       = fund_info.get('rsi')
-    ma        = fund_info.get('ma')
-    price     = fund_info.get('price') or pos['last']
-    buy_count = fund_info.get('buy_count', 0) or 0
-    pct_1w    = fund_info.get('pct_1w')
-    pct_1m    = fund_info.get('pct_1m')
-    dist_ma   = round((price - ma) / ma * 100, 2) if ma and price else None
+    lv         = fund_info.get('level', 3)
+    rsi        = fund_info.get('rsi')
+    ma         = fund_info.get('ma')
+    price      = fund_info.get('price') or pos['last']
+    buy_count  = fund_info.get('buy_count', 0) or 0
+    pct_1w     = fund_info.get('pct_1w')
+    pct_1m     = fund_info.get('pct_1m')
+    pct_1d     = fund_info.get('pct_1d') or fund_info.get('change_pct')
+    asset_type = fund_info.get('asset_type', 'equity_developed')
+    dist_ma    = round((price - ma) / ma * 100, 2) if ma and price else None
 
-    if lv == 1:
+    # ── Stop loss trailing (mai scende) ──────────────────────────────────────
+    margin     = _FUND_STOP_MARGIN.get(asset_type, 0.020)
+    stop_calc  = round(ma * (1 - margin), 4) if ma else None
+    stop_loss  = max(stop_calc, prev_stop) if stop_calc else (prev_stop or None)
+
+    if not prev_stop:
+        stop_change = 'NEW'
+    elif stop_loss and stop_loss > prev_stop + 0.0001:
+        stop_change = 'UP'
+    else:
+        stop_change = 'EQ'
+
+    if history is not None and stop_loss:
+        history.setdefault(isin, {})
+        history[isin]['max_stop'] = stop_loss
+
+    # ── Segnali di uscita / allerta ───────────────────────────────────────────
+    rsi_exit   = _FUND_RSI_EXIT.get(asset_type, _FUND_RSI_EXIT_DEFAULT)
+    dist_max   = _FUND_DIST_MAX.get(asset_type, 2.5)
+    kill_sw    = pct_1d is not None and pct_1d <= -3.0
+    sotto_mm20 = price is not None and ma is not None and price < ma
+    rsi_tirato = rsi is not None and rsi > rsi_exit
+    troppo_est = dist_ma is not None and dist_ma > dist_max
+
+    if kill_sw:
+        signal_txt, signal_cls = '🔴 USCITA — Kill Switch', 'exit'
+        note = f'Calo giornaliero {pct_1d:.1f}% ≤ −3% → valuta uscita immediata'
+    elif sotto_mm20 and lv >= 2:
+        signal_txt, signal_cls = '🟠 ALLERTA — Sotto MM20', 'alert'
+        note = f'NAV ({price:.4f}) sotto MM20 ({ma:.4f}) — trend deteriorato'
+    elif rsi_tirato and lv == 1:
+        signal_txt, signal_cls = '🟡 PRENDI BENEFICIO', 'hold'
+        note = f'RSI {rsi:.0f} > {rsi_exit}: valuta presa parziale di guadagno'
+    elif troppo_est and lv == 1:
+        signal_txt, signal_cls = '🟡 TROPPO ESTESO', 'hold'
+        note = f'Dist. MM20 {dist_ma:+.1f}% > {dist_max}%: non aggiungere ora'
+    elif lv == 1:
         if buy_count >= 6:
             signal_txt, signal_cls = '🟢 BUY / HOLD', 'buy'
             note = f'Tutte {buy_count}/6 condizioni L1 soddisfatte'
@@ -840,19 +960,22 @@ def build_fund_signal(pos, fund_info):
         note = 'In recupero da minimo (L0)'
     else:
         signal_txt, signal_cls = '⚠️ DEBOLE', 'weak'
-        note = 'Trend non confermato (L3)'
+        note = 'Trend non confermato (L3) — valuta uscita se continua'
 
     return {
-        'level':      f'L{lv}',
-        'signal_txt': signal_txt,
-        'signal_cls': signal_cls,
-        'rsi':        rsi,
-        'ma':         ma,
-        'dist_ma':    dist_ma,
-        'buy_count':  buy_count,
-        'pct_1w':     pct_1w,
-        'pct_1m':     pct_1m,
-        'note':       note,
+        'level':       f'L{lv}',
+        'signal_txt':  signal_txt,
+        'signal_cls':  signal_cls,
+        'rsi':         rsi,
+        'ma':          ma,
+        'dist_ma':     dist_ma,
+        'buy_count':   buy_count,
+        'pct_1w':      pct_1w,
+        'pct_1m':      pct_1m,
+        'pct_1d':      pct_1d,
+        'stop_loss':   stop_loss,
+        'stop_change': stop_change,
+        'note':        note,
     }
 
 
@@ -1038,6 +1161,8 @@ def generate_report(positions, signals, report_date, portfolio_history=None, wat
             dist  = sig.get('dist_ma')
             p1w   = sig.get('pct_1w')
             p1m   = sig.get('pct_1m')
+            stop  = sig.get('stop_loss')
+            stchg = sig.get('stop_change', 'EQ')
             pl_c  = pclass(p['pl_eur'])
             cond_dots = ''.join(
                 f'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;'
@@ -1048,17 +1173,27 @@ def generate_report(positions, signals, report_date, portfolio_history=None, wat
             p1m_s = (f"+{p1m:.1f}%" if p1m >= 0 else f"{p1m:.1f}%") if p1m is not None else '—'
             p1w_c = 'pos' if (p1w or 0) >= 0 else 'neg'
             p1m_c = 'pos' if (p1m or 0) >= 0 else 'neg'
+            stop_s = f"€{stop:.4f}" if stop else '—'
+            stop_arrow = {'UP': ' ↑', 'NEW': ' ✦', 'EQ': ''}.get(stchg, '')
+            stop_col = '#68d391' if stchg == 'UP' else ('#a0aec0' if stchg == 'NEW' else '#718096')
+            # Colore riga per segnali critici
+            row_bg = ''
+            if sc == 'exit':
+                row_bg = 'background:rgba(197,48,48,0.15);'
+            elif sc == 'alert':
+                row_bg = 'background:rgba(221,107,32,0.12);'
             fnd_rows += f"""
-    <tr>
+    <tr style="{row_bg}">
       <td class="l" style="font-size:0.82rem">{p['titolo'][:45]}</td>
       <td class="c"><span class="lv-badge s-{sc}">{sig.get('level','?')}</span></td>
-      <td class="c">{sig.get('signal_txt','—')}</td>
+      <td class="c" style="font-size:0.82rem">{sig.get('signal_txt','—')}</td>
       <td class="c">{cond_dots}<br><span style="font-size:0.7rem;color:#a0aec0">{bc}/6</span></td>
       <td class="r">{p['last']:.4f}</td>
       <td class="c" style="color:{_rsi_col(rsi)};font-weight:700">{f"{rsi:.1f}" if rsi else "—"}</td>
       <td class="r">{f"{dist:+.2f}%" if dist is not None else "—"}</td>
       <td class="r {p1w_c}">{p1w_s}</td>
       <td class="r {p1m_c}">{p1m_s}</td>
+      <td class="r" style="color:{stop_col};font-size:0.8rem">{stop_s}{stop_arrow}</td>
       <td class="r {pl_c}">{'+' if p['pl_eur']>=0 else ''}€{p['pl_eur']:,.2f}</td>
       <td class="r {pl_c}">{fmt_pct(p['pl_pct'])}</td>
       <td class="r">€{p['mkt_val']:,.2f}</td>
@@ -1079,6 +1214,7 @@ def generate_report(positions, signals, report_date, portfolio_history=None, wat
       <th class="c">Dist. MM20</th>
       <th class="r">1 Sett.</th>
       <th class="r">1 Mese</th>
+      <th class="r">Stop Loss</th>
       <th>P&amp;L €</th>
       <th>P&amp;L %</th>
       <th>Valore</th>
@@ -1495,6 +1631,8 @@ def main():
     etfs = [p for p in positions if p['is_etf']]
     btps = [p for p in positions if p['is_btp']]
 
+    history = load_stop_history()
+
     # ── Fondi ──────────────────────────────────────────────────────────────────
     fondi_path      = find_latest_fondi_xls()
     fondi_positions = []
@@ -1506,16 +1644,15 @@ def main():
         print("\nFetch dati tecnici Fondi...")
         all_funds = fetch_all_funds_data()
         for p in fondi_positions:
-            fund_signals[p['isin']] = build_fund_signal(p, all_funds.get(p['isin']))
+            fund_signals[p['isin']] = build_fund_signal(p, all_funds.get(p['isin']), history)
             sig = fund_signals[p['isin']]
             sig_txt = sig['signal_txt'].encode('ascii', 'replace').decode('ascii')
-            print(f"  {p['isin']} — {p['titolo'][:32]}... {sig['level']} | {sig_txt}")
+            stop_s = f" | Stop: {sig['stop_loss']:.4f}" if sig.get('stop_loss') else ''
+            print(f"  {p['isin']} — {p['titolo'][:32]}... {sig['level']} | {sig_txt}{stop_s}")
     else:
         print("\n(nessun file elencoFondi trovato in portafogli/ — sezione fondi saltata)")
 
     print(f"\nPosizioni: {len(etfs)} ETF + {len(fondi_positions)} Fondi + {len(btps)} BTP")
-
-    history = load_stop_history()
 
     print("\nFetch dati tecnici ETF...")
     signals = {}
@@ -1549,7 +1686,7 @@ def main():
 
     # Controlla stop loss e invia alert email se necessario
     print("\nControllo alert stop loss...")
-    check_and_send_alerts(positions, signals, history)
+    check_and_send_alerts(positions, signals, history, fondi_positions, fund_signals)
 
     # Salva history aggiornata con date alert e push su GitHub
     save_stop_history(history)
