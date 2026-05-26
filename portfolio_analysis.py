@@ -31,7 +31,8 @@ except ImportError:
 BASE_DIR       = Path(__file__).parent
 PORTAFOGLI_DIR = BASE_DIR / "portafogli"
 REPORTS_DIR    = PORTAFOGLI_DIR / "reports"
-HISTORY_FILE   = PORTAFOGLI_DIR / "stop_loss_history.json"
+HISTORY_FILE          = PORTAFOGLI_DIR / "stop_loss_history.json"
+PORTFOLIO_HISTORY_FILE = PORTAFOGLI_DIR / "portfolio_history.json"
 ETF_API_BASE   = "https://etf.andreapavan.tech"
 
 EMAIL_RECIPIENT = os.getenv('EMAIL_RECIPIENT', 'andreapavan67@gmail.com')
@@ -298,6 +299,124 @@ def save_stop_history(history):
         json.dumps(history, indent=2, ensure_ascii=False),
         encoding='utf-8'
     )
+
+
+def load_portfolio_history():
+    if PORTFOLIO_HISTORY_FILE.exists():
+        try:
+            return json.loads(PORTFOLIO_HISTORY_FILE.read_text(encoding='utf-8'))
+        except Exception:
+            return []
+    return []
+
+
+def save_portfolio_history(history):
+    PORTFOLIO_HISTORY_FILE.write_text(
+        json.dumps(history, indent=2, ensure_ascii=False),
+        encoding='utf-8'
+    )
+
+
+def update_portfolio_history(positions):
+    """Aggiunge/aggiorna il punto odierno nello storico portafoglio."""
+    history  = load_portfolio_history()
+    today    = datetime.now().strftime('%Y-%m-%d')
+    tot_val  = sum(p['mkt_val'] for p in positions)
+    tot_pl   = sum(p['pl_eur']  for p in positions)
+    acquisto = sum(p['acquisto'] for p in positions if p['acquisto'])
+    pl_pct   = tot_pl / acquisto * 100 if acquisto else 0
+
+    entry = {
+        'date':   today,
+        'value':  round(tot_val, 2),
+        'pl_eur': round(tot_pl,  2),
+        'pl_pct': round(pl_pct,  3),
+    }
+    idx = next((i for i, h in enumerate(history) if h['date'] == today), None)
+    if idx is not None:
+        history[idx] = entry
+    else:
+        history.append(entry)
+
+    history = sorted(history, key=lambda x: x['date'])[-365:]
+    save_portfolio_history(history)
+    return history
+
+
+def _make_history_chart(history):
+    """Genera SVG inline del grafico storico valore portafoglio."""
+    if len(history) < 2:
+        return ('<p style="color:#718096;text-align:center;padding:20px 0">'
+                'Storico non ancora disponibile — il grafico si costruisce dalla seconda esecuzione.</p>')
+
+    pts  = history[-60:]
+    n    = len(pts)
+    W, H = 680, 165
+    ml, mr, mt, mb = 70, 20, 18, 32
+
+    pw = W - ml - mr
+    ph = H - mt - mb
+
+    vals = [p['value'] for p in pts]
+    vmin, vmax = min(vals), max(vals)
+    if vmax == vmin:
+        vmax = vmin + 1
+
+    def px(i):  return ml + i / (n - 1) * pw
+    def py(v):  return mt + ph - (v - vmin) / (vmax - vmin) * ph
+
+    points   = ' '.join(f"{px(i):.1f},{py(v):.1f}" for i, v in enumerate(vals))
+    fill_pts = f"{px(0):.1f},{mt+ph} {points} {px(n-1):.1f},{mt+ph}"
+
+    is_up      = vals[-1] >= vals[0]
+    line_color = '#68d391' if is_up else '#fc8181'
+
+    # Y axis: 4 livelli con grid line
+    y_axis = ''
+    for i in range(4):
+        v  = vmin + i / 3 * (vmax - vmin)
+        yy = py(v)
+        y_axis += (f'<line x1="{ml}" y1="{yy:.1f}" x2="{W-mr}" y2="{yy:.1f}" '
+                   f'stroke="#2d3748" stroke-width="0.5"/>\n'
+                   f'<text x="{ml-6}" y="{yy+3:.1f}" text-anchor="end" '
+                   f'style="font-size:9px;fill:#718096">€{v:,.0f}</text>\n')
+
+    # X axis: 5 date etichette
+    x_axis = ''
+    for i in range(5):
+        idx    = int(i * (n - 1) / 4)
+        label  = pts[idx]['date'][5:]  # MM-DD
+        x_axis += (f'<text x="{px(idx):.1f}" y="{H-4}" text-anchor="middle" '
+                   f'style="font-size:9px;fill:#718096">{label}</text>\n')
+
+    # Ultimo punto: dot + annotazione
+    lx      = px(n - 1)
+    ly      = py(vals[-1])
+    delta   = vals[-1] - vals[0]
+    d_pct   = delta / vals[0] * 100 if vals[0] else 0
+    sign    = '+' if delta >= 0 else ''
+    a_color = '#68d391' if delta >= 0 else '#fc8181'
+    annot   = f"€{vals[-1]:,.0f}  ({sign}{d_pct:.1f}% dal {pts[0]['date'][5:]})"
+    ax      = min(lx + 8, W - mr - 140)
+    ay      = max(ly - 7, mt + 11)
+
+    return (f'<svg viewBox="0 0 {W} {H}" '
+            f'style="width:100%;max-width:{W}px;display:block;margin:0 auto">\n'
+            f'  <defs>\n'
+            f'    <linearGradient id="pfill" x1="0" y1="0" x2="0" y2="1">\n'
+            f'      <stop offset="0%" stop-color="{line_color}" stop-opacity="0.22"/>\n'
+            f'      <stop offset="100%" stop-color="{line_color}" stop-opacity="0.02"/>\n'
+            f'    </linearGradient>\n'
+            f'  </defs>\n'
+            f'  {y_axis}'
+            f'  <polygon points="{fill_pts}" fill="url(#pfill)"/>\n'
+            f'  <polyline points="{points}" fill="none" stroke="{line_color}" '
+            f'stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>\n'
+            f'  {x_axis}'
+            f'  <circle cx="{lx:.1f}" cy="{ly:.1f}" r="3.5" fill="{line_color}"/>\n'
+            f'  <text x="{ax:.1f}" y="{ay:.1f}" '
+            f'style="font-size:10px;font-weight:700;fill:{a_color}">{annot}</text>\n'
+            f'</svg>')
 
 
 def safe_float(val, default=0.0):
@@ -592,7 +711,7 @@ def pclass(v):
     return 'pos' if v >= 0 else 'neg'
 
 
-def generate_report(positions, signals, report_date):
+def generate_report(positions, signals, report_date, portfolio_history=None):
     etfs = [p for p in positions if p['is_etf']]
     btps = [p for p in positions if p['is_btp']]
 
@@ -634,6 +753,16 @@ def generate_report(positions, signals, report_date):
     <div class="card-value {pclass(btp_pl)}">{'+' if btp_pl >= 0 else ''}€{btp_pl:,.2f}</div>
     <div class="card-sub {pclass(btp_pl)}">{'+' if btp_pl_pct >= 0 else ''}{btp_pl_pct:.2f}% · val. €{btp_val:,.0f} · {len(btps)} tit.</div>
   </div>
+</div>"""
+
+    # ── Grafico storico ────────────────────────────────────────────────────────
+    chart_html = ''
+    if portfolio_history:
+        chart_svg = _make_history_chart(portfolio_history)
+        chart_html = f"""
+<h2>📈 Andamento Portafoglio</h2>
+<div style="background:#141b2d;border:1px solid #2d3748;border-radius:10px;padding:16px 12px 8px">
+{chart_svg}
 </div>"""
 
     # ── ETF table ──────────────────────────────────────────────────────────────
@@ -752,6 +881,7 @@ def generate_report(positions, signals, report_date):
 </div>
 
 {cards_html}
+{chart_html}
 
 <h2>📊 ETF — Segnali Operativi</h2>
 <div class="tbl-wrap">
@@ -1046,8 +1176,12 @@ def main():
     save_stop_history(history)
     _git_push_history()
 
+    print("\nAggiornamento storico portafoglio...")
+    portfolio_history = update_portfolio_history(positions)
+    print(f"  {len(portfolio_history)} punti nello storico")
+
     report_date = datetime.now().strftime('%d/%m/%Y')
-    html = generate_report(positions, signals, report_date)
+    html = generate_report(positions, signals, report_date, portfolio_history)
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     fname = f"report_{datetime.now().strftime('%Y%m%d_%H%M')}.html"
