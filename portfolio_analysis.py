@@ -698,6 +698,36 @@ tr:hover:not(.nrow) { background: #1e2533; }
 """
 
 
+def fetch_watchlist(portfolio_isins, top_n=5):
+    """Restituisce i top N ETF L1 non in portafoglio, ordinati per qualità ingresso."""
+    url = f"{ETF_API_BASE}/api/etfs"
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'PortfolioAnalyzer/1.0'})
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+    except Exception as e:
+        print(f"  Watchlist non disponibile: {e}")
+        return []
+
+    l1_list = data.get('levels', {}).get('1', [])
+    owned   = set(portfolio_isins)
+
+    candidates = []
+    for etf in l1_list:
+        isin = etf.get('isin', '')
+        if isin in owned:
+            continue
+        buy_count = etf.get('buy_count', 0) or 0
+        dist      = etf.get('dist_ema20') or 99.0
+        rsi       = etf.get('rsi') or 50.0
+        # Score: più condizioni ok + meno distanza da EMA20 + RSI vicino a 58 = meglio
+        score = buy_count * 15 - dist * 2 - abs(rsi - 58) * 0.3
+        candidates.append({**etf, '_score': round(score, 2)})
+
+    candidates.sort(key=lambda x: x['_score'], reverse=True)
+    return candidates[:top_n]
+
+
 def fmt_eur(v, decimals=2):
     if v is None: return '—'
     return f"€{v:,.{decimals}f}"
@@ -711,7 +741,7 @@ def pclass(v):
     return 'pos' if v >= 0 else 'neg'
 
 
-def generate_report(positions, signals, report_date, portfolio_history=None):
+def generate_report(positions, signals, report_date, portfolio_history=None, watchlist=None):
     etfs = [p for p in positions if p['is_etf']]
     btps = [p for p in positions if p['is_btp']]
 
@@ -861,6 +891,73 @@ def generate_report(positions, signals, report_date, portfolio_history=None):
       <td class="c">{scad}</td>
     </tr>"""
 
+    # ── Watchlist top-5 ETF L1 non in portafoglio ─────────────────────────────
+    watchlist_html = ''
+    if watchlist:
+        def _rsi_color(r):
+            if r is None: return '#718096'
+            if r > 68:    return '#f6ad55'
+            if r < 50:    return '#90cdf4'
+            return '#68d391'
+
+        wl_rows = ''
+        for i, etf in enumerate(watchlist, 1):
+            nome    = (etf.get('nome') or etf.get('ticker', ''))[:42]
+            ticker  = etf.get('ticker', '—')
+            cat     = (etf.get('categoria') or etf.get('etf_type', ''))[:22]
+            bc      = etf.get('buy_count', 0) or 0
+            rsi     = etf.get('rsi')
+            dist    = etf.get('dist_ema20')
+            p1w     = etf.get('pct_1w')
+            p1m     = etf.get('pct_1m')
+            rsi_s   = f"{rsi:.1f}"  if rsi  is not None else '—'
+            dist_s  = f"{dist:.2f}%" if dist is not None else '—'
+            p1w_s   = (f"+{p1w:.1f}%" if p1w >= 0 else f"{p1w:.1f}%") if p1w is not None else '—'
+            p1m_s   = (f"+{p1m:.1f}%" if p1m >= 0 else f"{p1m:.1f}%") if p1m is not None else '—'
+            p1w_c   = 'pos' if (p1w or 0) >= 0 else 'neg'
+            p1m_c   = 'pos' if (p1m or 0) >= 0 else 'neg'
+            rc      = _rsi_color(rsi)
+            cond_dots = ''.join(
+                f'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;'
+                f'background:{"#68d391" if j < bc else "#2d3748"};margin:0 1px"></span>'
+                for j in range(6)
+            )
+            medal = ('🥇' if i == 1 else '🥈' if i == 2 else '🥉' if i == 3 else f'#{i}')
+            wl_rows += f"""
+    <tr>
+      <td class="c" style="font-size:1rem">{medal}</td>
+      <td class="l"><strong>{nome}</strong><br>
+        <span style="color:#718096;font-size:0.75rem">{ticker} &nbsp;·&nbsp; {cat}</span></td>
+      <td class="c">{cond_dots}<br><span style="font-size:0.72rem;color:#a0aec0">{bc}/6</span></td>
+      <td class="c" style="color:{rc};font-weight:700">{rsi_s}</td>
+      <td class="c">{dist_s}</td>
+      <td class="r {p1w_c}">{p1w_s}</td>
+      <td class="r {p1m_c}">{p1m_s}</td>
+    </tr>"""
+
+        watchlist_html = f"""
+<h2>&#127919; Watchlist — Top {len(watchlist)} ETF L1 da valutare</h2>
+<p style="color:#718096;font-size:0.82rem;margin:-8px 0 10px">
+  ETF già in trend L1 nel monitor, non ancora in portafoglio — ordinati per qualità ingresso.
+</p>
+<div class="tbl-wrap">
+<table>
+  <thead>
+    <tr>
+      <th class="c">#</th>
+      <th class="l">ETF</th>
+      <th class="c">Cond. L1</th>
+      <th class="c">RSI</th>
+      <th class="c">Dist. EMA20</th>
+      <th class="r">1 Sett.</th>
+      <th class="r">1 Mese</th>
+    </tr>
+  </thead>
+  <tbody>{wl_rows}
+  </tbody>
+</table>
+</div>"""
+
     # ── Assemble HTML ──────────────────────────────────────────────────────────
     now_str = datetime.now().strftime('%d/%m/%Y %H:%M')
     return f"""<!DOCTYPE html>
@@ -934,6 +1031,8 @@ def generate_report(positions, signals, report_date, portfolio_history=None):
   </tbody>
 </table>
 </div>
+
+{watchlist_html}
 
 <div class="legend">
   <strong>Legenda:</strong>
@@ -1180,8 +1279,13 @@ def main():
     portfolio_history = update_portfolio_history(positions)
     print(f"  {len(portfolio_history)} punti nello storico")
 
+    print("\nFetch watchlist ETF L1...")
+    portfolio_isins = [p['isin'] for p in positions if p['is_etf']]
+    watchlist = fetch_watchlist(portfolio_isins)
+    print(f"  {len(watchlist)} candidati trovati")
+
     report_date = datetime.now().strftime('%d/%m/%Y')
-    html = generate_report(positions, signals, report_date, portfolio_history)
+    html = generate_report(positions, signals, report_date, portfolio_history, watchlist)
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     fname = f"report_{datetime.now().strftime('%Y%m%d_%H%M')}.html"
