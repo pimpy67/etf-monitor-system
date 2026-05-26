@@ -9,6 +9,7 @@ venv/
 portafogli/*.xls
 portafogli/*.xlsx
 portafogli/reports/
+portafogli/portfolio_history.json
 .DS_Store
 *.gsheet
 *_backup_*.xlsx
