@@ -112,12 +112,17 @@ def _send_email(subject, html_body):
         headers={
             'Authorization': f'Bearer {RESEND_API_KEY}',
             'Content-Type':  'application/json',
+            'User-Agent':    'curl/7.88.1',
         }
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
             print(f"  Email inviata: {subject}")
             return True
+    except urllib.error.HTTPError as e:
+        body = e.read().decode('utf-8', errors='replace')
+        print(f"  Errore invio email: HTTP {e.code} — {body}")
+        return False
     except Exception as e:
         print(f"  Errore invio email: {e}")
         return False
@@ -887,4 +892,20 @@ def main():
 
 
 if __name__ == '__main__':
+    if '--test-email' in sys.argv:
+        print("Invio email di test...")
+        ok = _send_email(
+            "TEST — Portfolio Monitor funzionante",
+            """<h2 style="color:#2d6a4f">Test Email OK ✅</h2>
+<p>Il sistema di alert è configurato correttamente.</p>
+<p><b>Recipient:</b> {recipient}<br>
+<b>Sender:</b> {sender}<br>
+<b>Data:</b> {date}</p>
+<p style="color:#666;font-size:12px">Questo è un messaggio di test generato da portfolio_analysis.py --test-email</p>""".format(
+                recipient=EMAIL_RECIPIENT,
+                sender=EMAIL_SENDER,
+                date=datetime.now().strftime('%d/%m/%Y %H:%M')
+            )
+        )
+        sys.exit(0 if ok else 1)
     main()
