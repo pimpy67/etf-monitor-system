@@ -21,11 +21,22 @@ import urllib.error
 if sys.stdout.encoding and sys.stdout.encoding.lower() not in ('utf-8', 'utf8'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
+# Carica .env locale se presente
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent / '.env')
+except ImportError:
+    pass
+
 BASE_DIR       = Path(__file__).parent
 PORTAFOGLI_DIR = BASE_DIR / "portafogli"
 REPORTS_DIR    = PORTAFOGLI_DIR / "reports"
 HISTORY_FILE   = PORTAFOGLI_DIR / "stop_loss_history.json"
 ETF_API_BASE   = "https://etf.andreapavan.tech"
+
+EMAIL_RECIPIENT = os.getenv('EMAIL_RECIPIENT', 'andreapavan67@gmail.com')
+EMAIL_SENDER    = os.getenv('EMAIL_SENDER',    'onboarding@resend.dev')
+RESEND_API_KEY  = os.getenv('RESEND_API_KEY',  '')
 
 # Indici colonne nel file XLS della banca (riga header = riga 2, indice 0-based)
 COL_TITOLO    = 1
@@ -82,6 +93,188 @@ def _git_push_history():
             print("History invariata, nessun push necessario.")
     except Exception:
         print("(git push history non riuscito — nessun problema, solo locale)")
+
+
+def _send_email(subject, html_body):
+    """Invia email via Resend API (HTTP diretto, nessun pacchetto extra)."""
+    if not RESEND_API_KEY:
+        print(f"  (email non inviata — RESEND_API_KEY mancante nel .env)")
+        return False
+    payload = json.dumps({
+        'from':    f'Portfolio Monitor <{EMAIL_SENDER}>',
+        'to':      [EMAIL_RECIPIENT],
+        'subject': subject,
+        'html':    html_body,
+    }).encode('utf-8')
+    req = urllib.request.Request(
+        'https://api.resend.com/emails',
+        data=payload,
+        headers={
+            'Authorization': f'Bearer {RESEND_API_KEY}',
+            'Content-Type':  'application/json',
+        }
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            print(f"  Email inviata: {subject}")
+            return True
+    except Exception as e:
+        print(f"  Errore invio email: {e}")
+        return False
+
+
+def check_and_send_alerts(positions, signals, history):
+    """
+    Controlla stop loss e invia email se:
+    - ROSSO: prezzo < stop_loss         → stop triggerato, azione immediata
+    - GIALLO: prezzo < stop_loss * 1.02 → avvicinamento, tieniti pronto
+    - ARANCIO: variazione giornaliera <= -3% → kill switch attivo
+    Sopprime alert già inviati oggi per lo stesso ISIN.
+    """
+    today   = datetime.now().strftime('%Y-%m-%d')
+    alerts  = []   # livello ROSSO
+    warnings = []  # livello GIALLO/ARANCIO
+
+    for p in positions:
+        if not p['is_etf']:
+            continue
+        isin  = p['isin']
+        s     = signals.get(isin, {})
+        stop  = s.get('stop_loss')
+        price = p['last']
+        nome  = p['titolo'][:45]
+
+        if not stop or not price:
+            continue
+
+        prev          = history.get(isin, {})
+        last_alert    = prev.get('last_alert_date', '')
+        last_warning  = prev.get('last_warning_date', '')
+
+        # ROSSO — stop triggerato
+        if price < stop:
+            diff_pct = (stop - price) / stop * 100
+            alerts.append({
+                'isin': isin, 'nome': nome,
+                'price': price, 'stop': stop,
+                'diff_pct': diff_pct,
+                'already_sent': last_alert == today,
+            })
+            history[isin]['last_alert_date'] = today
+
+        # GIALLO — avvicinamento (entro 2%)
+        elif price < stop * 1.02:
+            diff_pct = (stop - price) / stop * 100
+            warnings.append({
+                'isin': isin, 'nome': nome,
+                'price': price, 'stop': stop,
+                'diff_pct': diff_pct, 'tipo': 'avvicinamento',
+                'already_sent': last_warning == today,
+            })
+            history[isin]['last_warning_date'] = today
+
+        # ARANCIO — kill switch (-3% giornaliero)
+        if p['var_pct'] <= -3.0:
+            warnings.append({
+                'isin': isin, 'nome': nome,
+                'price': price, 'stop': stop,
+                'diff_pct': abs(p['var_pct']),
+                'tipo': 'kill_switch',
+                'already_sent': last_warning == today,
+            })
+            history[isin]['last_warning_date'] = today
+
+    # ── Invia email ROSSO ────────────────────────────────────────────────────
+    nuovi_alert = [a for a in alerts if not a['already_sent']]
+    if nuovi_alert:
+        rows = ''.join(f"""
+        <tr>
+          <td style="padding:10px;border-bottom:1px solid #2d3748">{a['nome']}</td>
+          <td style="padding:10px;border-bottom:1px solid #2d3748;text-align:right">€{a['price']:.3f}</td>
+          <td style="padding:10px;border-bottom:1px solid #2d3748;text-align:right;color:#fc8181;font-weight:bold">€{a['stop']:.3f}</td>
+          <td style="padding:10px;border-bottom:1px solid #2d3748;text-align:right;color:#fc8181">−{a['diff_pct']:.2f}%</td>
+        </tr>""" for a in nuovi_alert)
+
+        html = f"""
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#0f1117;color:#e0e0e0">
+  <div style="background:#c53030;padding:18px 20px">
+    <h2 style="margin:0;color:#fff">&#9888; STOP LOSS TRIGGERATO</h2>
+    <p style="margin:4px 0 0;color:#fed7d7;font-size:0.9rem">{datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+  </div>
+  <div style="padding:20px">
+    <p style="color:#fc8181;font-weight:bold">Il prezzo attuale è sceso SOTTO il tuo stop loss. Valuta uscita immediata.</p>
+    <table style="width:100%;border-collapse:collapse;margin-top:16px">
+      <thead>
+        <tr style="background:#1a2035">
+          <th style="padding:8px 10px;text-align:left;color:#90cdf4">ETF</th>
+          <th style="padding:8px 10px;text-align:right;color:#90cdf4">Prezzo</th>
+          <th style="padding:8px 10px;text-align:right;color:#90cdf4">Stop Loss</th>
+          <th style="padding:8px 10px;text-align:right;color:#90cdf4">Distanza</th>
+        </tr>
+      </thead>
+      <tbody>{rows}</tbody>
+    </table>
+    <div style="margin-top:20px;padding:14px;background:#1a2035;border-left:4px solid #fc8181;border-radius:4px">
+      <strong>Azione:</strong> verifica sul conto se l'ordine stop è già scattato.<br>
+      Se non è scattato automaticamente, valuta uscita manuale.
+    </div>
+  </div>
+  <div style="padding:10px 20px;background:#1a2035;color:#4a5568;font-size:0.75rem;text-align:center">
+    Portfolio Monitor · etf.andreapavan.tech
+  </div>
+</div>"""
+        _send_email(f"STOP LOSS — {', '.join(a['nome'][:20] for a in nuovi_alert)}", html)
+
+    # ── Invia email GIALLO/ARANCIO ───────────────────────────────────────────
+    nuovi_warn = [w for w in warnings if not w['already_sent']]
+    if nuovi_warn:
+        rows = ''.join(f"""
+        <tr>
+          <td style="padding:10px;border-bottom:1px solid #2d3748">{w['nome']}</td>
+          <td style="padding:10px;border-bottom:1px solid #2d3748;text-align:center">
+            {'&#128308; KILL SWITCH -3%' if w['tipo']=='kill_switch' else '&#9888; Avvicinamento stop'}
+          </td>
+          <td style="padding:10px;border-bottom:1px solid #2d3748;text-align:right">€{w['price']:.3f}</td>
+          <td style="padding:10px;border-bottom:1px solid #2d3748;text-align:right;color:#f6ad55">€{w['stop']:.3f}</td>
+        </tr>""" for w in nuovi_warn)
+
+        html = f"""
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#0f1117;color:#e0e0e0">
+  <div style="background:#d69e2e;padding:18px 20px">
+    <h2 style="margin:0;color:#fff">&#9888; ATTENZIONE — Monitoraggio Stop</h2>
+    <p style="margin:4px 0 0;color:#fefcbf;font-size:0.9rem">{datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+  </div>
+  <div style="padding:20px">
+    <p>Uno o più ETF si stanno avvicinando al livello di stop oppure hanno subito un calo significativo.</p>
+    <table style="width:100%;border-collapse:collapse;margin-top:16px">
+      <thead>
+        <tr style="background:#1a2035">
+          <th style="padding:8px 10px;text-align:left;color:#90cdf4">ETF</th>
+          <th style="padding:8px 10px;text-align:center;color:#90cdf4">Tipo alert</th>
+          <th style="padding:8px 10px;text-align:right;color:#90cdf4">Prezzo</th>
+          <th style="padding:8px 10px;text-align:right;color:#90cdf4">Stop Loss</th>
+        </tr>
+      </thead>
+      <tbody>{rows}</tbody>
+    </table>
+    <div style="margin-top:20px;padding:14px;background:#1a2035;border-left:4px solid #f6ad55;border-radius:4px">
+      <strong>Azione:</strong> nessuna urgenza immediata, ma tieni d'occhio domani.<br>
+      Considera di stringere il trailing stop se il trend si indebolisce.
+    </div>
+  </div>
+  <div style="padding:10px 20px;background:#1a2035;color:#4a5568;font-size:0.75rem;text-align:center">
+    Portfolio Monitor · etf.andreapavan.tech
+  </div>
+</div>"""
+        _send_email(f"Attenzione portafoglio — {len(nuovi_warn)} segnale/i", html)
+
+    # Riepilogo console
+    if not alerts and not warnings:
+        print("  Nessun alert stop — tutti gli ETF sopra i livelli di guardia.")
+    elif alerts:
+        print(f"  STOP TRIGGERATO su {len(alerts)} ETF — email inviata!")
+    if warnings:
+        print(f"  Avvisi su {len(warnings)} ETF — email inviata!")
 
 
 def load_stop_history():
@@ -669,6 +862,13 @@ def main():
             }
     save_stop_history(history)
     print(f"Stop loss history salvata: {HISTORY_FILE.name}")
+
+    # Controlla stop loss e invia alert email se necessario
+    print("\nControllo alert stop loss...")
+    check_and_send_alerts(positions, signals, history)
+
+    # Salva history aggiornata con date alert e push su GitHub
+    save_stop_history(history)
     _git_push_history()
 
     report_date = datetime.now().strftime('%d/%m/%Y')
