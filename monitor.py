@@ -71,11 +71,11 @@ class ETFMonitor:
         if isin:
             db_df = self.db.get_close_by_isin(isin, days=260)
 
-        # Usa il DB solo se ha dati recenti (entro 5 giorni lavorativi)
+        # Usa il DB solo se ha dati recenti (entro 2 giorni lavorativi)
         if not db_df.empty and len(db_df) >= 55:
             today     = _pd.Timestamp.today().normalize()
             last_date = db_df.index[-1] if hasattr(db_df.index[-1], 'date') else _pd.Timestamp(db_df.index[-1])
-            if (today - last_date).days <= 5:
+            if (today - last_date).days <= 2:
                 return db_df  # dati freschi → no fetch Yahoo Finance
 
         # 2. Yahoo Finance (OHLCV completo) — DB assente o datato
