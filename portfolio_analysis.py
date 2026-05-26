@@ -398,14 +398,20 @@ def generate_report(positions, signals, report_date):
     etfs = [p for p in positions if p['is_etf']]
     btps = [p for p in positions if p['is_btp']]
 
-    tot_val  = sum(p['mkt_val'] for p in positions)
-    tot_pl   = sum(p['pl_eur']  for p in positions)
-    etf_val  = sum(p['mkt_val'] for p in etfs)
-    btp_val  = sum(p['mkt_val'] for p in btps)
-    etf_pl   = sum(p['pl_eur']  for p in etfs)
-    btp_pl   = sum(p['pl_eur']  for p in btps)
-    etf_pct  = etf_val / tot_val * 100 if tot_val else 0
-    btp_pct  = btp_val / tot_val * 100 if tot_val else 0
+    tot_val      = sum(p['mkt_val']  for p in positions)
+    tot_pl       = sum(p['pl_eur']   for p in positions)
+    etf_val      = sum(p['mkt_val']  for p in etfs)
+    btp_val      = sum(p['mkt_val']  for p in btps)
+    etf_pl       = sum(p['pl_eur']   for p in etfs)
+    btp_pl       = sum(p['pl_eur']   for p in btps)
+    etf_acquisto = sum(p['acquisto'] for p in etfs  if p['acquisto'])
+    btp_acquisto = sum(p['acquisto'] for p in btps  if p['acquisto'])
+    tot_acquisto = etf_acquisto + btp_acquisto
+    etf_pl_pct   = etf_pl / etf_acquisto * 100 if etf_acquisto else 0
+    btp_pl_pct   = btp_pl / btp_acquisto * 100 if btp_acquisto else 0
+    tot_pl_pct   = tot_pl / tot_acquisto * 100  if tot_acquisto else 0
+    etf_pct      = etf_val / tot_val * 100 if tot_val else 0
+    btp_pct      = btp_val / tot_val * 100 if tot_val else 0
 
     # ── Summary cards ──────────────────────────────────────────────────────────
     cards_html = f"""
@@ -418,17 +424,17 @@ def generate_report(positions, signals, report_date):
   <div class="card">
     <div class="card-label">P&amp;L totale</div>
     <div class="card-value {pclass(tot_pl)}">{'+' if tot_pl >= 0 else ''}€{tot_pl:,.2f}</div>
-    <div class="card-sub">vs costo acquisto</div>
+    <div class="card-sub {pclass(tot_pl)}">{'+' if tot_pl_pct >= 0 else ''}{tot_pl_pct:.2f}% sul capitale</div>
   </div>
   <div class="card">
-    <div class="card-label">ETF — Valore ({etf_pct:.1f}%)</div>
-    <div class="card-value">€{etf_val:,.0f}</div>
-    <div class="card-sub {pclass(etf_pl)}">{'+' if etf_pl >= 0 else ''}€{etf_pl:,.2f} P&amp;L · {len(etfs)} posizioni</div>
+    <div class="card-label">ETF — P&amp;L ({etf_pct:.1f}% portaf.)</div>
+    <div class="card-value {pclass(etf_pl)}">{'+' if etf_pl >= 0 else ''}€{etf_pl:,.2f}</div>
+    <div class="card-sub {pclass(etf_pl)}">{'+' if etf_pl_pct >= 0 else ''}{etf_pl_pct:.2f}% · val. €{etf_val:,.0f} · {len(etfs)} pos.</div>
   </div>
   <div class="card">
-    <div class="card-label">BTP — Valore ({btp_pct:.1f}%)</div>
-    <div class="card-value">€{btp_val:,.0f}</div>
-    <div class="card-sub {pclass(btp_pl)}">{'+' if btp_pl >= 0 else ''}€{btp_pl:,.2f} P&amp;L · {len(btps)} titoli</div>
+    <div class="card-label">BTP — P&amp;L ({btp_pct:.1f}% portaf.)</div>
+    <div class="card-value {pclass(btp_pl)}">{'+' if btp_pl >= 0 else ''}€{btp_pl:,.2f}</div>
+    <div class="card-sub {pclass(btp_pl)}">{'+' if btp_pl_pct >= 0 else ''}{btp_pl_pct:.2f}% · val. €{btp_val:,.0f} · {len(btps)} tit.</div>
   </div>
 </div>"""
 
