@@ -30,6 +30,7 @@
     "max_stop": 254.963,
     "max_trailing": 258.846,
     "last_updated": "2026-06-03",
-    "etf_name": "ISHARES MSCI CANADA B"
+    "etf_name": "ISHARES MSCI CANADA B",
+    "last_warning_date": "2026-06-03"
   }
 }
