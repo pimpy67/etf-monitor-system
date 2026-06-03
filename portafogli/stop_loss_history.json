@@ -1,4 +1,13 @@
 {
+  "LU1213835942": {
+    "max_stop": 13.3804
+  },
+  "LU1706106447": {
+    "max_stop": 208.3279
+  },
+  "LU0106817157": {
+    "max_stop": 33.5983
+  },
   "LU1681038672": {
     "max_stop": 362.9,
     "max_trailing": 368.427,
@@ -23,15 +32,5 @@
     "last_updated": "2026-06-03",
     "etf_name": "ISHARES MSCI CANADA B",
     "last_warning_date": "2026-06-03"
-  },
-  "LU1213835942": {
-    "max_stop": 13.6176,
-    "last_warning_date": "2026-06-03"
-  },
-  "LU1706106447": {
-    "max_stop": 208.3279
-  },
-  "LU0106817157": {
-    "max_stop": 33.5983
   }
 }
