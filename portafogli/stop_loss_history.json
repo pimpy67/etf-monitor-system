@@ -1,44 +1,45 @@
 {
   "LU1213835942": {
     "max_stop": 13.3804,
-    "last_alert_date": "2026-06-15"
+    "last_alert_date": "2026-06-17"
   },
   "LU1706106447": {
-    "max_stop": 211.2248
+    "max_stop": 211.3017
   },
   "LU0106817157": {
-    "max_stop": 33.763,
-    "last_warning_date": "2026-06-15"
+    "max_stop": 33.8698,
+    "last_warning_date": "2026-06-17"
   },
   "LU1681038672": {
-    "max_stop": 367.59,
-    "max_trailing": 373.188,
-    "last_updated": "2026-06-15",
+    "max_stop": 369.471,
+    "max_trailing": 375.097,
+    "last_updated": "2026-06-17",
     "etf_name": "AM IS RUS 2000 UEC SHS -UCITS ETF- CAPITALISATION",
-    "last_warning_date": "2026-06-15"
+    "last_warning_date": "2026-06-17"
   },
   "LU1681037609": {
-    "max_stop": 139.192,
-    "max_trailing": 141.312,
-    "last_updated": "2026-06-15",
-    "etf_name": "AMUNDI INDEX SOLUTIONS -AMUNDI JAPAN TOPIX CLASSE C EUR"
+    "max_stop": 139.959,
+    "max_trailing": 142.09,
+    "last_updated": "2026-06-17",
+    "etf_name": "AMUNDI INDEX SOLUTIONS -AMUNDI JAPAN TOPIX CLASSE C EUR",
+    "last_warning_date": "2026-06-17"
   },
   "LU2195226068": {
-    "max_stop": 40.071,
-    "max_trailing": 40.681,
-    "last_updated": "2026-06-15",
+    "max_stop": 40.392,
+    "max_trailing": 41.007,
+    "last_updated": "2026-06-17",
     "etf_name": "AMUNDI S&P EUROZONE CLIMATE PARIS ALIGNED UCITS ETF ACC EUR",
-    "last_warning_date": "2026-06-15"
+    "last_warning_date": "2026-06-17"
   },
   "IE00B52SF786": {
-    "max_stop": 256.305,
-    "max_trailing": 260.208,
-    "last_updated": "2026-06-15",
+    "max_stop": 257.119,
+    "max_trailing": 261.035,
+    "last_updated": "2026-06-17",
     "etf_name": "ISHARES MSCI CANADA B",
-    "last_warning_date": "2026-06-15"
+    "last_warning_date": "2026-06-17"
   },
   "LU1046236037": {
-    "max_stop": 92.6492,
-    "last_warning_date": "2026-06-15"
+    "max_stop": 92.6887,
+    "last_warning_date": "2026-06-17"
   }
 }
