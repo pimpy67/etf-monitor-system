@@ -1,46 +1,47 @@
 {
   "LU1213835942": {
     "max_stop": 13.3804,
-    "last_alert_date": "2026-06-23"
+    "last_alert_date": "2026-06-25"
   },
   "LU1706106447": {
-    "max_stop": 212.5081,
-    "last_warning_date": "2026-06-23"
+    "max_stop": 212.8732,
+    "last_warning_date": "2026-06-25"
   },
   "LU0106817157": {
-    "max_stop": 34.2138,
-    "last_warning_date": "2026-06-23"
+    "max_stop": 34.2936,
+    "last_warning_date": "2026-06-23",
+    "last_alert_date": "2026-06-25"
   },
   "LU1681038672": {
-    "max_stop": 374.645,
-    "max_trailing": 380.35,
-    "last_updated": "2026-06-23",
+    "max_stop": 378.069,
+    "max_trailing": 383.827,
+    "last_updated": "2026-06-25",
     "etf_name": "AM IS RUS 2000 UEC SHS -UCITS ETF- CAPITALISATION",
-    "last_alert_date": "2026-06-23"
+    "last_alert_date": "2026-06-25"
   },
   "LU1681037609": {
-    "max_stop": 141.843,
-    "max_trailing": 144.003,
-    "last_updated": "2026-06-23",
+    "max_stop": 142.195,
+    "max_trailing": 144.361,
+    "last_updated": "2026-06-25",
     "etf_name": "AMUNDI INDEX SOLUTIONS -AMUNDI JAPAN TOPIX CLASSE C EUR",
-    "last_warning_date": "2026-06-23"
+    "last_warning_date": "2026-06-25"
   },
   "LU2195226068": {
-    "max_stop": 40.864,
-    "max_trailing": 41.487,
-    "last_updated": "2026-06-23",
+    "max_stop": 40.956,
+    "max_trailing": 41.579,
+    "last_updated": "2026-06-25",
     "etf_name": "AMUNDI S&P EUROZONE CLIMATE PARIS ALIGNED UCITS ETF ACC EUR",
-    "last_alert_date": "2026-06-23"
+    "last_alert_date": "2026-06-25"
   },
   "IE00B52SF786": {
-    "max_stop": 257.411,
-    "max_trailing": 261.331,
-    "last_updated": "2026-06-23",
+    "max_stop": 257.658,
+    "max_trailing": 261.582,
+    "last_updated": "2026-06-25",
     "etf_name": "ISHARES MSCI CANADA B",
-    "last_warning_date": "2026-06-23"
+    "last_warning_date": "2026-06-25"
   },
   "LU1046236037": {
-    "max_stop": 92.7584,
-    "last_warning_date": "2026-06-23"
+    "max_stop": 92.7959,
+    "last_warning_date": "2026-06-25"
   }
 }
