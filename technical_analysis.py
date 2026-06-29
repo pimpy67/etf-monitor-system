@@ -660,6 +660,12 @@ class ETFTechnicalAnalyzer:
                 suggested = 3
                 reason    = f'Uscita L1 — {exit_rule}'
                 reason_codes.append('L1_EXIT')
+            elif buy_count < 6 or regime_str != "BULL":
+                # Demote if no longer meets 6/6 conditions or regime changed
+                conditions['exit_rule']    = None
+                suggested = 2
+                reason    = f'Downgrade L1→L2: {buy_count}/6 condizioni, regime {regime_str}'
+                reason_codes.append('L1_DEMOTED')
             else:
                 conditions['exit_rule']    = None
                 suggested = 1
