@@ -653,6 +653,9 @@ class ETFTechnicalAnalyzer:
         # ── Determina livello ──────────────────────────────────────────────────
         reason_codes = []
 
+        # Min buy count richiesto per L1 (dipende dalla famiglia)
+        min_buy_required = self.p.get('min_buy_count', 6)
+
         if current_level == 1:
             if exit_rule:
                 conditions['exit_rule']    = exit_rule
@@ -660,11 +663,11 @@ class ETFTechnicalAnalyzer:
                 suggested = 3
                 reason    = f'Uscita L1 — {exit_rule}'
                 reason_codes.append('L1_EXIT')
-            elif buy_count < 6 or regime_str != "BULL":
-                # Demote if no longer meets 6/6 conditions or regime changed
+            elif buy_count < min_buy_required or regime_str != "BULL":
+                # Demote if no longer meets min conditions or regime changed
                 conditions['exit_rule']    = None
                 suggested = 2
-                reason    = f'Downgrade L1→L2: {buy_count}/6 condizioni, regime {regime_str}'
+                reason    = f'Downgrade L1→L2: {buy_count}/{min_buy_required} condizioni, regime {regime_str}'
                 reason_codes.append('L1_DEMOTED')
             else:
                 conditions['exit_rule']    = None
