@@ -171,6 +171,37 @@ class ETFTechnicalAnalyzer:
         v = s.iloc[-1] if len(s) > 0 else None
         return float(v) if v is not None and pd.notna(v) else None
 
+    def calculate_regime(self, ema20: Optional[float], sma50: Optional[float],
+                        lateral_band: float = 0.01) -> str:
+        """
+        Determina regime a 3 stati: BULL / LATERALE / BEAR
+
+        Formula:
+          ratio = (EMA20 - SMA50) / SMA50
+          BULL     se ratio > +lateral_band
+          LATERALE se abs(ratio) <= lateral_band
+          BEAR     se ratio < -lateral_band
+
+        Args:
+            ema20: EMA20 value (None → LATERALE)
+            sma50: SMA50 value (None → LATERALE)
+            lateral_band: banda laterale in decimali (es. 0.01 = 1%)
+
+        Returns:
+            "BULL", "LATERALE", o "BEAR"
+        """
+        if ema20 is None or sma50 is None or sma50 == 0:
+            return "LATERALE"
+
+        ratio = (ema20 - sma50) / sma50
+
+        if ratio > lateral_band:
+            return "BULL"
+        elif ratio < -lateral_band:
+            return "BEAR"
+        else:
+            return "LATERALE"
+
     # ── Divergenza / recupero (copiato da fund system) ─────────────────────────
 
     def _detect_positive_divergence(self, prices: pd.Series, rsi: pd.Series,
@@ -435,13 +466,18 @@ class ETFTechnicalAnalyzer:
                 partial_exit = True
 
         # ── 6 condizioni L1 ───────────────────────────────────────────────────
-        # 1. Allineamento: price > EMA20 > SMA50 (+ regime SMA200)
+        # Determina regime a 3 stati
+        lateral_band = p.get('lateral_band', 0.01)
+        regime_str = self.calculate_regime(ema20_v, sma50_v, lateral_band)
+        regime_ok = regime_str == "BULL"  # L1 richiede regime BULL
+
+        # 1. Allineamento: price > EMA20 > SMA50 (+ regime SMA200 come filtro aggiuntivo)
         price_ema_ok  = ema20_v is not None and current > ema20_v
         ema_sma50_ok  = ema20_v is not None and sma50_v is not None and ema20_v > sma50_v
-        regime_ok     = True
+        regime_ok_mm200 = True
         if p['mm200_filter'] and sma200_v is not None:
-            regime_ok = current > sma200_v
-        allineamento  = price_ema_ok and ema_sma50_ok and regime_ok
+            regime_ok_mm200 = current > sma200_v
+        allineamento  = price_ema_ok and ema_sma50_ok and regime_ok and regime_ok_mm200
 
         # 2. Persistenza: >= 3gg sopra EMA20 + slope EMA20 positivo
         persistenza   = days_above_ema20 >= p['days_above_ema'] and ema20_slope > 0
@@ -478,6 +514,7 @@ class ETFTechnicalAnalyzer:
             'days_above_ema20':   days_above_ema20,
             'dist_ema20':         round(dist_ema20, 2),
             'ema20_slope':        round(ema20_slope, 6),
+            'regime':             regime_str,  # NUOVO: regime a 3 stati
             'regime_ok':          regime_ok,
             'kill_switch':        kill_switch,
             'daily_change_pct':   round(daily_chg, 2) if daily_chg is not None else None,
@@ -515,7 +552,12 @@ class ETFTechnicalAnalyzer:
             reason_codes.append('L2_WATCHLIST' if suggested == 2 else 'L3_MONITOR')
 
         elif allineamento and persistenza and rsi_ok and dist_ok and adx_ok and macd_ok:
-            if kill_switch:
+            # L1 richiede regime BULL (non accetta LATERALE o BEAR)
+            if regime_str != "BULL":
+                suggested = 2
+                reason    = f'Watchlist (regime {regime_str}): {buy_count}/6 condizioni L1'
+                reason_codes.append('L2_REGIME_LATERAL' if regime_str == "LATERALE" else 'L2_REGIME_BEAR')
+            elif kill_switch:
                 suggested = current_level
                 reason    = f'Kill Switch [{daily_chg:.1f}%]: nuovo ingresso L1 bloccato'
                 reason_codes.extend(['KILL_SWITCH', 'L1_ENTRY_BLOCKED'])
@@ -524,7 +566,7 @@ class ETFTechnicalAnalyzer:
                 regime_note = '' if regime_ok else ' (no SMA200)'
                 macd_note   = '↑' if (macd_hp is not None and macd_h is not None and macd_h > macd_hp) else '~'
                 reason = (
-                    f'L1 Trend Sicuro: EMA20>SMA50 ✓, {days_above_ema20}gg sopra EMA20 ✓, '
+                    f'L1 Trend Sicuro (regime {regime_str}): EMA20>SMA50 ✓, {days_above_ema20}gg sopra EMA20 ✓, '
                     f'RSI {rsi_val:.0f} ✓, dist {dist_ema20:.1f}% ✓, ADX {adx_val:.0f} ✓, '
                     f'MACD {macd_note} ✓{regime_note}'
                 )
@@ -623,6 +665,7 @@ class ETFTechnicalAnalyzer:
             'sma200':              lc.get('sma200_current'),
             'rsi':                 lc.get('rsi'),
             'adx':                 lc.get('adx'),
+            'regime':              lc.get('regime'),  # NUOVO: regime a 3 stati
             'macd_histogram':      lc.get('macd_histogram'),
             'macd_histogram_prev': lc.get('macd_histogram_prev'),
             'dist_ema20':          lc.get('dist_ema20'),

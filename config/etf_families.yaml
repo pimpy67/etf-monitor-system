@@ -1,0 +1,245 @@
+# ETF Monitor — Configurazione Famiglie e Parametri
+# Versione: 1.0 (Giugno 2026)
+# Source: ETF_Monitor_Config_Refactor_v2.xlsx foglio 2_SOGLIE
+
+families:
+  equity_sviluppati:
+    description: "Equity sviluppati — Large cap, ACWI, All-World"
+    ma_filter_1: "EMA20"
+    ma_filter_2: "SMA50"
+    rsi_entry_low: 45
+    rsi_entry_high: 55
+    rsi_exit: 68
+    adx_min: 18
+    lateral_band: 0.01  # 1.0%
+    atr_max: 0.03
+    aum_min: 50
+    mm200_filter: true
+    l0_drawdown: 15
+    l0_rsi_max: 35
+
+  mercati_emergenti:
+    description: "Mercati emergenti — EM globale, Asia, LatAm, EMEA"
+    ma_filter_1: "EMA20"
+    ma_filter_2: "SMA50"
+    rsi_entry_low: 40
+    rsi_entry_high: 52
+    rsi_exit: 65
+    adx_min: 22
+    lateral_band: 0.012  # 1.2%
+    atr_max: 0.04
+    aum_min: 50
+    mm200_filter: true
+    l0_drawdown: 20
+    l0_rsi_max: 38
+
+  settoriali_growth:
+    description: "Settoriali crescita — Tech, AI, Semi, Nasdaq, Digitale"
+    ma_filter_1: "EMA20"
+    ma_filter_2: "SMA50"
+    rsi_entry_low: 48
+    rsi_entry_high: 58
+    rsi_exit: 72
+    adx_min: 25
+    lateral_band: 0.015  # 1.5%
+    atr_max: 0.05
+    aum_min: 50
+    mm200_filter: true
+    l0_drawdown: 18
+    l0_rsi_max: 38
+
+  settoriali_difensivi:
+    description: "Settoriali difensivi — Salute, Utilities, Insurance, Food"
+    ma_filter_1: "SMA50"
+    ma_filter_2: "SMA200"
+    rsi_entry_low: 42
+    rsi_entry_high: 50
+    rsi_exit: 65
+    adx_min: 15
+    lateral_band: 0.01  # 1.0%
+    atr_max: 0.025
+    aum_min: 50
+    mm200_filter: true
+    l0_drawdown: 15
+    l0_rsi_max: 35
+
+  bond_governativi:
+    description: "Bond governativi EUR/USD — BTP, Bund, UST, Gov Euro, IL"
+    ma_filter_1: "SMA50"
+    ma_filter_2: "SMA200"
+    rsi_entry_low: 38
+    rsi_entry_high: 48
+    rsi_exit: 62
+    adx_min: 12
+    lateral_band: 0.005  # 0.5%
+    atr_max: 0.015
+    aum_min: 100
+    mm200_filter: false
+    l0_drawdown: 8
+    l0_rsi_max: 38
+
+  bond_corp_hy_em:
+    description: "Bond corporate / HY / EM — Corp EUR/USD, HY, EM bond"
+    ma_filter_1: "EMA20"
+    ma_filter_2: "SMA50"
+    rsi_entry_low: 42
+    rsi_entry_high: 52
+    rsi_exit: 65
+    adx_min: 15
+    lateral_band: 0.008  # 0.8%
+    atr_max: 0.025
+    aum_min: 50
+    mm200_filter: false
+    l0_drawdown: 10
+    l0_rsi_max: 38
+
+  commodities:
+    description: "Commodities broad — Bloomberg Comm, GSCI, Agri, Energia"
+    ma_filter_1: "SMA50"
+    ma_filter_2: null
+    rsi_entry_low: 40
+    rsi_entry_high: 55
+    rsi_exit: 68
+    adx_min: 22
+    lateral_band: 0.015  # 1.5%
+    atr_max: 0.06
+    aum_min: 50
+    mm200_filter: true
+    l0_drawdown: 20
+    l0_rsi_max: 40
+
+  oro_metalli_preziosi:
+    description: "Oro e metalli preziosi — Oro, Argento, Platino, Basket PM"
+    ma_filter_1: "SMA200"
+    ma_filter_2: null
+    rsi_entry_low: 38
+    rsi_entry_high: 52
+    rsi_exit: 68
+    adx_min: 18
+    lateral_band: 0.015  # 1.5%
+    atr_max: 0.04
+    aum_min: 50
+    mm200_filter: true
+    l0_drawdown: 15
+    l0_rsi_max: 35
+
+  metalli_industriali:
+    description: "Metalli industriali — Rame, Alluminio, Zinco, Nichel, Battery"
+    ma_filter_1: "SMA50"
+    ma_filter_2: null  # PMI proxy
+    rsi_entry_low: 38
+    rsi_entry_high: 50
+    rsi_exit: 65
+    adx_min: 20
+    lateral_band: 0.012  # 1.2%
+    atr_max: 0.05
+    aum_min: 30
+    mm200_filter: true
+    l0_drawdown: 18
+    l0_rsi_max: 38
+
+  real_estate_reit:
+    description: "Real Estate / REIT — EPRA Europe, NAREIT Global, REIT"
+    ma_filter_1: "SMA50"
+    ma_filter_2: null  # yield 10Y
+    rsi_entry_low: 42
+    rsi_entry_high: 52
+    rsi_exit: 65
+    adx_min: 15
+    lateral_band: 0.01  # 1.0%
+    atr_max: 0.03
+    aum_min: 50
+    mm200_filter: false
+    l0_drawdown: 12
+    l0_rsi_max: 38
+
+  crypto_digital_assets:
+    description: "Crypto / asset digitali — Bitcoin, Ethereum, Solana, Basket"
+    ma_filter_1: "EMA20"
+    ma_filter_2: "SMA200"
+    rsi_entry_low: 35
+    rsi_entry_high: 52
+    rsi_exit: 70
+    adx_min: 28
+    lateral_band: 0.03  # 3.0%
+    atr_max: 0.15
+    aum_min: 100
+    mm200_filter: true
+    l0_drawdown: 25
+    l0_rsi_max: 40
+
+  leva_single_stock:
+    description: "Leva / single stock / struct — ETP 3x long/short su singoli titoli"
+    ma_filter_1: "EMA20"
+    ma_filter_2: null  # vol impl.
+    rsi_entry_low: 45
+    rsi_entry_high: 58
+    rsi_exit: 65
+    adx_min: 28
+    lateral_band: 0.02  # 2.0%
+    atr_max: 0.20
+    aum_min: 50
+    mm200_filter: true
+    l0_drawdown: 20
+    l0_rsi_max: 40
+    hold_days_max: 30  # giorni massimi di tenuta
+
+  private_equity_buffer:
+    description: "Private Equity / Buffer ETF — Listed PE, Buffer strategy"
+    ma_filter_1: "SMA50"
+    ma_filter_2: null  # NAV disc.
+    rsi_entry_low: 40
+    rsi_entry_high: 55
+    rsi_exit: 65
+    adx_min: 15
+    lateral_band: 0.008  # 0.8%
+    atr_max: 0.03
+    aum_min: 50
+    mm200_filter: false
+    l0_drawdown: 15
+    l0_rsi_max: 38
+
+  monetario_liquidita:
+    description: "Monetario / liquidità — ETF overnight, short-term"
+    ma_filter_1: null
+    ma_filter_2: null
+    rsi_entry_low: null
+    rsi_entry_high: null
+    rsi_exit: null
+    adx_min: null
+    lateral_band: 0.0
+    atr_max: 0.005
+    aum_min: 100
+    mm200_filter: false
+    l0_drawdown: null
+    l0_rsi_max: null
+    # Monetario: solo ranking yield vs tasso BCE
+
+# Family assignment rules (pattern matching su categoria Excel)
+family_detection:
+  - pattern: ["monetar", "liquidity", "money market"]
+    family: "monetario_liquidita"
+
+  - pattern: ["settorial", "thematic", "tecnolog", "healthcare", "salute", "energia", "infrastruttur", "real estate", "immobil", "biotech", "pharma", "fintech", "consumi", "lusso", "consumer", "acqua", "water", "agri", "food", "nutrizi", "cyber", "security", "biotecnolog", "farmac"]
+    family: "settoriali_growth"
+
+  - pattern: ["alternativ", "bilanc", "multi-asset", "absolute return"]
+    family: "bond_corp_hy_em"  # fallback per bilanciati
+
+  - pattern: ["emerging", "cina", "india", "asia pacific"]
+    family: "mercati_emergenti"
+
+  - pattern: ["materie prime", "oro", "gold", "commodity", "metalli", "petrolio"]
+    family: "oro_metalli_preziosi"
+
+  - pattern: ["high yield", "high-yield", "corporate", "credit"]
+    family: "bond_corp_hy_em"
+
+  - pattern: ["obblig", "bond", "fixed"]
+    family: "bond_governativi"
+
+  - pattern: ["crypto", "bitcoin", "ethereum", "blockchain", "digital"]
+    family: "crypto_digital_assets"
+
+# Default fallback
+default_family: "equity_sviluppati"
