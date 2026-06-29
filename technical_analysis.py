@@ -272,6 +272,47 @@ class ETFTechnicalAnalyzer:
         else:
             return "LATERALE"
 
+    def _calculate_atr(self, high: pd.Series, low: pd.Series, close: pd.Series,
+                       period: int = 14) -> pd.Series:
+        """Calcola ATR (Average True Range)."""
+        tr = pd.concat([
+            high - low,
+            (high - close.shift(1)).abs(),
+            (low - close.shift(1)).abs()
+        ], axis=1).max(axis=1)
+        return tr.ewm(com=period - 1, min_periods=period).mean()
+
+    def _calculate_atr_normalized(self, high: pd.Series, low: pd.Series,
+                                  close: pd.Series, period: int = 14) -> Optional[float]:
+        """Calcola ATR normalizzato come % del prezzo attuale."""
+        if high is None or low is None or close is None or len(close) < period:
+            return None
+        atr = self._calculate_atr(high, low, close, period)
+        current_price = close.iloc[-1]
+        if current_price > 0 and pd.notna(atr.iloc[-1]):
+            return float(atr.iloc[-1]) / current_price
+        return None
+
+    def _calculate_drawdown_52w(self, close: pd.Series) -> Optional[float]:
+        """Calcola drawdown da massimo 52 settimane (ultimo ~250 giorni)."""
+        if close is None or len(close) < 20:
+            return None
+        # Ultimo ~250 giorni (1 anno trading)
+        period_52w = min(250, len(close))
+        hist_52w = close.iloc[-period_52w:]
+        peak = hist_52w.max()
+        current = close.iloc[-1]
+        if peak > 0:
+            dd = (current - peak) / peak
+            return float(dd)
+        return None
+
+    def _calculate_price_range(self, high: pd.Series, low: pd.Series) -> Optional[float]:
+        """Calcola il range di prezzo (High - Low) per i dati disponibili."""
+        if high is None or low is None or len(high) == 0:
+            return None
+        return float(high.iloc[-1] - low.iloc[-1])
+
     # ── Divergenza / recupero (copiato da fund system) ─────────────────────────
 
     def _detect_positive_divergence(self, prices: pd.Series, rsi: pd.Series,
@@ -504,6 +545,11 @@ class ETFTechnicalAnalyzer:
         peak    = float(close.tail(peak_w).max())
         drawdown = (peak - current) / peak * 100 if peak > 0 else 0.0
 
+        # NUOVE METRICHE: ATR, Drawdown 52W, Price Range
+        atr_normalized = self._calculate_atr_normalized(high, low, close) if high is not None and low is not None else None
+        drawdown_52w = self._calculate_drawdown_52w(close)
+        price_range = self._calculate_price_range(high, low) if high is not None and low is not None else None
+
         # ── Exit rules (se gia' in L1) ─────────────────────────────────────────
         exit_rule    = None
         partial_exit = False  # True = segnale D (vendi 90%, tieni 10%)
@@ -596,6 +642,10 @@ class ETFTechnicalAnalyzer:
             'pct_1m':             pct_1m,
             'peak_price':         round(peak, 4),
             'drawdown_from_peak': round(drawdown, 2),
+            # NUOVE METRICHE
+            'atr_normalized':     round(atr_normalized * 100, 2) if atr_normalized is not None else None,  # in %
+            'drawdown_52w':       round(drawdown_52w * 100, 2) if drawdown_52w is not None else None,  # in %
+            'price_range':        round(price_range, 4) if price_range is not None else None,
         }
         buy_count = sum([allineamento, persistenza, rsi_ok, dist_ok, adx_ok, macd_ok])
 
@@ -686,12 +736,13 @@ class ETFTechnicalAnalyzer:
             return {
                 'current_price': price,
                 'ema10': None, 'ema20': None, 'sma50': None, 'sma200': None,
-                'rsi': None, 'adx': None,
+                'rsi': None, 'adx': None, 'regime': None,
                 'macd_histogram': None, 'macd_histogram_prev': None,
                 'dist_ema20': None, 'ema20_slope': None,
                 'days_above_ema20': 0, 'days_below_ema20': 0,
                 'peak_price': price, 'drawdown_from_peak': 0.0,
                 'pct_change_1d': None, 'pct_change_1w': None, 'pct_change_1m': None,
+                'atr_normalized': None, 'drawdown_52w': None, 'price_range': None,
                 'partial_exit': False,
                 'suggested_level': current_level, 'level_change': False,
                 'level_reason': f'Dati insufficienti: {len(df)} giorni',
@@ -747,6 +798,9 @@ class ETFTechnicalAnalyzer:
             'pct_change_1d':       lc.get('pct_1d'),
             'pct_change_1w':       lc.get('pct_1w'),
             'pct_change_1m':       lc.get('pct_1m'),
+            'atr_normalized':      lc.get('atr_normalized'),
+            'drawdown_52w':        lc.get('drawdown_52w'),
+            'price_range':         lc.get('price_range'),
             'partial_exit':        lc.get('partial_exit', False),
             'suggested_level':     level['suggested_level'],
             'level_change':        level['level_change'],
