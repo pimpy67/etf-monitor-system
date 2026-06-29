@@ -57,8 +57,15 @@ ssh -i "$SSH_KEY" "$VPS" "
 
 # 5. Trigger monitor (aspetta che Flask sia pronto)
 echo ""
-echo "=== [5/5] Trigger monitor (aggiorna dashboard_data.json) ==="
+echo "=== [5/6] Trigger monitor (aggiorna dashboard_data.json) ==="
 ssh -i "$SSH_KEY" "$VPS" "until curl -sf http://localhost:5001/api/health > /dev/null 2>&1; do sleep 2; done && curl -s -X POST http://localhost:5001/api/trigger-update"
+
+# 6. Sincronizza file xlsx dal VPS al Mac locale
+echo ""
+echo "=== [6/6] Sincronizza Excel locale dal VPS ==="
+scp -i "$SSH_KEY" "$VPS:$VPS_REPO/etf_monitoraggio.xlsx" "./etf_monitoraggio.xlsx" 2>/dev/null && \
+    echo "✓ etf_monitoraggio.xlsx sincronizzato" || \
+    echo "⚠ Sincronizzazione Excel non riuscita (ma deploy è ok)"
 
 echo ""
 echo "Deploy completato. Dashboard: https://etf.andreapavan.tech"

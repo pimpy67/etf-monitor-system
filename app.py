@@ -63,7 +63,7 @@ def _should_run_today():
         last_update = data.get('last_update')
         if not last_update:
             return True
-        last_dt = datetime.fromisoformat(last_update)
+        last_dt = datetime.fromisoformat(last_update.replace('Z', '').split('+')[0])
         return last_dt.date() < now.date() and now.hour >= monitor_hour
     except Exception:
         return True
@@ -300,7 +300,8 @@ def health_check():
     hours_since_update = None
     if last_update:
         try:
-            last_dt = datetime.fromisoformat(last_update)
+            lu = last_update.replace('Z', '').split('+')[0]
+            last_dt = datetime.fromisoformat(lu)
             delta = now - last_dt
             hours_since_update = round(delta.total_seconds() / 3600, 1)
             stale = hours_since_update > 26
@@ -322,7 +323,8 @@ def health_check():
         message = 'Sistema operativo'
     elif stale:
         status = 'red'
-        message = f'Dati non aggiornati da {hours_since_update}h'
+        hrs_str = f'{hours_since_update}h' if hours_since_update is not None else '?h'
+        message = f'Dati non aggiornati da {hrs_str}'
     else:
         status = 'yellow'
         message = f'{etfs_error} ETF con errore' if etfs_error else 'Stato parziale'
@@ -352,8 +354,7 @@ def l1_tracking_api():
     import numpy as np
     from datetime import date as date_type
 
-    entries = db.get_all_l1_entries()
-    today   = date_type.today()
+    today = date_type.today()
 
     fund_names = {}
     try:
@@ -367,23 +368,32 @@ def l1_tracking_api():
     except Exception:
         pass
 
+    # Query batch: ottiene tracking + ultimo prezzo in un colpo solo
     result = []
-    for isin, entry in entries.items():
-        entry_date  = entry['entry_date']
-        entry_price = entry['entry_price']
-        ed = entry_date if isinstance(entry_date, date_type) else date_type.fromisoformat(str(entry_date))
+    conn = db._get_connection()
+    if not conn:
+        return jsonify({'tracking': []})
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT t.isin, t.entry_date, t.entry_price,
+                       p.close AS current_price, p.date AS price_date
+                FROM etf_l1_tracking t
+                LEFT JOIN LATERAL (
+                    SELECT close, date FROM etf_price_history
+                    WHERE isin = t.isin
+                    ORDER BY date DESC LIMIT 1
+                ) p ON true
+            """)
+            rows = cur.fetchall()
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
 
-        df_p = db.get_close_by_isin(isin, days=3)
-        current_price   = None
-        last_price_date = today
-        if not df_p.empty:
-            current_price = float(df_p.iloc[-1]['Close'])
-            # Usa data reale ultimo prezzo (evita conteggio errato nei weekend)
-            try:
-                idx = df_p.index[-1]
-                last_price_date = idx.date() if hasattr(idx, 'date') else idx.to_pydatetime().date()
-            except Exception:
-                last_price_date = today
+    for isin, entry_date, entry_price, current_price, price_date in rows:
+        ed = entry_date if isinstance(entry_date, date_type) else date_type.fromisoformat(str(entry_date))
+        last_price_date = price_date if price_date else today
 
         try:
             days_in_l1 = max(1, int(np.busday_count(ed, last_price_date)) + 1)
@@ -392,18 +402,77 @@ def l1_tracking_api():
 
         pct_gain = None
         if current_price and entry_price:
+            pct_gain = round((float(current_price) - float(entry_price)) / float(entry_price) * 100, 2)
+
+        result.append({
+            'isin':          isin,
+            'fund_name':     fund_names.get(isin, isin),
+            'entry_date':    ed.isoformat(),
+            'entry_price':   float(entry_price),
+            'current_price': float(current_price) if current_price else None,
+            'pct_gain':      pct_gain,
+            'days_in_l1':    days_in_l1,
+            'is_new':        days_in_l1 == 1,
+        })
+
+    return jsonify({'tracking': result})
+
+
+@app.route('/api/l0-tracking')
+def l0_tracking_api():
+    """ETF attualmente in L0 (Deep Recovery) con dati di ingresso e performance."""
+    from datetime import date as date_type
+    import numpy as np
+
+    entries = db.get_all_l0_entries()
+    today   = date_type.today()
+
+    fund_names = {}
+    try:
+        with open('data/dashboard_data.json', 'r') as f:
+            dash = json.load(f)
+        for lv_funds in dash.get('levels', {}).values():
+            for etf in lv_funds:
+                isin = etf.get('isin') or ''
+                if isin:
+                    fund_names[isin] = etf.get('nome', isin)
+        for etf in dash.get('l0_funds', []):
+            isin = etf.get('isin') or ''
+            if isin:
+                fund_names[isin] = etf.get('nome', isin)
+    except Exception:
+        pass
+
+    result = []
+    for isin, entry in entries.items():
+        entry_date  = entry['entry_date']
+        entry_price = entry['entry_price']
+        panic_low   = entry.get('panic_low')
+        ed = entry_date if isinstance(entry_date, date_type) else date_type.fromisoformat(str(entry_date))
+
+        df_p = db.get_close_by_isin(isin, days=3)
+        current_price = None
+        if not df_p.empty:
+            current_price = float(df_p.iloc[-1]['Close'])
+
+        try:
+            days_in_l0 = max(1, int(np.busday_count(ed, today)) + 1)
+        except Exception:
+            days_in_l0 = 1
+
+        pct_gain = None
+        if current_price and entry_price:
             pct_gain = round((current_price - float(entry_price)) / float(entry_price) * 100, 2)
 
-        delta_calendar = (today - ed).days
         result.append({
-            'isin':         isin,
-            'fund_name':    fund_names.get(isin, isin),
-            'entry_date':   ed.isoformat(),
-            'entry_price':  float(entry_price),
+            'isin':          isin,
+            'fund_name':     fund_names.get(isin, isin),
+            'entry_date':    ed.isoformat(),
+            'entry_price':   float(entry_price),
+            'panic_low':     float(panic_low) if panic_low else None,
             'current_price': current_price,
-            'pct_gain':     pct_gain,
-            'days_in_l1':   days_in_l1,
-            'is_new':       days_in_l1 <= 2,
+            'pct_gain':      pct_gain,
+            'days_in_l0':    days_in_l0,
         })
 
     return jsonify({'tracking': result})
