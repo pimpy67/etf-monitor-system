@@ -229,30 +229,65 @@ families:
     l0_rsi_max: null
 
 # Family assignment rules (pattern matching su categoria Excel)
+# Mappato da tutte le 42 categorie nel file Excel
 family_detection:
-  - pattern: ["monetar", "liquidity", "money market"]
+
+  # 01 — MONETARIO / LIQUIDITÀ (4 ETF)
+  - pattern: ["monetario", "liquidita", "money market"]
     family: "monetario_liquidita"
 
-  - pattern: ["settorial", "thematic", "tecnolog", "healthcare", "salute", "energia", "infrastruttur", "real estate", "immobil", "biotech", "pharma", "fintech", "consumi", "lusso", "consumer", "acqua", "water", "agri", "food", "nutrizi", "cyber", "security", "biotecnolog", "farmac"]
-    family: "settoriali_growth"
-
-  - pattern: ["alternativ", "bilanc", "multi-asset", "absolute return"]
-    family: "bond_corp_hy_em"
-
-  - pattern: ["emerging", "cina", "india", "asia pacific"]
+  # 02 — MERCATI EMERGENTI (22 ETF)
+  - pattern: ["asia - emergente", "america latina", "africa & middle", "europa dell'est"]
     family: "mercati_emergenti"
 
-  - pattern: ["materie prime", "oro", "gold", "commodity", "metalli", "petrolio"]
-    family: "oro_metalli_preziosi"
+  # 03 — SETTORIALI GROWTH (10 ETF) — Tech, Energia, Industriali, Finanza
+  - pattern: ["settoriale - tecnolog", "settoriale - energia", "settoriale - industri", "settoriale - finanza"]
+    family: "settoriali_growth"
 
-  - pattern: ["high yield", "high-yield", "corporate", "credit"]
-    family: "bond_corp_hy_em"
+  # 04 — SETTORIALI DIFENSIVI (4 ETF) — Salute, Consumi
+  - pattern: ["settoriale - salute", "settoriale - consumi"]
+    family: "settoriali_difensivi"
 
-  - pattern: ["obblig", "bond", "fixed"]
+  # 05 — BOND GOVERNATIVI (24 ETF)
+  - pattern: ["obbligazionari - governativi", "obbligazionari - globali", "obbligazionari - inflation"]
     family: "bond_governativi"
 
-  - pattern: ["crypto", "bitcoin", "ethereum", "blockchain", "digital"]
+  # 06 — BOND CORPORATE / HY / EM (26 ETF)
+  - pattern: ["obbligazionari - corporate", "obbligazionari - high yield", "obbligazionari - emergenti", "obbligazionari - aggregati"]
+    family: "bond_corp_hy_em"
+
+  # 07 — COMMODITIES (4 ETF)
+  - pattern: ["materie prime", "settoriale - materie prime"]
+    family: "commodities"
+
+  # 08 — ORO E METALLI PREZIOSI (5 ETF)
+  - pattern: ["oro", "metalli preziosi"]
+    family: "oro_metalli_preziosi"
+
+  # 09 — METALLI INDUSTRIALI (6 ETF)
+  - pattern: ["metalli industriali"]
+    family: "metalli_industriali"
+
+  # 10 — REAL ESTATE / REIT (3 ETF)
+  - pattern: ["real estate", "reit", "infrastrutture"]
+    family: "real_estate_reit"
+
+  # 11 — CRYPTO / DIGITAL ASSETS (5 ETF)
+  - pattern: ["crypto"]
     family: "crypto_digital_assets"
 
-# Default fallback
+  # 12 — LEVA / SINGLE STOCK (12 ETF)
+  - pattern: ["leva singolo", "volatilita", "strutturati"]
+    family: "leva_single_stock"
+
+  # 13 — PRIVATE EQUITY / BUFFER (2 ETF)
+  - pattern: ["private equity"]
+    family: "private_equity_buffer"
+
+  # 14 — EQUITY SVILUPPATI (99 ETF) — DEFAULT FALLBACK
+  # Includes: USA, Europa, Giappone, All-World, Mid Cap, ecc.
+  - pattern: ["stati uniti", "europa occidentale", "giappone", "globale", "azionario", "canada", "australasia", "regno unito", "asia - paesi sviluppati"]
+    family: "equity_sviluppati"
+
+# Default fallback per categorie non mappate
 default_family: "equity_sviluppati"
