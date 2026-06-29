@@ -430,7 +430,8 @@ class ETFTechnicalAnalyzer:
         dist_peak              = (current - peak_price) / peak_price * 100
         result['distance_from_peak'] = round(dist_peak, 2)
 
-        cond1 = dist_peak <= -self.p['l0_drawdown']
+        # Cond 1: drawdown check (skip if not applicable for this family)
+        cond1 = self.p['l0_drawdown'] is not None and dist_peak <= -self.p['l0_drawdown']
         cond2 = rsi_val < l0_rsi_thr
         result['rsi_oversold'] = cond2
         cond3 = self._detect_positive_divergence(prices, rsi)
