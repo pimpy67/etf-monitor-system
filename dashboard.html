@@ -778,29 +778,30 @@ function renderParamRef() {
     </div>
     <div class="param-ref-body" id="paramRefBody">
 
-      <div class="param-section-title">L1 "Trend Sicuro" — 5 Condizioni di Entrata (tutte richieste)</div>
+      <div class="param-section-title">L1 "Trend Sicuro" — 6 Condizioni di Entrata (tutte richieste)</div>
       <div style="font-size:0.78em;color:#58a6ff;margin-bottom:6px;padding:3px 6px;background:rgba(88,166,255,0.07);border-radius:4px;">
-        &#9432; 6 condizioni tutte obbligatorie per l'ingresso L1
+        &#9432; 6 condizioni tutte obbligatorie per l'ingresso L1 — Refactor v2.0 (13 famiglie parametriche)
       </div>
       <table class="param-table">
         <thead><tr>
-          <th style="width:22%">Parametro</th>
-          <th class="cls-eq"  style="width:20%">&#9670; Equity / Tematici</th>
-          <th class="cls-em"  style="width:18%">&#9670; Mercati Emergenti</th>
-          <th class="cls-sec" style="width:18%">&#9670; Materie Prime</th>
-          <th class="cls-etf" style="width:22%">&#9670; Bond</th>
+          <th style="width:20%">Parametro</th>
+          <th class="cls-eq"  style="width:16%">&#9670; Equity Sviluppati</th>
+          <th class="cls-em"  style="width:16%">&#9670; Mercati Emergenti</th>
+          <th class="cls-sec" style="width:16%">&#9670; Settoriali Growth</th>
+          <th class="cls-sec" style="width:16%">&#9670; Commodities</th>
+          <th class="cls-etf" style="width:16%">&#9670; Bond</th>
         </tr></thead>
         <tbody>
-          <tr><td class="param-name">RSI range entrata</td><td class="val-eq">50 – 70</td><td class="val-em">50 – 65</td><td class="val-sec">50 – 65</td><td class="val-na">48 – 62</td></tr>
-          <tr><td class="param-name">Persistenza EMA20</td><td class="val-eq">3 giorni</td><td class="val-em">3 giorni</td><td class="val-sec">3 giorni</td><td class="val-na">3 giorni</td></tr>
-          <tr><td class="param-name">Distanza max EMA20</td><td class="val-eq">4 – 6%*</td><td class="val-em">5%</td><td class="val-sec">5%</td><td class="val-na">2%</td></tr>
-          <tr><td class="param-name">ADX(14) richiesto</td><td class="val-eq">&gt; 20 – 22*</td><td class="val-em">&gt; 20</td><td class="val-sec">&gt; 22</td><td class="val-na">&gt; 15</td></tr>
-          <tr><td class="param-name">MACD momentum</td><td class="val-eq" colspan="4" style="color:#8b949e;">Histogram &gt; 0 e (in crescita oppure prezzo vicino EMA20 &lt; 2%)</td></tr>
-          <tr><td class="param-name">Filtro bear market</td><td class="val-eq" colspan="3" style="color:#8b949e;">Prezzo &gt; SMA200 — blocca nuovi ingressi L1</td><td class="val-na" style="color:#555;">Non applicato</td></tr>
+          <tr><td class="param-name">RSI range entrata</td><td class="val-eq">45 – 55</td><td class="val-em">40 – 52</td><td class="val-sec">48 – 58</td><td class="val-sec">40 – 55</td><td class="val-na">38 – 48</td></tr>
+          <tr><td class="param-name">Persistenza EMA20</td><td class="val-eq">3 giorni</td><td class="val-em">3 giorni</td><td class="val-sec">3 giorni</td><td class="val-sec">3 giorni</td><td class="val-na">3 giorni</td></tr>
+          <tr><td class="param-name">Distanza max EMA20</td><td class="val-eq">4%</td><td class="val-em">5%</td><td class="val-sec">5%</td><td class="val-sec">3%</td><td class="val-na">1.5%</td></tr>
+          <tr><td class="param-name">ADX(14) richiesto</td><td class="val-eq">&gt; 18</td><td class="val-em">&gt; 22</td><td class="val-sec">&gt; 25</td><td class="val-sec">&gt; 22</td><td class="val-na">&gt; 12</td></tr>
+          <tr><td class="param-name">Regime richiesto</td><td class="val-eq" colspan="5" style="color:#8b949e;">BULL (EMA20 &gt; SMA50 oltre banda laterale) — blocca L1 se LATERALE/BEAR</td></tr>
+          <tr><td class="param-name">MACD momentum</td><td class="val-eq" colspan="5" style="color:#8b949e;">Histogram &gt; 0 e (in crescita oppure dist EMA20 &lt; 2%)</td></tr>
         </tbody>
       </table>
       <div style="font-size:0.74em;color:#555;margin-top:4px;padding:0 2px;">
-        * Equity sviluppati: dist 4%, ADX 20 — Settoriali: dist 5%, ADX 22 — Tematici: dist 6%, ADX 22
+        ✓ Sistema aggiornato a v2.0 con 13 famiglie parametriche — Regime ternario (Bull/Laterale/Bear) — Metriche: ATR%, Drawdown 52W, Price Range
       </div>
 
       <div class="param-section-title" style="margin-top:16px;">L1 — Regole di Uscita (priorità dall'alto)</div>
