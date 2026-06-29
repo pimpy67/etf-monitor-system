@@ -1,219 +1,232 @@
 # ETF Monitor — Configurazione Famiglie e Parametri
-# Versione: 1.0 (Giugno 2026)
+# Versione: 2.0 (Giugno 2026) — CORRETTA
 # Source: ETF_Monitor_Config_Refactor_v2.xlsx foglio 2_SOGLIE
 
 families:
   equity_sviluppati:
     description: "Equity sviluppati — Large cap, ACWI, All-World"
-    ma_filter_1: "EMA20"
-    ma_filter_2: "SMA50"
     rsi_entry_low: 45
     rsi_entry_high: 55
-    rsi_exit: 68
-    adx_min: 18
-    lateral_band: 0.01  # 1.0%
+    rsi_exit_min: 40
+    rsi_overbought: 78
+    adx_entry: 18
+    ema_dist_max: 4.0
+    lateral_band: 0.01
     atr_max: 0.03
     aum_min: 50
+    days_above_ema: 3
     mm200_filter: true
-    l0_drawdown: 15
+    l0_drawdown: 15.0
     l0_rsi_max: 35
 
   mercati_emergenti:
     description: "Mercati emergenti — EM globale, Asia, LatAm, EMEA"
-    ma_filter_1: "EMA20"
-    ma_filter_2: "SMA50"
     rsi_entry_low: 40
     rsi_entry_high: 52
-    rsi_exit: 65
-    adx_min: 22
-    lateral_band: 0.012  # 1.2%
+    rsi_exit_min: 38
+    rsi_overbought: 76
+    adx_entry: 22
+    ema_dist_max: 5.0
+    lateral_band: 0.012
     atr_max: 0.04
     aum_min: 50
+    days_above_ema: 3
     mm200_filter: true
-    l0_drawdown: 20
+    l0_drawdown: 20.0
     l0_rsi_max: 38
 
   settoriali_growth:
     description: "Settoriali crescita — Tech, AI, Semi, Nasdaq, Digitale"
-    ma_filter_1: "EMA20"
-    ma_filter_2: "SMA50"
     rsi_entry_low: 48
     rsi_entry_high: 58
-    rsi_exit: 72
-    adx_min: 25
-    lateral_band: 0.015  # 1.5%
+    rsi_exit_min: 38
+    rsi_overbought: 78
+    adx_entry: 25
+    ema_dist_max: 5.0
+    lateral_band: 0.015
     atr_max: 0.05
     aum_min: 50
+    days_above_ema: 3
     mm200_filter: true
-    l0_drawdown: 18
+    l0_drawdown: 18.0
     l0_rsi_max: 38
 
   settoriali_difensivi:
     description: "Settoriali difensivi — Salute, Utilities, Insurance, Food"
-    ma_filter_1: "SMA50"
-    ma_filter_2: "SMA200"
     rsi_entry_low: 42
     rsi_entry_high: 50
-    rsi_exit: 65
-    adx_min: 15
-    lateral_band: 0.01  # 1.0%
+    rsi_exit_min: 38
+    rsi_overbought: 65
+    adx_entry: 15
+    ema_dist_max: 2.5
+    lateral_band: 0.01
     atr_max: 0.025
     aum_min: 50
+    days_above_ema: 5
     mm200_filter: true
-    l0_drawdown: 15
+    l0_drawdown: 15.0
     l0_rsi_max: 35
 
   bond_governativi:
     description: "Bond governativi EUR/USD — BTP, Bund, UST, Gov Euro, IL"
-    ma_filter_1: "SMA50"
-    ma_filter_2: "SMA200"
     rsi_entry_low: 38
     rsi_entry_high: 48
-    rsi_exit: 62
-    adx_min: 12
-    lateral_band: 0.005  # 0.5%
+    rsi_exit_min: 42
+    rsi_overbought: 70
+    adx_entry: 12
+    ema_dist_max: 1.5
+    lateral_band: 0.005
     atr_max: 0.015
     aum_min: 100
+    days_above_ema: 3
     mm200_filter: false
-    l0_drawdown: 8
+    l0_drawdown: 8.0
     l0_rsi_max: 38
 
   bond_corp_hy_em:
     description: "Bond corporate / HY / EM — Corp EUR/USD, HY, EM bond"
-    ma_filter_1: "EMA20"
-    ma_filter_2: "SMA50"
     rsi_entry_low: 42
     rsi_entry_high: 52
-    rsi_exit: 65
-    adx_min: 15
-    lateral_band: 0.008  # 0.8%
+    rsi_exit_min: 38
+    rsi_overbought: 70
+    adx_entry: 15
+    ema_dist_max: 2.0
+    lateral_band: 0.008
     atr_max: 0.025
     aum_min: 50
+    days_above_ema: 3
     mm200_filter: false
-    l0_drawdown: 10
+    l0_drawdown: 10.0
     l0_rsi_max: 38
 
   commodities:
     description: "Commodities broad — Bloomberg Comm, GSCI, Agri, Energia"
-    ma_filter_1: "SMA50"
-    ma_filter_2: null
     rsi_entry_low: 40
     rsi_entry_high: 55
-    rsi_exit: 68
-    adx_min: 22
-    lateral_band: 0.015  # 1.5%
+    rsi_exit_min: 38
+    rsi_overbought: 75
+    adx_entry: 22
+    ema_dist_max: 3.0
+    lateral_band: 0.015
     atr_max: 0.06
     aum_min: 50
+    days_above_ema: 3
     mm200_filter: true
-    l0_drawdown: 20
+    l0_drawdown: 20.0
     l0_rsi_max: 40
 
   oro_metalli_preziosi:
     description: "Oro e metalli preziosi — Oro, Argento, Platino, Basket PM"
-    ma_filter_1: "SMA200"
-    ma_filter_2: null
     rsi_entry_low: 38
     rsi_entry_high: 52
-    rsi_exit: 68
-    adx_min: 18
-    lateral_band: 0.015  # 1.5%
+    rsi_exit_min: 38
+    rsi_overbought: 68
+    adx_entry: 18
+    ema_dist_max: 2.5
+    lateral_band: 0.015
     atr_max: 0.04
     aum_min: 50
+    days_above_ema: 3
     mm200_filter: true
-    l0_drawdown: 15
+    l0_drawdown: 15.0
     l0_rsi_max: 35
 
   metalli_industriali:
     description: "Metalli industriali — Rame, Alluminio, Zinco, Nichel, Battery"
-    ma_filter_1: "SMA50"
-    ma_filter_2: null  # PMI proxy
     rsi_entry_low: 38
     rsi_entry_high: 50
-    rsi_exit: 65
-    adx_min: 20
-    lateral_band: 0.012  # 1.2%
+    rsi_exit_min: 38
+    rsi_overbought: 65
+    adx_entry: 20
+    ema_dist_max: 3.0
+    lateral_band: 0.012
     atr_max: 0.05
     aum_min: 30
+    days_above_ema: 3
     mm200_filter: true
-    l0_drawdown: 18
+    l0_drawdown: 18.0
     l0_rsi_max: 38
 
   real_estate_reit:
     description: "Real Estate / REIT — EPRA Europe, NAREIT Global, REIT"
-    ma_filter_1: "SMA50"
-    ma_filter_2: null  # yield 10Y
     rsi_entry_low: 42
     rsi_entry_high: 52
-    rsi_exit: 65
-    adx_min: 15
-    lateral_band: 0.01  # 1.0%
+    rsi_exit_min: 38
+    rsi_overbought: 65
+    adx_entry: 15
+    ema_dist_max: 2.0
+    lateral_band: 0.01
     atr_max: 0.03
     aum_min: 50
+    days_above_ema: 3
     mm200_filter: false
-    l0_drawdown: 12
+    l0_drawdown: 12.0
     l0_rsi_max: 38
 
   crypto_digital_assets:
     description: "Crypto / asset digitali — Bitcoin, Ethereum, Solana, Basket"
-    ma_filter_1: "EMA20"
-    ma_filter_2: "SMA200"
     rsi_entry_low: 35
     rsi_entry_high: 52
-    rsi_exit: 70
-    adx_min: 28
-    lateral_band: 0.03  # 3.0%
+    rsi_exit_min: 38
+    rsi_overbought: 70
+    adx_entry: 28
+    ema_dist_max: 6.0
+    lateral_band: 0.03
     atr_max: 0.15
     aum_min: 100
+    days_above_ema: 3
     mm200_filter: true
-    l0_drawdown: 25
+    l0_drawdown: 25.0
     l0_rsi_max: 40
 
   leva_single_stock:
     description: "Leva / single stock / struct — ETP 3x long/short su singoli titoli"
-    ma_filter_1: "EMA20"
-    ma_filter_2: null  # vol impl.
     rsi_entry_low: 45
     rsi_entry_high: 58
-    rsi_exit: 65
-    adx_min: 28
-    lateral_band: 0.02  # 2.0%
+    rsi_exit_min: 38
+    rsi_overbought: 65
+    adx_entry: 28
+    ema_dist_max: 4.0
+    lateral_band: 0.02
     atr_max: 0.20
     aum_min: 50
+    days_above_ema: 3
     mm200_filter: true
-    l0_drawdown: 20
+    l0_drawdown: 20.0
     l0_rsi_max: 40
-    hold_days_max: 30  # giorni massimi di tenuta
+    hold_days_max: 30
 
   private_equity_buffer:
     description: "Private Equity / Buffer ETF — Listed PE, Buffer strategy"
-    ma_filter_1: "SMA50"
-    ma_filter_2: null  # NAV disc.
     rsi_entry_low: 40
     rsi_entry_high: 55
-    rsi_exit: 65
-    adx_min: 15
-    lateral_band: 0.008  # 0.8%
+    rsi_exit_min: 38
+    rsi_overbought: 65
+    adx_entry: 15
+    ema_dist_max: 2.5
+    lateral_band: 0.008
     atr_max: 0.03
     aum_min: 50
+    days_above_ema: 3
     mm200_filter: false
-    l0_drawdown: 15
+    l0_drawdown: 15.0
     l0_rsi_max: 38
 
   monetario_liquidita:
     description: "Monetario / liquidità — ETF overnight, short-term"
-    ma_filter_1: null
-    ma_filter_2: null
     rsi_entry_low: null
     rsi_entry_high: null
-    rsi_exit: null
-    adx_min: null
+    rsi_exit_min: 42
+    rsi_overbought: 97
+    adx_entry: null
+    ema_dist_max: 0.5
     lateral_band: 0.0
     atr_max: 0.005
     aum_min: 100
+    days_above_ema: 3
     mm200_filter: false
     l0_drawdown: null
     l0_rsi_max: null
-    # Monetario: solo ranking yield vs tasso BCE
 
 # Family assignment rules (pattern matching su categoria Excel)
 family_detection:
@@ -224,7 +237,7 @@ family_detection:
     family: "settoriali_growth"
 
   - pattern: ["alternativ", "bilanc", "multi-asset", "absolute return"]
-    family: "bond_corp_hy_em"  # fallback per bilanciati
+    family: "bond_corp_hy_em"
 
   - pattern: ["emerging", "cina", "india", "asia pacific"]
     family: "mercati_emergenti"
