@@ -14,6 +14,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from typing import Dict, List, Optional
+import yaml
+import os
 
 
 class ETFTechnicalAnalyzer:
@@ -68,9 +70,31 @@ class ETFTechnicalAnalyzer:
 
     EQUITY_FAMILY = frozenset({'equity_developed', 'equity_sector', 'equity_emerging', 'thematic', 'equity'})
 
-    def __init__(self, etf_type: str = 'equity_developed'):
-        self.etf_type = etf_type if etf_type in self.PROFILES else 'equity_developed'
-        self.p = self.PROFILES[self.etf_type]
+    # Carica configurazione famiglie da YAML una volta all'avvio della classe
+    _FAMILIES_CONFIG = None
+
+    def __init__(self, etf_type: str = 'equity_developed', famiglia: Optional[str] = None):
+        """
+        Inizializza l'analizzatore tecnico.
+
+        Args:
+            etf_type: tipo legacy per backward compatibility (ignorato se famiglia fornito)
+            famiglia: nome famiglia da config/etf_families.yaml (eg. 'equity_sviluppati')
+        """
+        # Carica configurazione YAML se non già fatto
+        if ETFTechnicalAnalyzer._FAMILIES_CONFIG is None:
+            ETFTechnicalAnalyzer._FAMILIES_CONFIG = self._load_families_config()
+
+        # Se famiglia fornito, usa parametri da YAML; altrimenti fallback a PROFILES
+        if famiglia and famiglia in (self._FAMILIES_CONFIG.get('families', {}) if self._FAMILIES_CONFIG else {}):
+            self.famiglia = famiglia
+            self.p = self._FAMILIES_CONFIG['families'][famiglia]
+            self.etf_type = famiglia
+        else:
+            # Backward compatibility: usa PROFILES legacy
+            self.famiglia = None
+            self.etf_type = etf_type if etf_type in self.PROFILES else 'equity_developed'
+            self.p = self.PROFILES[self.etf_type]
 
         self.ema10_period  = 10
         self.ema20_period  = 20
@@ -81,6 +105,52 @@ class ETFTechnicalAnalyzer:
         self.macd_fast     = 12
         self.macd_slow     = 26
         self.macd_signal_p = 9
+
+    @staticmethod
+    def _load_families_config() -> Optional[Dict]:
+        """Carica configurazione famiglie da config/etf_families.yaml"""
+        config_path = os.path.join(os.path.dirname(__file__), 'config', 'etf_families.yaml')
+        if not os.path.exists(config_path):
+            print(f"⚠️  Config file non trovato: {config_path}")
+            return None
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return yaml.safe_load(f)
+        except Exception as e:
+            print(f"❌ Errore caricamento YAML: {e}")
+            return None
+
+    @staticmethod
+    def detect_family(categoria: Optional[str]) -> str:
+        """
+        Assegna famiglia basandosi sulla categoria Excel.
+
+        Args:
+            categoria: stringa categoria da Excel (es. "Settoriale - Energia")
+
+        Returns:
+            nome famiglia (es. "equity_sviluppati")
+        """
+        if not categoria:
+            return "equity_sviluppati"  # default
+
+        categoria_lower = categoria.lower()
+
+        # Carica regole di riconoscimento da YAML
+        if ETFTechnicalAnalyzer._FAMILIES_CONFIG is None:
+            ETFTechnicalAnalyzer._FAMILIES_CONFIG = ETFTechnicalAnalyzer._load_families_config()
+
+        if not ETFTechnicalAnalyzer._FAMILIES_CONFIG:
+            return "equity_sviluppati"  # fallback se YAML non disponibile
+
+        rules = ETFTechnicalAnalyzer._FAMILIES_CONFIG.get('family_detection', [])
+        for rule in rules:
+            patterns = rule.get('pattern', [])
+            if any(p in categoria_lower for p in patterns):
+                return rule.get('family', 'equity_sviluppati')
+
+        # Default fallback
+        return ETFTechnicalAnalyzer._FAMILIES_CONFIG.get('default_family', 'equity_sviluppati')
 
     # ── Indicator helpers ──────────────────────────────────────────────────────
 

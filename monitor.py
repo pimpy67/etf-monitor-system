@@ -102,8 +102,12 @@ class ETFMonitor:
         borsa    = str(row.get('Borsa', ''))
         level    = int(row.get('Livello', 3))
 
-        etf_type = ETFTechnicalAnalyzer.category_to_etf_type(categoria)
-        analyzer = ETFTechnicalAnalyzer(etf_type=etf_type)
+        # Nuovi sistema: usa famiglia da config YAML
+        famiglia = ETFTechnicalAnalyzer.detect_family(categoria)
+        analyzer = ETFTechnicalAnalyzer(famiglia=famiglia)
+
+        # Mantieni etf_type per backward compatibility
+        etf_type = famiglia
 
         identifier = ticker if ticker else isin
         if not identifier:
@@ -134,10 +138,11 @@ class ETFMonitor:
         }
 
     def _empty_result(self, ticker, isin, nome, categoria, borsa, level, reason):
+        famiglia = ETFTechnicalAnalyzer.detect_family(categoria)
         return {
             'ticker': ticker, 'isin': isin, 'nome': nome,
             'categoria': categoria, 'borsa': borsa, 'livello': level,
-            'etf_type': ETFTechnicalAnalyzer.category_to_etf_type(categoria),
+            'etf_type': famiglia,  # backward compatibility
             'analysis': {
                 'current_price': None,
                 'ema20': None, 'sma50': None, 'sma200': None,
@@ -241,8 +246,10 @@ class ETFMonitor:
             add_log(traceback.format_exc())
             return []
 
-    def generate_dashboard_data(self, results: list, send_daily_report: bool = True) -> dict:
+    def generate_dashboard_data(self, results: list, send_daily_report: bool = True, errors: list = None) -> dict:
         """Genera dati JSON per la dashboard HTML."""
+        if errors is None:
+            errors = []
         l1_tracking = self.db.get_all_l1_entries()
         dashboard = {
             'last_update': datetime.now().isoformat(),
@@ -328,6 +335,17 @@ class ETFMonitor:
             dashboard['summary']['data_as_of'] = stats.get('last_date')
         except Exception:
             dashboard['summary']['data_as_of'] = None
+
+        # Health report per /api/health
+        dashboard['health'] = {
+            'timestamp': datetime.now().isoformat(),
+            'total_etfs': len(results),
+            'etfs_ok': len(results),
+            'etfs_error': len(errors),
+            'errors': [{'ticker': e.get('ticker', '?'), 'error': e.get('error', '')} for e in errors],
+            'etfs_with_price': sum(1 for r in results if r['analysis'].get('current_price') is not None),
+            'etfs_no_price': sum(1 for r in results if r['analysis'].get('current_price') is None),
+        }
 
         os.makedirs('data', exist_ok=True)
         with open('data/dashboard_data.json', 'w') as f:
@@ -545,7 +563,7 @@ class ETFMonitor:
         # 4. Genera dashboard
         try:
             add_log("Generazione dashboard...")
-            dashboard = self.generate_dashboard_data(results, send_daily_report=send_daily_report)
+            dashboard = self.generate_dashboard_data(results, send_daily_report=send_daily_report, errors=errors)
             add_log(f"Dashboard: L0={dashboard['summary']['l0_count']} "
                     f"L1={dashboard['summary']['l1_count']} "
                     f"L2={dashboard['summary']['l2_count']} "
@@ -554,7 +572,7 @@ class ETFMonitor:
             add_log(f"ERRORE Dashboard: {e}")
             add_log(traceback.format_exc())
             dashboard = {
-                'last_update': datetime.now().isoformat(),
+                'last_update': datetime.now().isoformat() + 'Z',
                 'data_source': 'Yahoo Finance',
                 'summary': {'total_etfs': len(results),
                             'l0_count': 0, 'l1_count': 0, 'l2_count': 0, 'l3_count': 0},
