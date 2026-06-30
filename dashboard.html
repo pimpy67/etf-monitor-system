@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ETF Monitor</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1a2e,#16213e); min-height:100vh; color:#e6edf3; }
@@ -158,6 +159,10 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 .btn-pf-action { background:none; border:1px solid rgba(255,255,255,0.15); color:#8b949e; border-radius:4px; cursor:pointer; font-size:0.82em; padding:2px 6px; line-height:1.4; transition:all .15s; margin:0 2px; }
 .btn-edit:hover { border-color:#4472C4; color:#4472C4; background:rgba(68,114,196,0.12); }
 .btn-sell:hover { border-color:#DC3545; color:#DC3545; background:rgba(220,53,69,0.1); }
+
+/* PDF export button */
+.btn-pdf-export { background:none; border:1px solid rgba(88,166,255,0.4); color:#58a6ff; border-radius:4px; cursor:pointer; font-size:0.78em; padding:4px 10px; line-height:1.4; transition:all .15s; white-space:nowrap; }
+.btn-pdf-export:hover { border-color:#58a6ff; background:rgba(88,166,255,0.12); }
 
 /* Exit warning */
 .exit-warn { display:inline-block; font-size:0.72em; margin-left:4px; cursor:default; vertical-align:middle; }
@@ -772,9 +777,12 @@ function renderPortfolioSection() {
 function renderParamRef() {
   return `
   <div class="param-ref">
-    <div class="param-ref-header" onclick="toggleParamRef()">
+    <div class="param-ref-header" onclick="toggleParamRef()" style="justify-content:space-between;">
       <h3>&#x1F4CB; Parametri di Riferimento — Profili e Regole L0/L1</h3>
-      <span class="param-ref-toggle" id="paramRefToggle">&#9660;</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn-pdf-export" title="Scarica PDF" onclick="event.stopPropagation();exportParametersPDF()">📥 PDF</button>
+        <span class="param-ref-toggle" id="paramRefToggle">&#9660;</span>
+      </div>
     </div>
     <div class="param-ref-body" id="paramRefBody" style="max-height:85vh;overflow-y:auto;">
 
@@ -1004,6 +1012,18 @@ function toggleParamRef() {
   const tog  = document.getElementById('paramRefToggle');
   body.classList.toggle('open');
   tog.classList.toggle('open');
+}
+
+function exportParametersPDF() {
+  const element = document.getElementById('paramRefBody');
+  const opt = {
+    margin: 10,
+    filename: 'ETF_Monitor_Parametri_Riferimento.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2 },
+    jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
+  };
+  html2pdf().set(opt).from(element).save();
 }
 
 // ── Portfolio ──────────────────────────────────────────────────────────────
