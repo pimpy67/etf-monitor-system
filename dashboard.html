@@ -776,91 +776,223 @@ function renderParamRef() {
       <h3>&#x1F4CB; Parametri di Riferimento — Profili e Regole L0/L1</h3>
       <span class="param-ref-toggle" id="paramRefToggle">&#9660;</span>
     </div>
-    <div class="param-ref-body" id="paramRefBody">
+    <div class="param-ref-body" id="paramRefBody" style="max-height:85vh;overflow-y:auto;">
 
-      <div class="param-section-title">L1 "Trend Sicuro" — 6 Condizioni di Entrata (tutte richieste)</div>
-      <div style="font-size:0.78em;color:#58a6ff;margin-bottom:6px;padding:3px 6px;background:rgba(88,166,255,0.07);border-radius:4px;">
-        &#9432; 6 condizioni tutte obbligatorie per l'ingresso L1 — Refactor v2.0 (13 famiglie parametriche)
+      <!-- SCHEMA GENERALE L1 -->
+      <div class="param-section-title">📋 Schema Generale: L1 "Trend Sicuro" — 6 Condizioni di Entrata</div>
+      <div style="font-size:0.78em;color:#58a6ff;margin-bottom:10px;padding:8px;background:rgba(88,166,255,0.08);border-radius:4px;border-left:3px solid #58a6ff;">
+        <strong style="color:#58a6ff;">✓ TUTTE le 6 condizioni sono obbligatorie</strong> per l'ingresso L1<br>
+        <span style="color:#aaa;font-size:0.9em;">Refactor v2.0: 15 famiglie parametriche (inclusa inflation_linked e monetario)</span>
       </div>
 
-      <div style="font-size:0.75em;color:#aaa;margin-bottom:8px;padding:4px;">📊 TABELLA 1/2: Equity & Commodity</div>
-      <table class="param-table">
-        <thead><tr>
-          <th style="width:18%">Parametro</th>
-          <th style="width:14%">Equity Sviluppati</th>
-          <th style="width:14%">Mercati Emergenti</th>
-          <th style="width:14%">Settoriali Growth</th>
-          <th style="width:14%">Settoriali Difensivi</th>
-          <th style="width:14%">Commodities</th>
-          <th style="width:14%">Metalli Industriali</th>
-        </tr></thead>
-        <tbody>
-          <tr><td class="param-name">RSI range</td><td>45–55</td><td>40–52</td><td>48–58</td><td>42–50</td><td>40–55</td><td>38–50</td></tr>
-          <tr><td class="param-name">ADX min</td><td>&gt;18</td><td>&gt;22</td><td>&gt;25</td><td>&gt;15</td><td>&gt;22</td><td>&gt;20</td></tr>
-          <tr><td class="param-name">Dist. EMA20</td><td>4%</td><td>5%</td><td>5%</td><td>2.5%</td><td>3%</td><td>3%</td></tr>
-          <tr><td class="param-name">Giorni EMA</td><td>3</td><td>3</td><td>3</td><td>5</td><td>3</td><td>3</td></tr>
-          <tr><td class="param-name">Banda laterale</td><td>1.0%</td><td>1.2%</td><td>1.5%</td><td>1.0%</td><td>1.5%</td><td>1.2%</td></tr>
-        </tbody>
-      </table>
-
-      <div style="font-size:0.75em;color:#aaa;margin-bottom:8px;margin-top:14px;padding:4px;">📊 TABELLA 2/2: Bond, Real Estate, Speciati & Alternativi</div>
-      <table class="param-table">
-        <thead><tr>
-          <th style="width:13%">Parametro</th>
-          <th style="width:11%">Bond Gov.</th>
-          <th style="width:11%">Bond Corp/HY</th>
-          <th style="width:11%">Oro/Metalli PM</th>
-          <th style="width:11%">Real Estate REIT</th>
-          <th style="width:11%">Crypto</th>
-          <th style="width:11%">Leva/Single</th>
-          <th style="width:11%">Private Equity</th>
-          <th style="width:11%">Monetario</th>
-        </tr></thead>
-        <tbody>
-          <tr><td class="param-name">RSI range</td><td>38–48</td><td>42–52</td><td>38–52</td><td>42–52</td><td>35–52</td><td>45–58</td><td>40–55</td><td style="color:#888;">—</td></tr>
-          <tr><td class="param-name">ADX min</td><td>&gt;12</td><td>&gt;15</td><td>&gt;18</td><td>&gt;15</td><td>&gt;28</td><td>&gt;28</td><td>&gt;15</td><td style="color:#888;">—</td></tr>
-          <tr><td class="param-name">Dist. EMA20</td><td>1.5%</td><td>2.0%</td><td>2.5%</td><td>2.0%</td><td>6.0%</td><td>4.0%</td><td>2.5%</td><td>0.5%</td></tr>
-          <tr><td class="param-name">Giorni EMA</td><td>3</td><td>3</td><td>3</td><td>3</td><td>3</td><td>3</td><td>3</td><td>3</td></tr>
-          <tr><td class="param-name">Banda laterale</td><td>0.5%</td><td>0.8%</td><td>1.5%</td><td>1.0%</td><td>3.0%</td><td>2.0%</td><td>0.8%</td><td>0.0%</td></tr>
-        </tbody>
-      </table>
-
-      <div style="font-size:0.78em;color:#555;margin-top:12px;padding:8px;background:rgba(88,166,255,0.08);border-radius:4px;border-left:3px solid #58a6ff;">
-        <strong style="color:#58a6ff;">Condizioni globali L1:</strong>
-        <ul style="margin:6px 0 0 20px;padding:0;">
-          <li>Regime BULL obbligatorio (EMA20 &gt; SMA50 oltre banda famiglia)</li>
-          <li>MACD momentum: Histogram &gt; 0 e (crescente oppure dist EMA20 &lt; 2%)</li>
-          <li>Tutte le 6 condizioni (A/P/R/D/X/M) RICHIESTE per L1</li>
-        </ul>
+      <div style="font-size:0.8em;line-height:1.5;color:#8b949e;margin:10px 0;padding:8px;background:rgba(88,166,255,0.06);border-radius:4px;">
+        <strong style="color:#58a6ff;">✓ Condizione 1:</strong> Allineamento (price &gt; EMA20 &gt; SMA50 &gt; SMA200*)<br>
+        <strong style="color:#58a6ff;">✓ Condizione 2:</strong> Persistenza (giorni_sopra_EMA20 ≥ N + slope(EMA20) &gt; 0)<br>
+        <strong style="color:#58a6ff;">✓ Condizione 3:</strong> RSI Ottimale (rsi_entry_low ≤ RSI ≤ rsi_entry_high)<br>
+        <strong style="color:#58a6ff;">✓ Condizione 4:</strong> Distanza EMA20 (0% ≤ dist_EMA20 ≤ ema_dist_max)<br>
+        <strong style="color:#58a6ff;">✓ Condizione 5:</strong> ADX (ADX ≥ adx_entry)<br>
+        <strong style="color:#58a6ff;">✓ Condizione 6:</strong> MACD Momentum (histogram &gt; 0 AND [rising OR dist&lt;2%])<br>
+        <span style="color:#555;font-size:0.85em;">* SMA200 richiesto solo se mm200_filter=True per famiglia</span>
       </div>
 
-      <div class="param-section-title" style="margin-top:16px;">L1 — Regole di Uscita (priorità dall'alto)</div>
+      <!-- TABELLE PARAMETRI COMPLETE -->
+      <div class="param-section-title" style="margin-top:20px;">📊 Parametri per Famiglia — Parte 1: Equity & Commodity</div>
+      <div style="overflow-x:auto;margin-bottom:16px;">
+        <table class="param-table" style="font-size:0.75em;">
+          <thead><tr>
+            <th style="width:16%">Parametro</th>
+            <th style="width:12%">Equity Sviluppati</th>
+            <th style="width:12%">Mercati Emergenti</th>
+            <th style="width:12%">Settoriali Growth</th>
+            <th style="width:12%">Settoriali Difensivi</th>
+            <th style="width:12%">Commodities</th>
+            <th style="width:12%">Metalli Industriali</th>
+          </tr></thead>
+          <tbody>
+            <tr><td class="param-name">RSI Entry Range</td><td>45–55</td><td>40–52</td><td>48–58</td><td>42–50</td><td>40–55</td><td>38–50</td></tr>
+            <tr><td class="param-name">ADX Min</td><td>&gt;18</td><td>&gt;22</td><td>&gt;25</td><td>&gt;15</td><td>&gt;22</td><td>&gt;20</td></tr>
+            <tr><td class="param-name">Dist. EMA20 Max</td><td>4%</td><td>5%</td><td>5%</td><td>2.5%</td><td>3%</td><td>3%</td></tr>
+            <tr><td class="param-name">Giorni Sopra EMA20</td><td>3</td><td>3</td><td>3</td><td>5</td><td>3</td><td>3</td></tr>
+            <tr><td class="param-name">Banda Laterale %</td><td>1.0</td><td>1.2</td><td>1.5</td><td>1.0</td><td>1.5</td><td>1.2</td></tr>
+            <tr><td class="param-name">ATR% Max</td><td>3%</td><td>4%</td><td>5%</td><td>2.5%</td><td>6%</td><td>5%</td></tr>
+            <tr><td class="param-name">SMA200 Filter</td><td>✓ Sì</td><td>✓ Sì</td><td>✓ Sì</td><td>✓ Sì</td><td>✓ Sì</td><td>✓ Sì</td></tr>
+            <tr><td class="param-name">L0 Drawdown</td><td>15%</td><td>20%</td><td>18%</td><td>15%</td><td>20%</td><td>18%</td></tr>
+            <tr><td class="param-name">L0 RSI Max</td><td>35</td><td>38</td><td>38</td><td>35</td><td>40</td><td>38</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="param-section-title" style="margin-top:20px;">📊 Parametri per Famiglia — Parte 2: Bond, Oro, Real Estate</div>
+      <div style="overflow-x:auto;margin-bottom:16px;">
+        <table class="param-table" style="font-size:0.75em;">
+          <thead><tr>
+            <th style="width:16%">Parametro</th>
+            <th style="width:12%">Bond Gov.</th>
+            <th style="width:12%">Bond Corp/HY</th>
+            <th style="width:12%">Oro/Metalli PM</th>
+            <th style="width:12%">Real Estate REIT</th>
+            <th style="width:12%">Inflation Linked</th>
+            <th style="width:12%">Monetario</th>
+          </tr></thead>
+          <tbody>
+            <tr><td class="param-name">RSI Entry Range</td><td>38–48</td><td>42–52</td><td>38–52</td><td>42–52</td><td>38–48</td><td style="color:#888;">—</td></tr>
+            <tr><td class="param-name">ADX Min</td><td>&gt;12</td><td>&gt;15</td><td>&gt;18</td><td>&gt;15</td><td>&gt;12</td><td style="color:#888;">—</td></tr>
+            <tr><td class="param-name">Dist. EMA20 Max</td><td>1.5%</td><td>2.0%</td><td>2.5%</td><td>2.0%</td><td>1.5%</td><td>0.5%</td></tr>
+            <tr><td class="param-name">Giorni Sopra EMA20</td><td>3</td><td>3</td><td>3</td><td>3</td><td>3</td><td>3</td></tr>
+            <tr><td class="param-name">Banda Laterale %</td><td>0.5</td><td>0.8</td><td>1.5</td><td>1.0</td><td>0.5</td><td>0.0</td></tr>
+            <tr><td class="param-name">ATR% Max</td><td>1.5%</td><td>2.5%</td><td>4%</td><td>3%</td><td>1.5%</td><td>0.5%</td></tr>
+            <tr><td class="param-name">SMA200 Filter</td><td>✗ No</td><td>✗ No</td><td>✓ Sì</td><td>✗ No</td><td>✗ No</td><td>✗ No</td></tr>
+            <tr><td class="param-name">L0 Drawdown</td><td>8%</td><td>10%</td><td>15%</td><td>12%</td><td>8%</td><td style="color:#888;">—</td></tr>
+            <tr><td class="param-name">L0 RSI Max</td><td>38</td><td>38</td><td>35</td><td>38</td><td>38</td><td style="color:#888;">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="param-section-title" style="margin-top:20px;">📊 Parametri per Famiglia — Parte 3: Crypto, Leva, Private Equity</div>
+      <div style="overflow-x:auto;margin-bottom:16px;">
+        <table class="param-table" style="font-size:0.75em;">
+          <thead><tr>
+            <th style="width:20%">Parametro</th>
+            <th style="width:15%">Crypto/Digital</th>
+            <th style="width:15%">Leva/Single Stock</th>
+            <th style="width:15%">Private Equity</th>
+          </tr></thead>
+          <tbody>
+            <tr><td class="param-name">RSI Entry Range</td><td>35–52</td><td>45–58</td><td>40–55</td></tr>
+            <tr><td class="param-name">ADX Min</td><td>&gt;28</td><td>&gt;28</td><td>&gt;15</td></tr>
+            <tr><td class="param-name">Dist. EMA20 Max</td><td>6.0%</td><td>4.0%</td><td>2.5%</td></tr>
+            <tr><td class="param-name">Giorni Sopra EMA20</td><td>3</td><td>3</td><td>3</td></tr>
+            <tr><td class="param-name">Banda Laterale %</td><td>3.0</td><td>2.0</td><td>0.8</td></tr>
+            <tr><td class="param-name">ATR% Max</td><td>15%</td><td>20%</td><td>3%</td></tr>
+            <tr><td class="param-name">SMA200 Filter</td><td>✓ Sì</td><td>✓ Sì</td><td>✗ No</td></tr>
+            <tr><td class="param-name">L0 Drawdown</td><td>25%</td><td>20%</td><td>15%</td></tr>
+            <tr><td class="param-name">L0 RSI Max</td><td>40</td><td>40</td><td>38</td></tr>
+            <tr><td class="param-name">Hold Max Days</td><td>—</td><td style="color:#ff8c00;"><strong>30gg</strong></td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- REGOLE USCITA L1 -->
+      <div class="param-section-title" style="margin-top:20px;">🚪 L1 — Regole di Uscita (Priorità dall'Alto)</div>
       <div class="exit-grid">
-        <div class="exit-item exit-l1"><span class="exit-label">F.</span> Kill Switch: calo giornaliero &le; &minus;3% — uscita totale immediata</div>
-        <div class="exit-item exit-l1"><span class="exit-label">A.</span> Stop Loss: prezzo sotto EMA20 da &ge; <strong>3 giorni</strong> consecutivi</div>
-        <div class="exit-item exit-l1"><span class="exit-label">B.</span> Trailing Stop: EMA10 &lt; EMA20 — uscita totale</div>
-        <div class="exit-item exit-l1"><span class="exit-label">C.</span> Stanchezza: RSI era &ge;70 e scende sotto 70 — uscita totale (solo non-bond)</div>
-        <div class="exit-item exit-l1"><span class="exit-label">E.</span> ADX &lt; 18 <em>e</em> prezzo &lt; EMA20 — trend esaurito (solo equity/commodity)</div>
-        <div class="exit-item" style="background:rgba(255,140,0,0.08);border:1px solid rgba(255,140,0,0.3);border-radius:6px;padding:5px 8px;"><span class="exit-label" style="color:#ff8c00;">D.</span> <strong style="color:#ff8c00;">Uscita Parziale 90%</strong>: RSI &gt; 78 — vendi 90%, tieni 10% (piede dentro)</div>
-      </div>
-      <div style="font-size:0.76em;color:#555;margin-top:8px;padding:4px 6px;background:rgba(255,140,0,0.05);border-left:2px solid rgba(255,140,0,0.4);border-radius:0 4px 4px 0;">
-        <strong style="color:#ff8c00;">Logica "piede dentro" 90/10:</strong> su segnale D acquista XEON (monetario &euro;STR) con il 90% — il 10% rimasto &egrave; il sensore. Su segnale F/A/B/C/E vendi il 10% residuo. Al rientro L1 vendi XEON e rientra 100%.
+        <div class="exit-item exit-l1"><span class="exit-label">F.</span> <strong style="color:#f85149;">Kill Switch</strong>: Calo giornaliero ≤ −3% → <strong>uscita totale immediata</strong></div>
+        <div class="exit-item exit-l1"><span class="exit-label">A.</span> <strong style="color:#f85149;">Stop Loss</strong>: Prezzo &lt; EMA20 da ≥ <strong>3 giorni consecutivi</strong> → uscita totale (equity/commodity solo)</div>
+        <div class="exit-item exit-l1"><span class="exit-label">B.</span> <strong style="color:#f85149;">Trailing Stop</strong>: EMA10 &lt; EMA20 → uscita totale (tutte famiglie)</div>
+        <div class="exit-item exit-l1"><span class="exit-label">C.</span> <strong style="color:#f85149;">Stanchezza</strong>: RSI era ≥70, scende &lt;70 → uscita totale (non-bond)</div>
+        <div class="exit-item exit-l1"><span class="exit-label">E.</span> <strong style="color:#f85149;">ADX Debole</strong>: ADX &lt; 18 + prezzo &lt; EMA20 → uscita totale (equity/commodity solo)</div>
+        <div class="exit-item" style="background:rgba(255,140,0,0.1);border:1px solid rgba(255,140,0,0.3);border-radius:6px;padding:6px 8px;margin-bottom:8px;"><span class="exit-label" style="color:#ff8c00;">D.</span> <strong style="color:#ff8c00;">Uscita Parziale 90%</strong>: RSI &gt; 78 → Vendi 90% posizione, compra XEON (ETF monetario €STR), mantieni 10% come "sensore"</div>
       </div>
 
-      <div class="param-section-title" style="border-left:3px solid #ff8c00;padding-left:8px;border-bottom:none;margin-top:20px;">L0 "Deep Recovery" — Recupero dopo Forte Deprezzamento</div>
-      <div class="exit-grid">
-        <div class="exit-item exit-l0"><span class="exit-label">1.</span> Drawdown: Prezzo &ge;15% sotto il picco storico</div>
-        <div class="exit-item exit-l0"><span class="exit-label">2.</span> Oversold: RSI &lt; 30</div>
-        <div class="exit-item exit-l0"><span class="exit-label">3.</span> Divergenza: Prezzo &rarr; nuovo min, RSI &rarr; min più alto</div>
-        <div class="exit-item exit-l0"><span class="exit-label">4.</span> Segnale recupero: RSI &gt; 32 o micro-breakout +0.3%</div>
-      </div>
-      <div style="font-size:0.79em;color:#555;margin-top:8px;padding:0 4px;">
-        Uscita L0: &alpha; Stop loss (panic low) &nbsp;|&nbsp; &beta; Bear trap (RSI &lt;25) &nbsp;|&nbsp; &gamma; Promozione (Prezzo &gt; EMA20) &nbsp;|&nbsp; &epsilon; Timeout 30gg
+      <div style="font-size:0.79em;color:#fff;margin-top:12px;padding:10px;background:rgba(255,140,0,0.12);border:1px solid rgba(255,140,0,0.3);border-radius:4px;border-left:4px solid #ff8c00;">
+        <strong style="color:#ff8c00;">🦶 LOGICA "PIEDE DENTRO" 90%/10%:</strong><br>
+        <span style="color:#8b949e;">
+          <strong>Passo 1 (Regola D):</strong> Vendi 90% su XEON (guadagna ~3-4% annuo €STR), mantieni 10% ETF equity<br>
+          <strong>Passo 2 (Se F/A/B/C/E prima rientro):</strong> Vendi il 10% rimanente, mantieni XEON<br>
+          <strong>Passo 3 (Rientro L1 — tutte 6 condizioni):</strong> Vendi XEON, rientra 100% equity<br>
+          <strong>Vantaggi:</strong> 90% guadagna passivamente · 10% è il sensore (riacquisto gratis) · Tassazione solo su 90% venduto
+        </span>
       </div>
 
-      <div class="param-section-title" style="border-left:3px solid #f85149;padding-left:8px;border-bottom:none;margin-top:20px;">Kill Switch</div>
-      <div style="font-size:0.8em;color:#8b949e;padding:4px 0 10px;">
-        Se variazione giornaliera &le; <strong style="color:#f85149;">-3.0%</strong>: tutti i nuovi ingressi L1 e L0 vengono bloccati. Le uscite rimangono sempre operative.
+      <!-- L0 ENTRY/EXIT -->
+      <div class="param-section-title" style="margin-top:20px;border-left:3px solid #d29922;">🔍 L0 "Deep Recovery" — Ingresso e Uscita</div>
+      <div style="font-size:0.8em;line-height:1.6;color:#8b949e;margin:8px 0;padding:8px;background:rgba(210,153,34,0.08);border-radius:4px;">
+        <strong style="color:#d29922;">Entrata L0 (4 condizioni tutte obbligatorie):</strong><br>
+        ① Drawdown: Prezzo ≥ L0_DRAWDOWN% sotto il picco storico<br>
+        ② Oversold: RSI &lt; L0_RSI_MAX (ipervenduto)<br>
+        ③ Divergenza: Prezzo → nuovo minimo, RSI → minimo più alto<br>
+        ④ Segnale recupero: RSI &gt; 32 OPPURE micro-breakout ≥ 0.3% su 5 giorni<br><br>
+        <strong style="color:#d29922;">Uscita L0 (basta 1):</strong><br>
+        <strong style="color:#3fb950;">γ (Promotion)</strong>: Prezzo &gt; EMA20 → promozione a L2<br>
+        <strong style="color:#f85149;">β (Bear Trap)</strong>: RSI &lt; 25 dopo ingresso → trappola ribassista<br>
+        <strong style="color:#f85149;">α (Stop Assoluto)</strong>: Prezzo &lt; panic_low (min 30gg) → stop loss<br>
+        <strong style="color:#8b949e;">ε (Timeout)</strong>: 30gg senza recupero → gestito automaticamente
+      </div>
+
+      <!-- REGIME 3-STATI -->
+      <div class="param-section-title" style="margin-top:20px;border-left:3px solid #58a6ff;">📈 Regime 3-Stati: Bull / Laterale / Bear</div>
+      <div style="font-size:0.8em;color:#8b949e;margin:8px 0;padding:8px;background:rgba(88,166,255,0.08);border-radius:4px;border-left:3px solid #58a6ff;">
+        <strong style="color:#58a6ff;">Calcolo:</strong> (EMA20 − SMA50) / SMA50 comparato con banda_famiglia<br><br>
+        <strong style="color:#3fb950;">BULL:</strong> Rapporto &gt; +banda% → Trend rialzista confermato → <strong>L1 eligibile</strong><br>
+        <strong style="color:#d29922;">LATERALE:</strong> |Rapporto| ≤ banda% → Consolidamento → <strong>Penalità −1 punto, solo L2</strong><br>
+        <strong style="color:#f85149;">BEAR:</strong> Rapporto &lt; −banda% → Trend ribassista → <strong>L1 vietato, monitoraggio L3</strong><br><br>
+        <strong>Bande per famiglia:</strong> equity_sviluppati 1.0% · emergenti 1.2% · growth 1.5% · commodity 1.5% · oro 1.5% · crypto 3.0% · leva 2.0% · bond gov 0.5% · inflation 0.5%
+      </div>
+
+      <!-- KILL SWITCH -->
+      <div class="param-section-title" style="margin-top:20px;border-left:3px solid #f85149;">⛔ Kill Switch</div>
+      <div style="font-size:0.8em;color:#f85149;margin:8px 0;padding:8px;background:rgba(248,81,73,0.1);border-radius:4px;border-left:3px solid #f85149;">
+        <strong>Se variazione giornaliera ETF ≤ −3.0%:</strong><br>
+        ✓ Tutti i nuovi ingressi L1 e L0 vengono <strong>BLOCCATI immediatamente</strong><br>
+        ✓ Le uscite rimangono sempre operative (F/A/B/C/E/D attive)<br>
+        ✗ No entrare finché volatilità non si normalizza
+      </div>
+
+      <!-- FILTRI SPECIALI PER FAMIGLIA -->
+      <div class="param-section-title" style="margin-top:20px;border-left:3px solid #79c0ff;">🔧 Filtri Speciali per Famiglia</div>
+      <div style="font-size:0.78em;color:#8b949e;margin:8px 0;">
+        <div style="padding:6px;margin-bottom:6px;background:rgba(121,192,255,0.08);border-radius:4px;border-left:2px solid #79c0ff;">
+          <strong style="color:#79c0ff;">Commodities & Metalli Industriali:</strong> Aggiungi filtro <strong>PMI Manifatturiero</strong> esterno<br>
+          PMI &gt; 50 = Espansione economica favorevole · PMI &lt; 50 = Contrazione, riduci esposizione
+        </div>
+        <div style="padding:6px;margin-bottom:6px;background:rgba(121,192,255,0.08);border-radius:4px;border-left:2px solid #79c0ff;">
+          <strong style="color:#79c0ff;">Real Estate / REIT:</strong> Aggiungi filtro <strong>Tasso interesse 10Y</strong> esterno<br>
+          Tassi in calo = Favorevole REIT · Tassi in rialzo = Sfavorevole (cedole meno competitive)
+        </div>
+        <div style="padding:6px;margin-bottom:6px;background:rgba(121,192,255,0.08);border-radius:4px;border-left:2px solid #79c0ff;">
+          <strong style="color:#79c0ff;">Oro / Metalli Preziosi:</strong> <strong>SMA200 è filtro PRIMARIO</strong> (non secondario)<br>
+          Oro tende a seguire trend di lungo (SMA200) più che EMA20. Inversione SMA200 = cambio regime
+        </div>
+        <div style="padding:6px;margin-bottom:6px;background:rgba(121,192,255,0.08);border-radius:4px;border-left:2px solid #79c0ff;">
+          <strong style="color:#79c0ff;">Private Equity Buffer:</strong> Aggiungi filtro <strong>Sconto NAV</strong> esterno<br>
+          Sconto ridotto = Valore migliore · Entra L1 se trend OK + NAV discount ragionevole
+        </div>
+        <div style="padding:6px;background:rgba(121,192,255,0.08);border-radius:4px;border-left:2px solid #79c0ff;">
+          <strong style="color:#79c0ff;">Monetario / Liquidità:</strong> <strong>No analisi tecnica</strong> — solo ranking yield<br>
+          Usa come parcheggio temporaneo, destinazione Regola D, o asset rifugio in BEAR
+        </div>
+      </div>
+
+      <!-- TABELLA RIEPILOGATIVA USCITE PER FAMIGLIA -->
+      <div class="param-section-title" style="margin-top:20px;">📋 Tabella: Quali Regole Uscita per Ogni Famiglia</div>
+      <div style="overflow-x:auto;margin-bottom:16px;font-size:0.74em;">
+        <table class="param-table">
+          <thead><tr>
+            <th style="width:12%">Regola</th>
+            <th style="width:7%">Equity Dev.</th>
+            <th style="width:7%">Emer.</th>
+            <th style="width:7%">Growth</th>
+            <th style="width:7%">Difesa</th>
+            <th style="width:7%">Bond Gov</th>
+            <th style="width:7%">Corp/HY</th>
+            <th style="width:7%">Oro</th>
+            <th style="width:7%">Commodity</th>
+            <th style="width:7%">REIT</th>
+            <th style="width:7%">Crypto</th>
+            <th style="width:7%">Leva</th>
+            <th style="width:7%">PE</th>
+          </tr></thead>
+          <tbody>
+            <tr><td class="param-name">F - Kill Switch</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+            <tr><td class="param-name">A - Stop Loss</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✗</td><td>✗</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+            <tr><td class="param-name">B - Trailing</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+            <tr><td class="param-name">C - Stanchezza</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+            <tr><td class="param-name">E - ADX Debole</td><td>✓</td><td>✓</td><td>✓</td><td>✗</td><td>✗</td><td>✗</td><td>✓</td><td>✓</td><td>✗</td><td>✓</td><td>✓</td><td>✓</td></tr>
+            <tr><td class="param-name">D - Partial 90%</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✗</td><td>✗</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✗</td><td>✓</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="font-size:0.77em;color:#555;margin-top:12px;padding:8px;background:rgba(88,166,255,0.08);border-radius:4px;">
+        <strong style="color:#58a6ff;">Legenda:</strong> ✓ Regola attiva per famiglia · ✗ Regola disabilitata (no logica per questa classe di asset)<br>
+        <strong>Bond Government:</strong> Disabilitato A (rumore 1gg), E (ADX irrilevante), D (RSI raramente &gt;78)<br>
+        <strong>Monetario:</strong> Nessuna regola uscita — asset rifugio, si mantiene fino a rientro L1
+      </div>
+
+      <!-- FOOTER INFO -->
+      <div style="font-size:0.75em;color:#555;margin-top:20px;padding:10px;background:rgba(88,166,255,0.04);border-radius:4px;">
+        <strong style="color:#58a6ff;">📄 Documentazione Completa:</strong> Vedi <code>FAMILIES_COMPLETE_GUIDE.md</code> per descrizioni dettagliate di ogni famiglia, razionale parametri, e filtri speciali.<br>
+        <strong style="color:#58a6ff;">⚙️ Implementazione:</strong> Parametri caricati da <code>config/etf_families.yaml</code> · Monitor quotidiano 17:00 CEST (lun-ven) + silent 09:00 CEST<br>
+        <strong style="color:#58a6ff;">🔄 Ultimo aggiornamento:</strong> 1 luglio 2026 — v2.0 Refactor completo (15 famiglie parametriche)
       </div>
 
     </div>
