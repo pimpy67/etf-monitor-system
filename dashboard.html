@@ -443,6 +443,46 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
   </div>
 </div>
 
+<!-- ── Market Regime Widget ──────────────────────────────────────────────── -->
+<div id="marketRegimeContainer" style="background:rgba(0,100,200,0.08); border-top:1px solid rgba(88,166,255,0.3); border-bottom:1px solid rgba(88,166,255,0.2); padding:14px 20px;">
+  <div style="max-width:1640px; margin:0 auto; display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+    <div>
+      <div style="font-size:0.75em; color:#8b949e; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">📊 Market Regime</div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span id="regimeLabel" style="font-weight:700; font-size:1em; padding:4px 12px; border-radius:6px; background:rgba(0,176,80,0.2); color:#00B050;">BULL</span>
+          <span id="riskScore" style="font-weight:600; font-size:0.95em; color:#58a6ff;">71/100</span>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <div id="regimeInterpretation" style="font-size:0.82em; color:#ccc; line-height:1.5;">
+        Caricamento regime di mercato...
+      </div>
+    </div>
+    <div style="display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap;">
+      <div>
+        <div style="font-size:0.72em; color:#8b949e; margin-bottom:4px;">📈 Equity</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span id="allocationEquity" style="font-weight:600; font-size:1.1em; color:#4472C4;">75%</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:0.72em; color:#8b949e; margin-bottom:4px;">💰 Bond</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span id="allocationBond" style="font-weight:600; font-size:1.1em; color:#FFC000;">20%</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:0.72em; color:#8b949e; margin-bottom:4px;">🏦 Monetario</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span id="allocationMonetario" style="font-weight:600; font-size:1.1em; color:#888;">5%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Column header ──────────────────────────────────────────────────────── -->
 <div class="col-header">
   <table>
@@ -517,6 +557,7 @@ async function loadData() {
     l1ExitsData = l1Exit.exits || [];
     buildRecentExitsMap();
     renderDashboard();
+    loadMarketRegime();  // Carica regime di mercato
   } catch(e) {
     document.getElementById('mainContent').innerHTML =
       `<div class="loader" style="color:#f85149">Errore: ${e.message} — <a href="/api/trigger-update" style="color:#58a6ff">Aggiorna</a></div>`;
@@ -536,6 +577,51 @@ function buildRecentExitsMap() {
       recentExitsMap[ex.isin] = { exit_date: exitDate, days_ago: daysAgo };
     }
   });
+}
+
+// ── Load Market Regime ────────────────────────────────────────────────────
+async function loadMarketRegime() {
+  try {
+    const res = await fetch('/api/market-regime');
+    const data = await res.json();
+
+    if (data.error) {
+      console.warn('Market Regime error:', data.error);
+      return;
+    }
+
+    const mr = data.market_regime;
+    const container = document.getElementById('marketRegimeContainer');
+
+    // Risk score e label
+    const riskScore = mr.risk_score || 50;
+    const regime = mr.regime_label || 'NEUTRAL';
+
+    document.getElementById('riskScore').textContent = `${riskScore}/100`;
+
+    // Regime color
+    let regimeColor = '#FFC000';  // NEUTRAL
+    if (regime === 'BULL') regimeColor = '#00B050';
+    else if (regime === 'BEAR') regimeColor = '#DC3545';
+
+    document.getElementById('regimeLabel').textContent = regime;
+    document.getElementById('regimeLabel').style.background = `${regimeColor}22`;
+    document.getElementById('regimeLabel').style.borderColor = `${regimeColor}55`;
+    document.getElementById('regimeLabel').style.border = `1px solid ${regimeColor}55`;
+    document.getElementById('regimeLabel').style.color = regimeColor;
+
+    // Interpretation
+    document.getElementById('regimeInterpretation').textContent = mr.interpretation || '';
+
+    // Allocation
+    const alloc = mr.suggested_allocation || {};
+    document.getElementById('allocationEquity').textContent = `${alloc.equity || 50}%`;
+    document.getElementById('allocationBond').textContent = `${alloc.bond || 40}%`;
+    document.getElementById('allocationMonetario').textContent = `${alloc.monetario || 10}%`;
+
+  } catch(e) {
+    console.warn('Failed to load market regime:', e);
+  }
 }
 
 // ── Dashboard render ──────────────────────────────────────────────────────
