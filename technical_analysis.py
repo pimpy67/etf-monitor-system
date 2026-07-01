@@ -405,7 +405,12 @@ class ETFTechnicalAnalyzer:
         rsi_val = float(rsi.dropna().iloc[-1]) if len(rsi.dropna()) > 0 else 50.0
         ema20   = self._ema(prices, self.ema20_period)
         ema20_v = self._fval(ema20)
-        current = float(prices.iloc[-1])
+        # Ensure current price is valid
+        curr_price = prices.iloc[-1]
+        if pd.isna(curr_price) or curr_price is None:
+            result['reason_codes'] = ['NO_CURRENT_PRICE']
+            return result
+        current = float(curr_price)
 
         result['rsi']           = round(rsi_val, 1)
         result['ema20_current'] = round(ema20_v, 4) if ema20_v else None
@@ -413,14 +418,21 @@ class ETFTechnicalAnalyzer:
 
         # Kill switch: crollo giornaliero >= 3%
         kill_switch = False
-        if len(prices) >= 2 and float(prices.iloc[-2]) != 0:
-            daily_chg = (float(prices.iloc[-1]) - float(prices.iloc[-2])) / float(prices.iloc[-2]) * 100
-            kill_switch = daily_chg <= -3.0
-            result['daily_change_pct'] = round(daily_chg, 2)
+        if len(prices) >= 2:
+            p1 = prices.iloc[-1]
+            p2 = prices.iloc[-2]
+            if pd.notna(p1) and pd.notna(p2) and p1 is not None and p2 is not None:
+                p1_f = float(p1)
+                p2_f = float(p2)
+                if p2_f != 0:
+                    daily_chg = (p1_f - p2_f) / p2_f * 100
+                    kill_switch = daily_chg <= -3.0
+                    result['daily_change_pct'] = round(daily_chg, 2)
         result['kill_switch'] = kill_switch
 
         n_panic = min(30, len(prices))
-        result['panic_low'] = float(prices.iloc[-n_panic:].min())
+        panic_val = prices.iloc[-n_panic:].min()
+        result['panic_low'] = float(panic_val) if pd.notna(panic_val) else current
 
         l0_rsi_thr = self.p['l0_rsi_max']
 
