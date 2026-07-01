@@ -80,6 +80,19 @@ def run_monitor(send_alerts: bool = True):
         monitor_lock.release()
 
 
+def send_portfolio_report():
+    """Invia il resoconto del portafoglio a 19:30 CEST."""
+    try:
+        print(f"\n📧 Scheduler: invio resoconto portafoglio - {datetime.now()}")
+        from alerts import AlertSystem
+        alerts = AlertSystem()
+        alerts.send_portfolio_report()
+    except Exception as e:
+        print(f"⚠️ Errore invio resoconto portafoglio: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 def fallback_check():
     """Controllo fallback: se il run principale non ha girato oggi, lancialo.
     Si attiva solo dopo MONITOR_HOUR per evitare run prematuri al mattino."""
@@ -142,6 +155,14 @@ def run_scheduler():
 
     cest_main = f"{hour_main + 2:02d}:{minute_main:02d}"
     print(f"📅 Run principale: {time_main} UTC  ({cest_main} CEST) — lun-ven con alert email")
+
+    # Registra invio resoconto portafoglio a 19:30 CEST (17:30 UTC)
+    hour_report = 17
+    minute_report = 30
+    time_report = f"{hour_report:02d}:{minute_report:02d}"
+    for d in sorted(set(day_nums)):
+        _schedule_day(d, time_report, send_portfolio_report)
+    print(f"📧 Resoconto portafoglio: {time_report} UTC  (19:30 CEST) — lun-ven con dettagli posizioni")
 
     # Registra run silenzioso (se configurato)
     if time_soft:

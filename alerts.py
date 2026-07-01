@@ -359,3 +359,102 @@ class AlertSystem:
             f'{_FOOTER.format(ts=ts)}</body></html>'
         )
         return self._send_email(subject, body_html)
+
+    def send_portfolio_report(self) -> bool:
+        """Invia resoconto giornaliero del portafoglio."""
+        try:
+            from database import db
+
+            # Leggi posizioni dal database
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT pe.ticker, pe.entry_price, pe.entry_date, pe.fund_name,
+                       COALESCE(pe.stop_loss, 0) as stop_loss
+                FROM portfolio_entries pe
+                WHERE pe.ticker IS NOT NULL
+                ORDER BY pe.entry_date DESC
+            """)
+            positions = cur.fetchall()
+            conn.close()
+
+            if not positions:
+                return True  # No positions, no email needed
+
+            # Costruisci tabella HTML
+            rows = []
+            for ticker, entry_price, entry_date, fund_name, stop_loss in positions:
+                try:
+                    # Ottieni prezzo corrente (semplice: da price_history)
+                    conn = db.get_connection()
+                    cur = conn.cursor()
+                    cur.execute("""
+                        SELECT close FROM etf_price_history
+                        WHERE ticker = %s ORDER BY date DESC LIMIT 1
+                    """, (ticker,))
+                    result = cur.fetchone()
+                    conn.close()
+
+                    current_price = float(result[0]) if result else entry_price
+                    pct_change = ((current_price - entry_price) / entry_price * 100) if entry_price > 0 else 0
+                    color = '#28a745' if pct_change >= 0 else '#dc3545'
+                    sign = '+' if pct_change >= 0 else ''
+
+                    # Stop loss consigliato (5% sotto entry)
+                    suggested_sl = entry_price * 0.95
+
+                    rows.append(
+                        f'<tr style="background:{"#f8f9fa" if len(rows) % 2 == 0 else "white"}">'
+                        f'<td style="padding:8px;border:1px solid #ddd"><strong>{ticker}</strong></td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">{entry_price:.4f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">{current_price:.4f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:{color}"><strong>{sign}{pct_change:.2f}%</strong></td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">{stop_loss:.4f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">{suggested_sl:.4f}</td>'
+                        f'</tr>'
+                    )
+                except Exception as e:
+                    print(f"⚠️ Errore lettura prezzo {ticker}: {e}")
+                    continue
+
+            if not rows:
+                return True  # No valid positions
+
+            table_html = (
+                '<table style="width:100%;border-collapse:collapse;font-size:13px">'
+                '<tr style="background:#007bff;color:white">'
+                '<th style="padding:8px;border:1px solid #ddd;text-align:left">Ticker</th>'
+                '<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Acquisto</th>'
+                '<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Odierno</th>'
+                '<th style="padding:8px;border:1px solid #ddd;text-align:right">Gain/Loss %</th>'
+                '<th style="padding:8px;border:1px solid #ddd;text-align:right">SL Inserito</th>'
+                '<th style="padding:8px;border:1px solid #ddd;text-align:right">SL Consigliato</th>'
+                '</tr>'
+                f'{"".join(rows)}'
+                '</table>'
+            )
+
+            today = datetime.now().strftime('%d/%m/%Y %H:%M')
+            subject = f'📊 Resoconto Portafoglio ETF — {today}'
+            ts = datetime.now().strftime('%d/%m/%Y %H:%M')
+
+            body_html = (
+                f'<html><body style="{_BODY_STYLE}">'
+                f'<div style="background:#007bff;color:white;padding:20px;text-align:center">'
+                f'<h1 style="margin:0;font-size:18px">📊 RESOCONTO PORTAFOGLIO ETF</h1>'
+                f'<p style="margin:4px 0 0;font-size:13px">{today}</p></div>'
+                f'<div style="padding:20px;background:white">'
+                f'{table_html}'
+                f'<p style="margin-top:20px;font-size:12px;color:#666">'
+                f'<strong>Legenda:</strong> SL Consigliato = 5% sotto prezzo di acquisto</p>'
+                f'</div>'
+                f'{_FOOTER.format(ts=ts)}</body></html>'
+            )
+
+            return self._send_email(subject, body_html)
+
+        except Exception as e:
+            print(f"❌ Errore invio resoconto portafoglio: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
