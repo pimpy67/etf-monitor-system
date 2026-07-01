@@ -124,7 +124,14 @@ class ETFMonitor:
             return self._empty_result(ticker, isin, nome, categoria, borsa, level,
                                       f'Dati insufficienti: {len(hist)} giorni')
 
-        analysis = analyzer.analyze_etf(hist, current_level=level)
+        try:
+            analysis = analyzer.analyze_etf(hist, current_level=level)
+        except Exception as e:
+            add_log(f"  ERR {identifier}: {type(e).__name__}: {e}")
+            import traceback
+            add_log(traceback.format_exc())
+            return self._empty_result(ticker, isin, nome, categoria, borsa, level,
+                                      f'{type(e).__name__}: {e}')
 
         return {
             'ticker':    ticker,
