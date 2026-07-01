@@ -326,13 +326,25 @@ class ETFTechnicalAnalyzer:
         rr = rw.tail(recent)
         if len(rp) < 3:
             return False
-        ri  = int(rp.values.argmin())
-        r_p = float(rp.iloc[ri]);  r_r = float(rr.iloc[ri])
-        op  = pw.iloc[:-recent];   or_ = rw.iloc[:-recent]
+        # Filter out NaN values before argmin
+        rp_valid = pd.Series([v for v in rp if pd.notna(v)], index=rp.index[pd.notna(rp.values)])
+        rr_valid = pd.Series([v for v in rr if pd.notna(v)], index=rr.index[pd.notna(rr.values)])
+        if len(rp_valid) < 2 or len(rr_valid) < 2:
+            return False
+        ri  = int(rp_valid.values.argmin())
+        r_p = float(rp_valid.iloc[ri])
+        r_r = float(rr_valid.iloc[ri])
+        op  = pw.iloc[:-recent]
+        or_ = rw.iloc[:-recent]
         if len(op) < 5:
             return False
-        oi  = int(op.values.argmin())
-        o_p = float(op.iloc[oi]);  o_r = float(or_.iloc[oi])
+        op_valid = pd.Series([v for v in op if pd.notna(v)], index=op.index[pd.notna(op.values)])
+        or_valid = pd.Series([v for v in or_ if pd.notna(v)], index=or_.index[pd.notna(or_.values)])
+        if len(op_valid) < 2 or len(or_valid) < 2:
+            return False
+        oi  = int(op_valid.values.argmin())
+        o_p = float(op_valid.iloc[oi])
+        o_r = float(or_valid.iloc[oi])
         return (r_p < o_p) and (r_r > o_r)
 
     def _detect_rsi_recovery(self, rsi: pd.Series, oversold: float = 30.0,
@@ -341,8 +353,15 @@ class ETFTechnicalAnalyzer:
         if len(rc) < 3:
             return False
         recent = rc.tail(lookback)
-        return (any(v < oversold for v in recent.iloc[:-1]) and
-                float(recent.iloc[-1]) > recovery)
+        # Filter out None/NaN values explicitly before comparison
+        recent_vals = [v for v in recent.iloc[:-1] if pd.notna(v) and v is not None]
+        if not recent_vals:
+            return False
+        last_val = recent.iloc[-1]
+        if pd.isna(last_val) or last_val is None:
+            return False
+        return (any(v < oversold for v in recent_vals) and
+                float(last_val) > recovery)
 
     def _detect_micro_breakout(self, prices: pd.Series, lookback: int = 5,
                                 min_pct: float = 0.3) -> bool:
@@ -498,12 +517,29 @@ class ETFTechnicalAnalyzer:
         # Kill switch
         kill_switch = False
         daily_chg   = None
-        if len(prices) >= 2 and float(prices.iloc[-2]) != 0:
-            daily_chg   = (float(prices.iloc[-1]) - float(prices.iloc[-2])) / float(prices.iloc[-2]) * 100
-            kill_switch = daily_chg <= -3.0
+        if len(prices) >= 2:
+            p1 = prices.iloc[-1]
+            p2 = prices.iloc[-2]
+            if pd.notna(p1) and pd.notna(p2) and p1 is not None and p2 is not None:
+                p1_f = float(p1)
+                p2_f = float(p2)
+                if p2_f != 0:
+                    daily_chg = (p1_f - p2_f) / p2_f * 100
+                    kill_switch = daily_chg <= -3.0
 
         close   = prices.astype(float)
-        current = float(close.iloc[-1])
+        # Ensure current price is valid
+        curr_val = close.iloc[-1]
+        if pd.isna(curr_val) or curr_val is None:
+            # Not enough data
+            return {
+                'suggested_level': current_level,
+                'level_change': False,
+                'reason': 'Dati insufficienti — prezzo finale non disponibile',
+                'reason_codes': ['NO_CURRENT_PRICE'],
+                'conditions': {}
+            }
+        current = float(curr_val)
 
         ema10  = self._ema(close, self.ema10_period)
         ema20  = self._ema(close, self.ema20_period)
@@ -689,15 +725,20 @@ class ETFTechnicalAnalyzer:
                 reason_codes.append('L2_REGIME_LATERAL' if regime_str == "LATERALE" else 'L2_REGIME_BEAR')
             elif kill_switch:
                 suggested = current_level
-                reason    = f'Kill Switch [{daily_chg:.1f}%]: nuovo ingresso L1 bloccato'
+                chg_str = f'{daily_chg:.1f}' if daily_chg is not None else '?'
+                reason    = f'Kill Switch [{chg_str}%]: nuovo ingresso L1 bloccato'
                 reason_codes.extend(['KILL_SWITCH', 'L1_ENTRY_BLOCKED'])
             else:
                 suggested = 1
                 regime_note = '' if regime_ok else ' (no SMA200)'
                 macd_note   = '↑' if (macd_hp is not None and macd_h is not None and macd_h > macd_hp) else '~'
+                # Safe formatting with None checks
+                rsi_str = f'{rsi_val:.0f}' if rsi_val is not None else '?'
+                dist_str = f'{dist_ema20:.1f}' if dist_ema20 is not None else '?'
+                adx_str = f'{adx_val:.0f}' if adx_val is not None else '?'
                 reason = (
                     f'L1 Trend Sicuro (regime {regime_str}): EMA20>SMA50 ✓, {days_above_ema20}gg sopra EMA20 ✓, '
-                    f'RSI {rsi_val:.0f} ✓, dist {dist_ema20:.1f}% ✓, ADX {adx_val:.0f} ✓, '
+                    f'RSI {rsi_str} ✓, dist {dist_str}% ✓, ADX {adx_str} ✓, '
                     f'MACD {macd_note} ✓{regime_note}'
                 )
                 reason_codes.append('L1_ENTRY')
