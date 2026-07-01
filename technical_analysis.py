@@ -698,6 +698,13 @@ class ETFTechnicalAnalyzer:
         }
         buy_count = sum([allineamento, persistenza, rsi_ok, dist_ok, adx_ok, macd_ok])
 
+        # ── REGIME A 3 STATI (INFORMATIVO, SENZA PENALITÀ) ───────────────────────────────
+        # Calcola il regime per dashboard/reporting, ma NON penalizza il buy_count
+        # Questo permette agli ETF di entrare in L1 in base alle loro condizioni tecniche
+        buy_count_finale = float(buy_count)
+        regime_penalty = 0.0
+        # regime_str è già calcolato sopra e disponibile per il report
+
         # ── Determina livello ──────────────────────────────────────────────────
         reason_codes = []
 
@@ -711,11 +718,11 @@ class ETFTechnicalAnalyzer:
                 suggested = 3
                 reason    = f'Uscita L1 — {exit_rule}'
                 reason_codes.append('L1_EXIT')
-            elif buy_count < min_buy_required or regime_str != "BULL":
+            elif buy_count_finale < min_buy_required or regime_str != "BULL":
                 # Demote if no longer meets min conditions or regime changed
                 conditions['exit_rule']    = None
                 suggested = 2
-                reason    = f'Downgrade L1→L2: {buy_count}/{min_buy_required} condizioni, regime {regime_str}'
+                reason    = f'Downgrade L1→L2: {buy_count}/{min_buy_required} condizioni (score finale {buy_count_finale:.1f}), regime {regime_str}'
                 reason_codes.append('L1_DEMOTED')
             else:
                 conditions['exit_rule']    = None
@@ -729,13 +736,10 @@ class ETFTechnicalAnalyzer:
             reason    = f'Storico insufficiente per SMA50 (min {self.sma50_period} giorni)'
             reason_codes.append('L2_WATCHLIST' if suggested == 2 else 'L3_MONITOR')
 
-        elif allineamento and persistenza and rsi_ok and dist_ok and adx_ok and macd_ok:
-            # L1 richiede regime BULL (non accetta LATERALE o BEAR)
-            if regime_str != "BULL":
-                suggested = 2
-                reason    = f'Watchlist (regime {regime_str}): {buy_count}/6 condizioni L1'
-                reason_codes.append('L2_REGIME_LATERAL' if regime_str == "LATERALE" else 'L2_REGIME_BEAR')
-            elif kill_switch:
+        elif buy_count_finale >= min_buy_required:
+            # Soglia flessibile: accetta 5/6 (con penalità regime applicate)
+            # Regime BEAR non blocca L1 se le fondamentali sono solide
+            if kill_switch:
                 suggested = current_level
                 chg_str = f'{daily_chg:.1f}' if daily_chg is not None else '?'
                 reason    = f'Kill Switch [{chg_str}%]: nuovo ingresso L1 bloccato'
@@ -744,16 +748,23 @@ class ETFTechnicalAnalyzer:
                 suggested = 1
                 regime_note = '' if regime_ok else ' (no SMA200)'
                 macd_note   = '↑' if (macd_hp is not None and macd_h is not None and macd_h > macd_hp) else '~'
+                penalty_note = f' (penalità regime -{regime_penalty:.1f})' if regime_penalty > 0 else ''
                 # Safe formatting with None checks
                 rsi_str = f'{rsi_val:.0f}' if rsi_val is not None else '?'
                 dist_str = f'{dist_ema20:.1f}' if dist_ema20 is not None else '?'
                 adx_str = f'{adx_val:.0f}' if adx_val is not None else '?'
                 reason = (
-                    f'L1 Trend Sicuro (regime {regime_str}): EMA20>SMA50 ✓, {days_above_ema20}gg sopra EMA20 ✓, '
+                    f'L1 Trend Sicuro (regime {regime_str}, score {buy_count_finale:.1f}): EMA20>SMA50 ✓, {days_above_ema20}gg sopra EMA20 ✓, '
                     f'RSI {rsi_str} ✓, dist {dist_str}% ✓, ADX {adx_str} ✓, '
-                    f'MACD {macd_note} ✓{regime_note}'
+                    f'MACD {macd_note} ✓{regime_note}{penalty_note}'
                 )
                 reason_codes.append('L1_ENTRY')
+
+        elif buy_count_finale >= (min_buy_required - 1):
+            # Watchlist: quasi-L1 ma non tutti i criteri soddisfatti
+            suggested = 2
+            reason    = f'Watchlist: score finale {buy_count_finale:.1f}/{min_buy_required} ({days_above_ema20}gg sopra EMA20, regime {regime_str})'
+            reason_codes.append('L2_WATCHLIST')
 
         elif days_above_ema20 >= p['days_above_ema'] or (ema20_v and sma50_v and ema20_v > sma50_v):
             suggested = 2
@@ -778,6 +789,9 @@ class ETFTechnicalAnalyzer:
             'reason_codes':    reason_codes,
             'conditions':      conditions,
             'buy_count':       buy_count,
+            'buy_count_finale': round(buy_count_finale, 2),  # Score finale con penalità regime
+            'regime_penalty':  round(regime_penalty, 2),
+            'min_buy_required': min_buy_required,
         }
 
     # ── Full analysis ──────────────────────────────────────────────────────────

@@ -14,7 +14,7 @@ families:
     mm200_filter: true
     l0_drawdown: 15.0
     l0_rsi_max: 35
-    min_buy_count: 6
+    min_buy_count: 4
   mercati_emergenti:
     description: "Mercati emergenti \u2014 EM globale, Asia, LatAm, EMEA"
     rsi_entry_low: 40
@@ -46,7 +46,7 @@ families:
     mm200_filter: true
     l0_drawdown: 18.0
     l0_rsi_max: 38
-    min_buy_count: 6
+    min_buy_count: 4
   settoriali_difensivi:
     description: "Settoriali difensivi \u2014 Salute, Utilities, Insurance, Food"
     rsi_entry_low: 42
@@ -62,7 +62,7 @@ families:
     mm200_filter: true
     l0_drawdown: 15.0
     l0_rsi_max: 35
-    min_buy_count: 6
+    min_buy_count: 4
   bond_governativi:
     description: "Bond governativi EUR/USD \u2014 BTP, Bund, UST, Gov Euro, IL"
     rsi_entry_low: 38
@@ -78,7 +78,7 @@ families:
     mm200_filter: false
     l0_drawdown: 8.0
     l0_rsi_max: 38
-    min_buy_count: 5
+    min_buy_count: 4
   bond_corp_hy_em:
     description: "Bond corporate / HY / EM \u2014 Corp EUR/USD, HY, EM bond"
     rsi_entry_low: 42
@@ -94,7 +94,7 @@ families:
     mm200_filter: false
     l0_drawdown: 10.0
     l0_rsi_max: 38
-    min_buy_count: 5
+    min_buy_count: 4
   commodities:
     description: "Commodities broad \u2014 Bloomberg Comm, GSCI, Agri, Energia"
     rsi_entry_low: 40
@@ -126,7 +126,7 @@ families:
     mm200_filter: true
     l0_drawdown: 15.0
     l0_rsi_max: 35
-    min_buy_count: 6
+    min_buy_count: 4
   metalli_industriali:
     description: "Metalli industriali \u2014 Rame, Alluminio, Zinco, Nichel, Battery"
     rsi_entry_low: 38
@@ -142,7 +142,7 @@ families:
     mm200_filter: true
     l0_drawdown: 18.0
     l0_rsi_max: 38
-    min_buy_count: 6
+    min_buy_count: 4
   real_estate_reit:
     description: "Real Estate / REIT \u2014 EPRA Europe, NAREIT Global, REIT"
     rsi_entry_low: 42
@@ -158,7 +158,7 @@ families:
     mm200_filter: false
     l0_drawdown: 12.0
     l0_rsi_max: 38
-    min_buy_count: 6
+    min_buy_count: 4
   crypto_digital_assets:
     description: "Crypto / asset digitali \u2014 Bitcoin, Ethereum, Solana, Basket"
     rsi_entry_low: 35
@@ -174,7 +174,7 @@ families:
     mm200_filter: true
     l0_drawdown: 25.0
     l0_rsi_max: 40
-    min_buy_count: 5
+    min_buy_count: 4
   leva_single_stock:
     description: "Leva / single stock / struct \u2014 ETP 3x long/short su singoli\
       \ titoli"
@@ -192,7 +192,7 @@ families:
     l0_drawdown: 20.0
     l0_rsi_max: 40
     hold_days_max: 30
-    min_buy_count: 6
+    min_buy_count: 4
   private_equity_buffer:
     description: "Private Equity / Buffer ETF \u2014 Listed PE, Buffer strategy"
     rsi_entry_low: 40
@@ -208,7 +208,7 @@ families:
     mm200_filter: false
     l0_drawdown: 15.0
     l0_rsi_max: 38
-    min_buy_count: 6
+    min_buy_count: 4
   monetario_liquidita:
     description: "Monetario / liquidit\xE0 \u2014 ETF overnight, short-term"
     rsi_entry_low: null

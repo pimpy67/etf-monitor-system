@@ -916,13 +916,26 @@ function renderParamRef() {
         <strong style="color:#8b949e;">ε (Timeout)</strong>: 30gg senza recupero → gestito automaticamente
       </div>
 
-      <!-- REGIME 3-STATI -->
-      <div class="param-section-title" style="margin-top:20px;border-left:3px solid #58a6ff;">📈 Regime 3-Stati: Bull / Laterale / Bear</div>
+      <!-- SOGLIA L1 FLESSIBILE (OPZIONE 2 v2.0) -->
+      <div class="param-section-title" style="margin-top:20px;border-left:3px solid #3fb950;">✨ L1 — Soglia Flessibile (Opzione 2 v2.0)</div>
+      <div style="font-size:0.8em;color:#8b949e;margin:8px 0;padding:8px;background:rgba(63,185,80,0.12);border-radius:4px;border-left:3px solid #3fb950;">
+        <strong style="color:#3fb950;">Metodo:</strong> Score finale = condizioni base − penalità regime (attualmente zero)<br><br>
+        <strong>Buy Count Base:</strong> 0-6 condizioni L1 (allineamento, persistenza, RSI, distanza EMA20, ADX, MACD)<br>
+        <strong style="color:#3fb950;">Min Buy Count Richiesto:</strong> <strong>4 su 6</strong> (soglia elastica, pragmatica)<br>
+        <strong>Penalità Regime:</strong> <strong>0 punti</strong> (regime informativo per dashboard, non penalizza L1)<br><br>
+        <strong style="color:#3fb950;">Assegnazione L1:</strong> Se buy_count_finale ≥ 4 → L1 ("Trend Sicuro")<br>
+        <strong>Assegnazione L2:</strong> Se 3 ≤ buy_count_finale &lt; 4 → L2 ("Watchlist", quasi-L1)<br>
+        <strong>Assegnazione L3:</strong> Se buy_count_finale &lt; 3 → L3 ("Monitoraggio passivo")
+      </div>
+
+      <!-- REGIME 3-STATI (INFORMATIVO) -->
+      <div class="param-section-title" style="margin-top:20px;border-left:3px solid #58a6ff;">📈 Regime 3-Stati: Bull / Laterale / Bear (Informativo)</div>
       <div style="font-size:0.8em;color:#8b949e;margin:8px 0;padding:8px;background:rgba(88,166,255,0.08);border-radius:4px;border-left:3px solid #58a6ff;">
         <strong style="color:#58a6ff;">Calcolo:</strong> (EMA20 − SMA50) / SMA50 comparato con banda_famiglia<br><br>
-        <strong style="color:#3fb950;">BULL:</strong> Rapporto &gt; +banda% → Trend rialzista confermato → <strong>L1 eligibile</strong><br>
-        <strong style="color:#d29922;">LATERALE:</strong> |Rapporto| ≤ banda% → Consolidamento → <strong>Penalità −1 punto, solo L2</strong><br>
-        <strong style="color:#f85149;">BEAR:</strong> Rapporto &lt; −banda% → Trend ribassista → <strong>L1 vietato, monitoraggio L3</strong><br><br>
+        <strong style="color:#3fb950;">BULL:</strong> Rapporto &gt; +banda% → Trend rialzista confermato → <strong>Regime ottimale</strong><br>
+        <strong style="color:#d29922;">LATERALE:</strong> |Rapporto| ≤ banda% → Consolidamento → <strong>Regime neutro, monitoraggio continuo</strong><br>
+        <strong style="color:#f85149;">BEAR:</strong> Rapporto &lt; −banda% → Trend ribassista → <strong>Regime cauto, L1 possibile se condizioni solide</strong><br><br>
+        <strong style="color:#58a6ff;">Nota v2.0:</strong> Regime non penalizza più L1. È usato solo per report/dashboard. L1 dipende esclusivamente dalle 6 condizioni tecniche e dal min_buy_count=4.<br>
         <strong>Bande per famiglia:</strong> equity_sviluppati 1.0% · emergenti 1.2% · growth 1.5% · commodity 1.5% · oro 1.5% · crypto 3.0% · leva 2.0% · bond gov 0.5% · inflation 0.5%
       </div>
 
