@@ -762,6 +762,79 @@ def db_status_endpoint():
     return jsonify(result)
 
 
+@app.route('/api/market-regime')
+def market_regime_api():
+    """Market Regime Dashboard — Risk Score, correlazione, suggested allocation."""
+    try:
+        from risk import MarketRegimeAnalyzer
+        from datetime import datetime
+
+        # Leggi ultimo aggiornamento dashboard
+        with open('data/dashboard_data.json', 'r') as f:
+            dash = json.load(f)
+
+        # Estrai dati equity e bond dal dashboard_data
+        equity_etfs = dash.get('levels', {}).get('1', []) + \
+                      dash.get('levels', {}).get('2', []) + \
+                      dash.get('levels', {}).get('3', [])
+
+        # Cerca i principali benchmark (equity globale e bond)
+        equity_regime = 'LATERALE'
+        equity_adx = 15
+        equity_rsi = 55
+        equity_score = 3
+
+        bond_regime = 'LATERALE'
+        bond_adx = 10
+
+        # Ricerca semplice: identifica best proxy di equity e bond
+        for etf in equity_etfs:
+            nome = etf.get('nome', '').lower()
+            if 'vwce' in nome or 'all-world' in nome or 'msci world' in nome:
+                equity_regime = etf.get('regime', 'LATERALE')
+                equity_adx = etf.get('adx') or 15
+                equity_rsi = etf.get('rsi') or 55
+                equity_score = etf.get('buy_count', 3)
+                break
+
+        for etf in equity_etfs:
+            nome = etf.get('nome', '').lower()
+            if 'gov' in nome or 'egov' in nome or 'btp' in nome or ('bond' in nome and 'high' not in nome):
+                bond_regime = etf.get('regime', 'LATERALE')
+                bond_adx = etf.get('adx') or 10
+                break
+
+        # TODO: Calcola correlazione rolling da price_history
+        # Per ora, correlazione neutrale
+        correlation_90 = 0.0
+
+        # Analizza regime
+        analyzer = MarketRegimeAnalyzer(
+            equity_regime=equity_regime,
+            equity_adx=equity_adx,
+            equity_rsi=equity_rsi,
+            equity_score=equity_score,
+            bond_regime=bond_regime,
+            bond_adx=bond_adx,
+            corr_90=correlation_90
+        )
+
+        report = analyzer.generate_regime_report()
+
+        return jsonify({
+            'market_regime': report,
+            'data_timestamp': dash.get('last_update'),
+            'analyzed_at': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 if __name__ == '__main__':
     os.makedirs('data', exist_ok=True)
     if not os.path.exists('data/dashboard_data.json'):
