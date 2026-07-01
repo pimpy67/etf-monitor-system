@@ -816,9 +816,32 @@ class ETFTechnicalAnalyzer:
             }
 
         close = df['Close'].astype(float)
+        # Clean data: remove NaN/None which can cause comparison errors
+        close = close.dropna()
+        if len(close) < self.ema20_period:
+            price = float(close.iloc[-1]) if len(close) > 0 else None
+            return {
+                'current_price': price,
+                'ema10': None, 'ema20': None, 'sma50': None, 'sma200': None,
+                'rsi': None, 'adx': None, 'regime': None,
+                'macd_histogram': None, 'macd_histogram_prev': None,
+                'dist_ema20': None, 'ema20_slope': None,
+                'days_above_ema20': 0, 'days_below_ema20': 0,
+                'peak_price': price, 'drawdown_from_peak': 0.0,
+                'pct_change_1d': None, 'pct_change_1w': None, 'pct_change_1m': None,
+                'atr_normalized': None, 'drawdown_52w': None, 'price_range': None,
+                'partial_exit': False,
+                'suggested_level': current_level, 'level_change': False,
+                'level_reason': f'Dati insufficienti dopo pulizia: {len(close)} giorni validi',
+                'conditions': {}, 'buy_count': 0,
+                'l0_entry': False, 'l0_exit_rule': None,
+                'data_status': 'insufficient_after_cleanup',
+                'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+            }
+
         has_ohlc = all(c in df.columns for c in ['Open', 'High', 'Low'])
-        high = df['High'].astype(float) if has_ohlc else None
-        low  = df['Low'].astype(float)  if has_ohlc else None
+        high = df['High'].astype(float).dropna() if has_ohlc else None
+        low  = df['Low'].astype(float).dropna() if has_ohlc else None
 
         # L0 check
         l0 = self.suggest_level_0(close, current_level)
