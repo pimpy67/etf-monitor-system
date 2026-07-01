@@ -125,7 +125,7 @@ class ETFMonitor:
                                       f'Dati insufficienti: {len(hist)} giorni')
 
         try:
-            analysis = analyzer.analyze_etf(hist, current_level=level)
+            analysis = analyzer.analyze_etf(hist, current_level=level, ticker=ticker)
         except Exception as e:
             add_log(f"  ERR {identifier}: {type(e).__name__}: {e}")
             import traceback

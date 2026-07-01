@@ -782,7 +782,7 @@ class ETFTechnicalAnalyzer:
 
     # ── Full analysis ──────────────────────────────────────────────────────────
 
-    def analyze_etf(self, df: pd.DataFrame, current_level: int = 3) -> Dict:
+    def analyze_etf(self, df: pd.DataFrame, current_level: int = 3, ticker: str = None) -> Dict:
         """
         Analisi tecnica completa di un ETF.
 
@@ -790,10 +790,34 @@ class ETFTechnicalAnalyzer:
             df: DataFrame con colonne Close (+ Open, High, Low, Volume se disponibili).
                 Index deve essere Date.
             current_level: Livello attuale (0-3).
+            ticker: Ticker ETF (usato per escludere ETF monetari da analisi tecnica).
 
         Returns:
             Dict con tutti gli indicatori, condizioni e livello suggerito.
         """
+        # Money market ETF: skip technical analysis, assign to L3
+        money_market_tickers = {'YCSH.DE', 'C3M.PA', 'CSH.PA', 'XEON.DE'}
+        if ticker and ticker.upper() in money_market_tickers:
+            price = float(df['Close'].iloc[-1]) if len(df) > 0 else None
+            return {
+                'current_price': price,
+                'ema10': None, 'ema20': None, 'sma50': None, 'sma200': None,
+                'rsi': None, 'adx': None, 'regime': None,
+                'macd_histogram': None, 'macd_histogram_prev': None,
+                'dist_ema20': None, 'ema20_slope': None,
+                'days_above_ema20': 0, 'days_below_ema20': 0,
+                'peak_price': price, 'drawdown_from_peak': 0.0,
+                'pct_change_1d': None, 'pct_change_1w': None, 'pct_change_1m': None,
+                'atr_normalized': None, 'drawdown_52w': None, 'price_range': None,
+                'partial_exit': False,
+                'suggested_level': 3, 'level_change': False,
+                'level_reason': 'ETF monetario — monitoraggio passivo (L3)',
+                'conditions': {}, 'buy_count': 0,
+                'l0_entry': False, 'l0_exit_rule': None,
+                'data_status': 'money_market_etf',
+                'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+            }
+
         if len(df) < self.ema20_period:
             price = float(df['Close'].iloc[-1]) if len(df) > 0 else None
             return {
