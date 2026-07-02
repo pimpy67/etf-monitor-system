@@ -965,6 +965,10 @@ class PriceDatabase:
             conn.close()
 
 
+# Istanza globale per import da altri moduli
+db = PriceDatabase()
+
+
 if __name__ == "__main__":
     print("=" * 50)
     print("TEST DATABASE ETF")
