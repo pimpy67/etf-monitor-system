@@ -737,13 +737,23 @@ class ETFTechnicalAnalyzer:
             reason_codes.append('L2_WATCHLIST' if suggested == 2 else 'L3_MONITOR')
 
         elif buy_count_finale >= min_buy_required:
-            # Soglia flessibile: accetta 5/6 (con penalità regime applicate)
-            # Regime BEAR non blocca L1 se le fondamentali sono solide
+            # Soglia flessibile: accetta 5/6
+            # MA: REGIME BULL è obbligatorio (fondamenta irrinunciabile)
             if kill_switch:
                 suggested = current_level
                 chg_str = f'{daily_chg:.1f}' if daily_chg is not None else '?'
                 reason    = f'Kill Switch [{chg_str}%]: nuovo ingresso L1 bloccato'
                 reason_codes.extend(['KILL_SWITCH', 'L1_ENTRY_BLOCKED'])
+            elif regime_str != "BULL":
+                # FONDAMENTA: regime deve essere BULL
+                suggested = 2
+                reason    = f'Regime {regime_str} (non BULL): Watchlist — L1 richiede trend rialzista'
+                reason_codes.append('L2_WATCHLIST_REGIME')
+            elif sma50_v is not None and current < sma50_v:
+                # FONDAMENTA: prezzo deve stare sopra SMA50 (allineamento assoluto)
+                suggested = 2
+                reason    = f'Prezzo {current:.2f} < SMA50 {sma50_v:.2f}: Watchlist'
+                reason_codes.append('L2_WATCHLIST_PRICE')
             else:
                 suggested = 1
                 regime_note = '' if regime_ok else ' (no SMA200)'

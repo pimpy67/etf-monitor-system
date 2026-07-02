@@ -5,16 +5,16 @@ families:
     rsi_entry_high: 55
     rsi_exit_min: 40
     rsi_overbought: 78
-    adx_entry: 18
+    adx_entry: 22
     ema_dist_max: 4.0
     lateral_band: 0.01
     atr_max: 0.03
     aum_min: 50
-    days_above_ema: 3
+    days_above_ema: 5
     mm200_filter: true
     l0_drawdown: 15.0
     l0_rsi_max: 35
-    min_buy_count: 4
+    min_buy_count: 5
   mercati_emergenti:
     description: "Mercati emergenti \u2014 EM globale, Asia, LatAm, EMEA"
     rsi_entry_low: 40
@@ -42,18 +42,18 @@ families:
     lateral_band: 0.015
     atr_max: 0.05
     aum_min: 50
-    days_above_ema: 3
+    days_above_ema: 5
     mm200_filter: true
     l0_drawdown: 18.0
     l0_rsi_max: 38
-    min_buy_count: 4
+    min_buy_count: 5
   settoriali_difensivi:
     description: "Settoriali difensivi \u2014 Salute, Utilities, Insurance, Food"
     rsi_entry_low: 42
     rsi_entry_high: 50
     rsi_exit_min: 38
     rsi_overbought: 65
-    adx_entry: 15
+    adx_entry: 18
     ema_dist_max: 2.5
     lateral_band: 0.01
     atr_max: 0.025
@@ -62,7 +62,7 @@ families:
     mm200_filter: true
     l0_drawdown: 15.0
     l0_rsi_max: 35
-    min_buy_count: 4
+    min_buy_count: 5
   bond_governativi:
     description: "Bond governativi EUR/USD \u2014 BTP, Bund, UST, Gov Euro, IL"
     rsi_entry_low: 38
