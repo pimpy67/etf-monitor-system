@@ -756,12 +756,12 @@ class ETFTechnicalAnalyzer:
                 reason_codes.append('L2_WATCHLIST_PRICE')
             elif ema20_v is not None and len(ema20) >= 11:
                 # STRATO 2 — Filtro EMA20 slope: esclude trend piatti/artificiali
-                # EMA20 deve crescere almeno 0.5% negli ultimi 10 giorni (consente trend lenti ma consistenti)
-                # TODO: Parametrizzare soglia per famiglia (bond: 0.2%, equity: 0.7%)
+                # EMA20 deve crescere almeno 0.2% negli ultimi 10 giorni (trend lento ma reale)
+                # TODO: Parametrizzare soglia per famiglia (bond: 0.1%, equity: 0.4%)
                 ema20_10d_ago = float(ema20.iloc[-11]) if pd.notna(ema20.iloc[-11]) else None
                 if ema20_10d_ago and ema20_10d_ago > 0:
                     ema20_pct_change = ((ema20_v - ema20_10d_ago) / ema20_10d_ago * 100)
-                    if ema20_pct_change < 0.5:
+                    if ema20_pct_change < 0.2:
                         # EMA20 piatta o in calo: trend non è REALE
                         suggested = 2
                         reason    = f'EMA20 trend debole (+{ema20_pct_change:.2f}% vs 10gg fa): Watchlist'
