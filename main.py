@@ -66,13 +66,15 @@ def main():
     print(f"Dashboard disponibile su http://localhost:{port}")
     print("=" * 60 + "\n")
 
-    # Avvia monitoraggio iniziale e scheduler in background DOPO il server
-    def startup_background():
-        """Esegue monitoraggio iniziale e avvia scheduler in background"""
-        import time
-        time.sleep(5)  # Aspetta che Flask sia pronto
+    # Avvia scheduler SUBITO in thread (non-daemon, così continua anche dopo crash del monitor)
+    print("\nAvvio scheduler...")
+    scheduler_thread = start_scheduler_thread()
 
-        # Monitoraggio iniziale
+    # Monitoraggio iniziale in thread SEPARATO (non blocca lo scheduler)
+    def run_initial_monitor():
+        """Esegue monitoraggio iniziale in background, separato dallo scheduler"""
+        import time
+        time.sleep(8)  # Aspetta che Flask + scheduler siano pronti
         if os.environ.get('RUN_ON_START', 'true').lower() == 'true':
             print("\nEsecuzione monitoraggio iniziale (background)...")
             try:
@@ -80,12 +82,8 @@ def main():
             except Exception as e:
                 print(f"Errore monitoraggio iniziale: {e}")
 
-        # Avvia scheduler
-        print("\nAvvio scheduler...")
-        start_scheduler_thread()
-
-    bg_thread = threading.Thread(target=startup_background, daemon=True)
-    bg_thread.start()
+    initial_monitor_thread = threading.Thread(target=run_initial_monitor, daemon=True)
+    initial_monitor_thread.start()
 
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
