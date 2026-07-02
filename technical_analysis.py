@@ -757,6 +757,7 @@ class ETFTechnicalAnalyzer:
             elif ema20_v is not None and len(ema20) >= 11:
                 # STRATO 2 — Filtro EMA20 slope: esclude trend piatti/artificiali
                 # EMA20 deve crescere almeno 0.5% negli ultimi 10 giorni (consente trend lenti ma consistenti)
+                # TODO: Parametrizzare soglia per famiglia (bond: 0.2%, equity: 0.7%)
                 ema20_10d_ago = float(ema20.iloc[-11]) if pd.notna(ema20.iloc[-11]) else None
                 if ema20_10d_ago and ema20_10d_ago > 0:
                     ema20_pct_change = ((ema20_v - ema20_10d_ago) / ema20_10d_ago * 100)
@@ -767,8 +768,21 @@ class ETFTechnicalAnalyzer:
                         reason_codes.append('L2_WEAK_EMA_SLOPE')
                     else:
                         suggested = 1
+                        regime_note = '' if regime_ok else ' (no SMA200)'
+                        macd_note   = '↑' if (macd_hp is not None and macd_h is not None and macd_h > macd_hp) else '~'
+                        rsi_str = f'{rsi_val:.0f}' if rsi_val is not None else '?'
+                        dist_str = f'{dist_ema20:.1f}' if dist_ema20 is not None else '?'
+                        adx_str = f'{adx_val:.0f}' if adx_val is not None else '?'
+                        reason = (
+                            f'L1 Trend Sicuro (EMA20 slope +{ema20_pct_change:.2f}%, regime {regime_str}): '
+                            f'RSI {rsi_str} ✓, dist {dist_str}% ✓, ADX {adx_str} ✓, MACD {macd_note} ✓{regime_note}'
+                        )
+                        reason_codes.append('L1_ENTRY')
                 else:
+                    # EMA20 troppo breve per calcolare slope
                     suggested = 1
+                    reason    = f'L1 Trend Sicuro (storico EMA20 breve, {len(ema20)}gg)'
+                    reason_codes.append('L1_ENTRY')
             else:
                 suggested = 1
                 regime_note = '' if regime_ok else ' (no SMA200)'
