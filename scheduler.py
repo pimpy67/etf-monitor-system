@@ -180,15 +180,16 @@ def run_scheduler():
     print(f"   Prossima esecuzione principale: {prossimo} alle {time_main} UTC")
 
     loop_count = 0
+    print(f"✅ Scheduler PRONTO - Loop partito, attesa job...", flush=True)
     while True:
         try:
             schedule.run_pending()
             loop_count += 1
-            if loop_count % 60 == 0:
-                print(f"💓 Heartbeat: {datetime.now().strftime('%Y-%m-%d %H:%M')} — "
-                      f"prossimo job: {schedule.next_run()}")
+            if loop_count % 1 == 0:  # Stampa ogni ciclo per debug
+                print(f"💓 Heartbeat {loop_count}: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} — "
+                      f"prossimo job: {schedule.next_run()}", flush=True)
         except Exception as e:
-            print(f"⚠️ Scheduler errore: {e}")
+            print(f"⚠️ Scheduler errore: {e}", flush=True)
             import traceback
             traceback.print_exc()
         time.sleep(60)
