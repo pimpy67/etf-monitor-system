@@ -770,6 +770,10 @@ class ETFTechnicalAnalyzer:
         # Min buy count richiesto per L1 (dipende dalla famiglia)
         min_buy_required = self.p.get('min_buy_count', 6)
 
+        # [DEBUG] Log per tutte le decisioni L1
+        if buy_count_finale >= (min_buy_required - 1):
+            print(f"[L1-CHECK] buy_count={buy_count}, min_req={min_buy_required}, regime={regime_str}, ADX={adx_val}, dist={dist_ema20:.1f}%, max_dist={p['ema_dist_max']}%")
+
         if current_level == 1:
             if exit_rule:
                 conditions['exit_rule']    = exit_rule
