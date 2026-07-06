@@ -259,6 +259,74 @@ def get_prices():
                     'count': len(df)})
 
 
+@app.route('/api/portfolio-sl')
+def portfolio_sl():
+    """Restituisce SL attuali per tutte le posizioni L1."""
+    try:
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Database unavailable'}), 500
+
+        from psycopg2.extras import RealDictCursor
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Leggi posizioni L1 da portfolio_entries
+            cur.execute("""
+                SELECT pe.ticker, pe.entry_price, pe.entry_date, pe.fund_name,
+                       pe.stop_loss, pe.stop_loss_updated_at
+                FROM etf_portfolio_entries pe
+                WHERE pe.ticker IS NOT NULL
+                ORDER BY pe.entry_date DESC
+            """)
+            positions = cur.fetchall()
+
+            # Per ogni posizione, leggi prezzo corrente
+            result = []
+            for pos in positions:
+                ticker = pos['ticker']
+                cur.execute("""
+                    SELECT close, date FROM etf_price_history
+                    WHERE ticker = %s ORDER BY date DESC LIMIT 1
+                """, (ticker,))
+                price_row = cur.fetchone()
+
+                if price_row:
+                    current_price = float(price_row['close'])
+                    price_date = price_row['date']
+                    pct_change = ((current_price - float(pos['entry_price'])) /
+                                 float(pos['entry_price']) * 100) if pos['entry_price'] > 0 else 0
+
+                    # Calcola SL consigliato (logica a 2 fasi)
+                    entry_price = float(pos['entry_price'])
+                    if pct_change <= 0:
+                        suggested_sl = entry_price * 0.98
+                    else:
+                        suggested_sl = max(entry_price * 0.98, current_price * 0.95)
+
+                    result.append({
+                        'ticker': ticker,
+                        'fund_name': pos['fund_name'],
+                        'entry_price': float(entry_price),
+                        'entry_date': str(pos['entry_date']),
+                        'current_price': current_price,
+                        'price_date': str(price_date),
+                        'pct_change': round(pct_change, 2),
+                        'sl_current': float(pos['stop_loss']) if pos['stop_loss'] else None,
+                        'sl_suggested': round(suggested_sl, 4),
+                        'sl_updated': str(pos['stop_loss_updated_at']) if pos['stop_loss_updated_at'] else None,
+                    })
+
+        conn.close()
+        return jsonify({
+            'timestamp': datetime.now().isoformat(),
+            'positions': result,
+            'count': len(result)
+        })
+
+    except Exception as e:
+        print(f"Errore portfolio-sl: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/trigger-update', methods=['GET', 'POST'])
 def trigger_update():
     started = _trigger_auto_monitor()

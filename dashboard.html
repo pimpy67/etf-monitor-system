@@ -506,7 +506,10 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 <!-- ── Main content ───────────────────────────────────────────────────────── -->
 <div class="container">
   <div id="catFilters" class="cat-filters" style="display:none"></div>
-  <div id="mainContent"><div class="loader">Caricamento dati...</div></div>
+  <div id="mainContent">
+    <div class="loader">Caricamento dati...</div>
+    <div id="slPanel"></div>
+  </div>
 </div>
 
 <script>
@@ -1946,6 +1949,124 @@ function adxColor(v) {
   if (v == null) return '';
   return v >= 20 ? 'color:#3fb950' : v >= 15 ? 'color:#d29922' : 'color:#f85149';
 }
+
+// ─── PORTFOLIO STOP LOSS ────────────────────────────────────────────
+async function loadPortfolioSL() {
+  try {
+    const resp = await fetch('/api/portfolio-sl');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data.positions && data.positions.length > 0) {
+      renderPortfolioSL(data.positions);
+    }
+  } catch (e) {
+    console.warn('Errore caricamento portfolio SL:', e);
+  }
+}
+
+function renderPortfolioSL(positions) {
+  // Crea una sezione SL nel dashboard
+  const slPanel = document.getElementById('slPanel');
+  if (!slPanel) {
+    // Crea il pannello se non esiste
+    const panel = document.createElement('div');
+    panel.id = 'slPanel';
+    panel.style.cssText = `
+      margin: 20px 0;
+      padding: 20px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+    `;
+    document.getElementById('mainContent').appendChild(panel);
+  }
+
+  const slPanel2 = document.getElementById('slPanel');
+
+  let html = `
+    <div style="font-weight: 600; font-size: 16px; margin-bottom: 15px; color: #58a6ff;">
+      🛡️ Stop Loss Portafoglio L1 (${positions.length} posizioni)
+    </div>
+    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+      <thead>
+        <tr style="background: #161b22; border-bottom: 1px solid #30363d;">
+          <th style="padding: 10px; text-align: left; color: #8b949e;">Ticker</th>
+          <th style="padding: 10px; text-align: right; color: #8b949e;">Entry</th>
+          <th style="padding: 10px; text-align: right; color: #8b949e;">Corrente</th>
+          <th style="padding: 10px; text-align: right; color: #8b949e;">Guadagno</th>
+          <th style="padding: 10px; text-align: right; color: #8b949e;">SL Attuale</th>
+          <th style="padding: 10px; text-align: right; color: #8b949e;">SL Consigliato</th>
+          <th style="padding: 10px; text-align: center; color: #8b949e;">Stato</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  positions.forEach((pos, i) => {
+    const entryP = parseFloat(pos.entry_price).toFixed(4);
+    const currP = parseFloat(pos.current_price).toFixed(4);
+    const pctChg = pos.pct_change;
+    const slCurr = pos.sl_current ? parseFloat(pos.sl_current).toFixed(4) : '—';
+    const slSugg = parseFloat(pos.sl_suggested).toFixed(4);
+
+    // Colore per guadagno
+    const pctCol = pctChg > 0 ? '#3fb950' : pctChg < 0 ? '#f85149' : '#8b949e';
+
+    // Stato SL
+    let slStatus = '✅';
+    let slCol = '#3fb950';
+    if (currP < slSugg) {
+      slStatus = '⚠️ SOTTO';
+      slCol = '#f85149';
+    } else if (currP < slSugg * 1.02) {
+      slStatus = '⚡ VICINO';
+      slCol = '#d29922';
+    }
+
+    const bgRow = i % 2 === 0 ? 'transparent' : '#0d1117';
+
+    html += `
+      <tr style="background: ${bgRow}; border-bottom: 1px solid #30363d;">
+        <td style="padding: 10px;"><strong style="color: #58a6ff;">${pos.ticker}</strong></td>
+        <td style="padding: 10px; text-align: right;">€${entryP}</td>
+        <td style="padding: 10px; text-align: right;">€${currP}</td>
+        <td style="padding: 10px; text-align: right; color: ${pctCol};">
+          <strong>${pctChg > 0 ? '+' : ''}${pctChg.toFixed(2)}%</strong>
+        </td>
+        <td style="padding: 10px; text-align: right; color: #8b949e;">€${slCurr}</td>
+        <td style="padding: 10px; text-align: right; color: ${slCol};">
+          <strong>€${slSugg}</strong>
+        </td>
+        <td style="padding: 10px; text-align: center; color: ${slCol};">${slStatus}</td>
+      </tr>
+    `;
+  });
+
+  html += `
+      </tbody>
+    </table>
+    <div style="margin-top: 12px; font-size: 11px; color: #8b949e;">
+      <strong>Legenda SL Consigliato:</strong><br>
+      • In perdita: 98% di entry (protezione stretta)<br>
+      • In profitto: max(98% entry, 95% corrente) = trailing stop<br>
+      • Aggiornato automaticamente ogni giorno
+    </div>
+  `;
+
+  slPanel2.innerHTML = html;
+}
+
+// Carica SL ogni volta che viene aggiornato il dashboard
+async function autoRefreshSL() {
+  setInterval(loadPortfolioSL, 60000);  // Ogni minuto
+}
+
+// Chiama al caricamento iniziale
+document.addEventListener('DOMContentLoaded', () => {
+  loadPortfolioSL();
+  autoRefreshSL();
+});
 </script>
 </body>
 </html>
