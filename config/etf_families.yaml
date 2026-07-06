@@ -15,7 +15,7 @@ families:
     l0_drawdown: 15.0
     l0_rsi_max: 35
     min_buy_count: 5
-    ema20_slope_min: 1.0
+    ema20_slope_min: 1.5
     # Stop Loss Dinamici
     sl_atr_multiplier: 2.0
     sl_trailing_trigger: "EMA20"
@@ -38,7 +38,7 @@ families:
     l0_drawdown: 20.0
     l0_rsi_max: 38
     min_buy_count: 6
-    ema20_slope_min: 0.7
+    ema20_slope_min: 1.0
     # Stop Loss Dinamici
     sl_atr_multiplier: 2.2
     sl_trailing_trigger: "EMA20"
@@ -61,7 +61,7 @@ families:
     l0_drawdown: 18.0
     l0_rsi_max: 38
     min_buy_count: 5
-    ema20_slope_min: 0.7
+    ema20_slope_min: 1.0
     # Stop Loss Dinamici
     sl_atr_multiplier: 2.3
     sl_trailing_trigger: "EMA20"
@@ -245,7 +245,7 @@ families:
     l0_drawdown: 25.0
     l0_rsi_max: 40
     min_buy_count: 5
-    ema20_slope_min: 0.8
+    ema20_slope_min: 1.2
     # Stop Loss Dinamici
     sl_atr_multiplier: 3.0
     sl_trailing_trigger: "REGIME_BEAR"
