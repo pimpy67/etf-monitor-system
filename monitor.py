@@ -563,14 +563,15 @@ class ETFMonitor:
                 if exit_price and ep else None
             pct_str = f'{pct:+.2f}%' if pct is not None else 'N/D'
             add_log(f"  USCITA L1: {fr['nome'][:40]} — {pct_str}")
-            self.alert_system.send_l1_exit({
-                'isin': isin, 'ticker': fr['ticker'], 'nome': fr['nome'],
-                'categoria': fr['categoria'],
-                'entry_date': ed_raw, 'entry_price': ep,
-                'exit_price': float(exit_price) if exit_price else None,
-                'days_in_l1': days, 'pct_gain': pct,
-                'analysis': a,
-            })
+            # DISABILITATO: email uscite L1 (solo entrate + report portafoglio)
+            # self.alert_system.send_l1_exit({
+            #     'isin': isin, 'ticker': fr['ticker'], 'nome': fr['nome'],
+            #     'categoria': fr['categoria'],
+            #     'entry_date': ed_raw, 'entry_price': ep,
+            #     'exit_price': float(exit_price) if exit_price else None,
+            #     'days_in_l1': days, 'pct_gain': pct,
+            #     'analysis': a,
+            # })
             self.db.remove_l1_entry(isin)
 
         # ── Uscite da L0 ──────────────────────────────────────────────────────
@@ -581,27 +582,28 @@ class ETFMonitor:
 
         # ── INVIO ALERT STOP LOSS TRIGGERATI ────────────────────────────────
         for sl_exit in sl_triggered_exits:
-            add_log(f"  📧 Alert SL: {sl_exit['nome'][:40]} — Email inviata")
-            self.alert_system.send_l1_exit({
-                'isin': sl_exit['isin'],
-                'ticker': sl_exit['ticker'],
-                'nome': sl_exit['nome'],
-                'categoria': '',
-                'entry_date': sl_exit['entry_date'],
-                'entry_price': sl_exit['entry_price'],
-                'exit_price': sl_exit['exit_price'],
-                'days_in_l1': 0,
-                'pct_gain': sl_exit['pct_gain'],
-                'analysis': {
-                    'current_price': sl_exit['exit_price'],
-                    'ema10': None,
-                    'ema20': None,
-                    'sma50': None,
-                    'rsi': None,
-                    'adx': None,
-                },
-                'exit_rule': 'Stop Loss',  # Identifica SL triggerato
-            })
+            add_log(f"  📧 Alert SL: {sl_exit['nome'][:40]} — Registrato (no email)")
+            # DISABILITATO: email uscite L1 per Stop Loss (solo entrate + report portafoglio)
+            # self.alert_system.send_l1_exit({
+            #     'isin': sl_exit['isin'],
+            #     'ticker': sl_exit['ticker'],
+            #     'nome': sl_exit['nome'],
+            #     'categoria': '',
+            #     'entry_date': sl_exit['entry_date'],
+            #     'entry_price': sl_exit['entry_price'],
+            #     'exit_price': sl_exit['exit_price'],
+            #     'days_in_l1': 0,
+            #     'pct_gain': sl_exit['pct_gain'],
+            #     'analysis': {
+            #         'current_price': sl_exit['exit_price'],
+            #         'ema10': None,
+            #         'ema20': None,
+            #         'sma50': None,
+            #         'rsi': None,
+            #         'adx': None,
+            #     },
+            #     'exit_rule': 'Stop Loss',  # Identifica SL triggerato
+            # })
             self.db.remove_l1_entry(sl_exit['isin'])
 
         # ── Invio email ────────────────────────────────────────────────────────
