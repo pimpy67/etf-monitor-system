@@ -235,7 +235,8 @@ class PriceDatabase:
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS is_partial BOOLEAN DEFAULT FALSE",
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS partial_exit_date DATE",
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS partial_exit_price DECIMAL(12,4)",
-                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS stop_loss DECIMAL(12, 4)",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS stop_loss_inserted DECIMAL(12, 4)",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS stop_loss_suggested DECIMAL(12, 4)",
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS stop_loss_updated_at TIMESTAMP",
                 ]:
                     cur.execute(col_sql)
@@ -625,7 +626,7 @@ class PriceDatabase:
 
     def update_stop_loss_trailing(self, isin: str, new_stop_loss: float) -> bool:
         """
-        Aggiorna lo SL se il nuovo valore è superiore al precedente (trailing stop).
+        Aggiorna lo SL suggerito (trailing stop).
 
         Args:
             isin: Codice ISIN
@@ -639,16 +640,44 @@ class PriceDatabase:
             return False
         try:
             with conn.cursor() as cur:
-                # Aggiorna solo se il nuovo SL è più alto (trailing = non scende mai)
+                # Aggiorna SL consigliato (non il SL inserito)
                 cur.execute("""
                     UPDATE etf_portfolio_entries
-                    SET stop_loss = %s, stop_loss_updated_at = NOW()
-                    WHERE isin = %s AND (stop_loss IS NULL OR stop_loss < %s)
-                """, (float(new_stop_loss), isin, float(new_stop_loss)))
+                    SET stop_loss_suggested = %s, stop_loss_updated_at = NOW()
+                    WHERE isin = %s
+                """, (float(new_stop_loss), isin))
                 conn.commit()
                 return True
         except Exception as e:
             logging.error(f"Errore update_stop_loss_trailing {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def accept_stop_loss_suggestion(self, isin: str) -> bool:
+        """
+        Accetta il suggerimento SL: copia stop_loss_suggested in stop_loss_inserted.
+
+        Args:
+            isin: Codice ISIN
+
+        Returns:
+            True se accettato, False se errore
+        """
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE etf_portfolio_entries
+                    SET stop_loss_inserted = stop_loss_suggested, stop_loss_updated_at = NOW()
+                    WHERE isin = %s AND stop_loss_suggested IS NOT NULL
+                """, (isin,))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore accept_stop_loss_suggestion {isin}: {e}")
             return False
         finally:
             conn.close()

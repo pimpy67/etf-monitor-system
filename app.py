@@ -272,7 +272,7 @@ def portfolio_sl():
             # Leggi posizioni L1 da portfolio_entries
             cur.execute("""
                 SELECT pe.ticker, pe.entry_price, pe.entry_date, pe.fund_name,
-                       pe.stop_loss, pe.stop_loss_updated_at
+                       pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at
                 FROM etf_portfolio_entries pe
                 WHERE pe.ticker IS NOT NULL
                 ORDER BY pe.entry_date DESC
@@ -310,8 +310,8 @@ def portfolio_sl():
                         'current_price': current_price,
                         'price_date': str(price_date),
                         'pct_change': round(pct_change, 2),
-                        'sl_current': float(pos['stop_loss']) if pos['stop_loss'] else None,
-                        'sl_suggested': round(suggested_sl, 4),
+                        'sl_inserted': float(pos['stop_loss_inserted']) if pos['stop_loss_inserted'] else None,
+                        'sl_suggested': float(pos['stop_loss_suggested']) if pos['stop_loss_suggested'] else round(suggested_sl, 4),
                         'sl_updated': str(pos['stop_loss_updated_at']) if pos['stop_loss_updated_at'] else None,
                     })
 
@@ -324,6 +324,32 @@ def portfolio_sl():
 
     except Exception as e:
         print(f"Errore portfolio-sl: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/accept-sl-suggestion', methods=['POST'])
+def accept_sl_suggestion():
+    """Accetta il suggerimento SL per un ETF."""
+    try:
+        data = request.get_json()
+        isin = data.get('isin')
+        ticker = data.get('ticker')
+
+        identifier = isin or ticker
+        if not identifier:
+            return jsonify({'error': 'ISIN or ticker required'}), 400
+
+        # Accetta il suggerimento SL
+        if db.accept_stop_loss_suggestion(identifier):
+            return jsonify({
+                'status': 'accepted',
+                'identifier': identifier,
+                'timestamp': datetime.now().isoformat()
+            })
+        else:
+            return jsonify({'error': 'Failed to accept suggestion'}), 500
+
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
