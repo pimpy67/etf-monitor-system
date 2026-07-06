@@ -813,28 +813,52 @@ class ETFTechnicalAnalyzer:
                 suggested = 2
                 reason    = f'Prezzo {current:.2f} < SMA50 {sma50_v:.2f}: Watchlist'
                 reason_codes.append('L2_WATCHLIST_PRICE')
-            elif int(buy_count) == 5 and (adx_val is None or adx_val < p['adx_entry'] or dist_ema20 > p['ema_dist_max']):
-                # ⚡ STRATO 3 — Filtri di accelerazione per i 5/6 (stringenti)
-                # Se solo 5/6 condizioni passano, richiedi ADX forte + distanza EMA20 non estesa
+            elif buy_count < 6:
+                # ⚡ STRATO 3 — Filtri di accelerazione per i 5/6 e inferiori (stringenti)
+                # Se meno di 6/6 condizioni passano, richiedi ADX forte + distanza EMA20 non estesa
                 # Questo taglia gli asset in lateralizzazione o estesi sul picco
-                failed_filters = []
-                if adx_val is None or adx_val < p['adx_entry']:
-                    failed_filters.append(f"ADX {adx_val or 'N/A'} < {p['adx_entry']}")
-                if dist_ema20 > p['ema_dist_max']:
-                    failed_filters.append(f"dist {dist_ema20:.1f}% > {p['ema_dist_max']}%")
-                suggested = 2
-                reason    = f"Ingresso 5/6 bloccato: {' + '.join(failed_filters)} — Watchlist"
-                reason_codes.append('L2_5OF6_ACCELERATION_FILTERS')
+                adx_fails = adx_val is None or adx_val < p['adx_entry']
+                dist_fails = dist_ema20 > p['ema_dist_max']
+
+                if adx_fails or dist_fails:
+                    failed_filters = []
+                    if adx_fails:
+                        failed_filters.append(f"ADX {adx_val or 'N/A'} < {p['adx_entry']}")
+                    if dist_fails:
+                        failed_filters.append(f"dist {dist_ema20:.1f}% > {p['ema_dist_max']}%")
+                    suggested = 2
+                    reason    = f"Ingresso {int(buy_count)}/6 bloccato: {' + '.join(failed_filters)} — Watchlist"
+                    reason_codes.append('L2_5OF6_ACCELERATION_FILTERS')
+                # Se passa i filtri, continua a controllare EMA slope
+                elif ema20_v is not None and len(ema20) >= 11:
+                    ema20_slope_threshold = self.p.get('ema20_slope_min', 0.2)
+                    ema20_10d_ago = float(ema20.iloc[-11]) if pd.notna(ema20.iloc[-11]) else None
+                    if ema20_10d_ago and ema20_10d_ago > 0:
+                        ema20_pct_change = ((ema20_v - ema20_10d_ago) / ema20_10d_ago * 100)
+                        if ema20_pct_change < ema20_slope_threshold:
+                            suggested = 2
+                            reason    = f'EMA20 trend debole (+{ema20_pct_change:.2f}% vs 10gg fa): Watchlist'
+                            reason_codes.append('L2_WEAK_EMA_SLOPE')
+                        else:
+                            suggested = 1
+                            reason    = f'L1 Trend Sicuro (5/6, ADX+dist OK, EMA20 slope +{ema20_pct_change:.2f}%)'
+                            reason_codes.append('L1_ENTRY')
+                    else:
+                        suggested = 1
+                        reason    = f'L1 Trend Sicuro (5/6, ADX+dist OK, storico EMA20 breve)'
+                        reason_codes.append('L1_ENTRY')
+                else:
+                    suggested = 1
+                    reason    = f'L1 Trend Sicuro (5/6, ADX+dist OK)'
+                    reason_codes.append('L1_ENTRY')
             elif ema20_v is not None and len(ema20) >= 11:
-                # STRATO 2 — Filtro EMA20 slope: esclude trend piatti/artificiali
+                # STRATO 2 — Filtro EMA20 slope per L1 completi (6/6): esclude trend piatti/artificiali
                 # EMA20 deve crescere almeno X% negli ultimi 10 giorni (parametrizzato per famiglia)
-                # Soglia per famiglia: bond=0.1%, equity=0.4%, crypto=0.6%, ecc.
                 ema20_slope_threshold = self.p.get('ema20_slope_min', 0.2)  # Default 0.2%
                 ema20_10d_ago = float(ema20.iloc[-11]) if pd.notna(ema20.iloc[-11]) else None
                 if ema20_10d_ago and ema20_10d_ago > 0:
                     ema20_pct_change = ((ema20_v - ema20_10d_ago) / ema20_10d_ago * 100)
                     if ema20_pct_change < ema20_slope_threshold:
-
                         suggested = 2
                         reason    = f'EMA20 trend debole (+{ema20_pct_change:.2f}% vs 10gg fa): Watchlist'
                         reason_codes.append('L2_WEAK_EMA_SLOPE')
@@ -846,14 +870,13 @@ class ETFTechnicalAnalyzer:
                         dist_str = f'{dist_ema20:.1f}' if dist_ema20 is not None else '?'
                         adx_str = f'{adx_val:.0f}' if adx_val is not None else '?'
                         reason = (
-                            f'L1 Trend Sicuro (EMA20 slope +{ema20_pct_change:.2f}%, regime {regime_str}): '
+                            f'L1 Trend Sicuro (6/6, EMA20 slope +{ema20_pct_change:.2f}%, regime {regime_str}): '
                             f'RSI {rsi_str} ✓, dist {dist_str}% ✓, ADX {adx_str} ✓, MACD {macd_note} ✓{regime_note}'
                         )
                         reason_codes.append('L1_ENTRY')
                 else:
-                    # EMA20 troppo breve per calcolare slope
                     suggested = 1
-                    reason    = f'L1 Trend Sicuro (storico EMA20 breve, {len(ema20)}gg)'
+                    reason    = f'L1 Trend Sicuro (6/6, storico EMA20 breve, {len(ema20)}gg)'
                     reason_codes.append('L1_ENTRY')
             else:
                 suggested = 1
