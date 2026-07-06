@@ -828,9 +828,10 @@ class ETFTechnicalAnalyzer:
                 # Se meno di 6/6 condizioni passano, richiedi:
                 # 1. ADX forte (>= adx_entry)
                 # 2. Distanza EMA20 non estesa (<= max)
-                # 3. EMA20 slope FORTE (>= 0.5%) — molto stringente per eliminarsi trend piatti
+                # 3. EMA20 slope FORTE (>= ema20_slope_min) — parametrizzato per famiglia
                 adx_fails = adx_val is None or adx_val < p['adx_entry']
                 dist_fails = dist_ema20 > p['ema_dist_max']
+                ema20_slope_threshold_s3 = self.p.get('ema20_slope_min', 0.5)  # Default 0.5% per STRATO 3
 
                 # Calcola EMA20 slope per il controllo aggiuntivo
                 slope_fails = False
@@ -839,7 +840,7 @@ class ETFTechnicalAnalyzer:
                     ema20_10d_ago = float(ema20.iloc[-11]) if pd.notna(ema20.iloc[-11]) else None
                     if ema20_10d_ago and ema20_10d_ago > 0:
                         ema20_slope_value = ((ema20_v - ema20_10d_ago) / ema20_10d_ago * 100)
-                        slope_fails = ema20_slope_value < 0.5  # Soglia STRINGENTE: 0.5% minimo
+                        slope_fails = ema20_slope_value < ema20_slope_threshold_s3  # Soglia parametrizzata
 
                 if adx_fails or dist_fails or slope_fails:
                     failed_filters = []
@@ -848,7 +849,7 @@ class ETFTechnicalAnalyzer:
                     if dist_fails:
                         failed_filters.append(f"dist {dist_ema20:.1f}% > {p['ema_dist_max']}%")
                     if slope_fails:
-                        failed_filters.append(f"slope +{ema20_slope_value:.2f}% < 0.5%")
+                        failed_filters.append(f"slope +{ema20_slope_value:.2f}% < {ema20_slope_threshold_s3}%")
                     suggested = 2
                     reason    = f"Ingresso {int(buy_count)}/6 bloccato: {' + '.join(failed_filters)} — Watchlist"
                     reason_codes.append('L2_5OF6_ACCELERATION_FILTERS')
