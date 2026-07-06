@@ -842,9 +842,6 @@ class ETFTechnicalAnalyzer:
                         ema20_slope_value = ((ema20_v - ema20_10d_ago) / ema20_10d_ago * 100)
                         slope_fails = ema20_slope_value < ema20_slope_threshold_s3  # Soglia parametrizzata
 
-                # DEBUG: Log STRATO 3 results
-                print(f"[S3-CHECK] {ticker} | {family_name} | slope={ema20_slope_value:.2f}% (min {ema20_slope_threshold_s3}%) | adx_fail={adx_fails} dist_fail={dist_fails} slope_fail={slope_fails}")
-
                 if adx_fails or dist_fails or slope_fails:
                     failed_filters = []
                     if adx_fails:
@@ -868,8 +865,6 @@ class ETFTechnicalAnalyzer:
                 ema20_10d_ago = float(ema20.iloc[-11]) if pd.notna(ema20.iloc[-11]) else None
                 if ema20_10d_ago and ema20_10d_ago > 0:
                     ema20_pct_change = ((ema20_v - ema20_10d_ago) / ema20_10d_ago * 100)
-                    # DEBUG: log slope check
-                    print(f"[SLOPE-DEBUG] {ticker} | {family_name} | slope={ema20_pct_change:.2f}% vs threshold={ema20_slope_threshold}%")
                     if ema20_pct_change < ema20_slope_threshold:
                         suggested = 2
                         reason    = f'EMA20 trend debole (+{ema20_pct_change:.2f}% < {ema20_slope_threshold:.2f}%): Watchlist'
