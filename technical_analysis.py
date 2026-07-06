@@ -813,6 +813,18 @@ class ETFTechnicalAnalyzer:
                 suggested = 2
                 reason    = f'Prezzo {current:.2f} < SMA50 {sma50_v:.2f}: Watchlist'
                 reason_codes.append('L2_WATCHLIST_PRICE')
+            elif int(buy_count) == 5 and (adx_val is None or adx_val < p['adx_entry'] or dist_ema20 > p['ema_dist_max']):
+                # ⚡ STRATO 3 — Filtri di accelerazione per i 5/6 (stringenti)
+                # Se solo 5/6 condizioni passano, richiedi ADX forte + distanza EMA20 non estesa
+                # Questo taglia gli asset in lateralizzazione o estesi sul picco
+                failed_filters = []
+                if adx_val is None or adx_val < p['adx_entry']:
+                    failed_filters.append(f"ADX {adx_val or 'N/A'} < {p['adx_entry']}")
+                if dist_ema20 > p['ema_dist_max']:
+                    failed_filters.append(f"dist {dist_ema20:.1f}% > {p['ema_dist_max']}%")
+                suggested = 2
+                reason    = f"Ingresso 5/6 bloccato: {' + '.join(failed_filters)} — Watchlist"
+                reason_codes.append('L2_5OF6_ACCELERATION_FILTERS')
             elif ema20_v is not None and len(ema20) >= 11:
                 # STRATO 2 — Filtro EMA20 slope: esclude trend piatti/artificiali
                 # EMA20 deve crescere almeno X% negli ultimi 10 giorni (parametrizzato per famiglia)
