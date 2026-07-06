@@ -772,7 +772,9 @@ class ETFTechnicalAnalyzer:
 
         # [DEBUG] Log per tutte le decisioni L1
         if buy_count_finale >= (min_buy_required - 1):
-            print(f"[L1-CHECK] buy_count={buy_count}, min_req={min_buy_required}, regime={regime_str}, ADX={adx_val}, dist={dist_ema20:.1f}%, max_dist={p['ema_dist_max']}%")
+            famiglia_str = self.famiglia or self.etf_type
+            adx_entry = p.get('adx_entry', '?')
+            print(f"[L1-CHECK] {famiglia_str} | {buy_count}/{min_buy_required} | regime={regime_str} | ADX={adx_val or 'N/A'} (>={adx_entry}) | dist={dist_ema20:.1f}% (max {p['ema_dist_max']}%)")
 
         if current_level == 1:
             if exit_rule:
