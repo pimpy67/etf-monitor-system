@@ -514,6 +514,32 @@ class ETFMonitor:
                             'signal_detail': signal_detail,
                         })
 
+        # ── CONTROLLO STOP LOSS (Exit L1 se prezzo < SL) ───────────────────
+        sl_triggered_exits = []
+        for isin, entry in existing_l1.items():
+            if isin in current_l1_isins:
+                # ETF ancora in L1, ma verifica SL
+                fr = next((r for r in results if (r.get('isin') or r['ticker']) == isin), None)
+                if fr:
+                    price = fr['analysis'].get('current_price')
+                    sl_current = entry.get('stop_loss')
+
+                    if price and sl_current and float(price) < float(sl_current):
+                        # STOP LOSS TRIGGERATO!
+                        sl_triggered_exits.append({
+                            'isin': isin,
+                            'ticker': fr.get('ticker'),
+                            'nome': fr.get('nome'),
+                            'entry_price': float(entry['entry_price']),
+                            'entry_date': entry['entry_date'],
+                            'exit_price': float(price),
+                            'stop_loss': float(sl_current),
+                            'pct_gain': round((float(price) - float(entry['entry_price'])) / float(entry['entry_price']) * 100, 2),
+                        })
+                        # Rimuovi da current_l1_isins per registrare come uscita
+                        current_l1_isins.discard(isin)
+                        add_log(f"  🚨 STOP LOSS TRIGGERATO: {fr['nome'][:40]} — Prezzo €{price:.4f} < SL €{sl_current:.4f}")
+
         # ── Uscite da L1 ──────────────────────────────────────────────────────
         for isin, entry in existing_l1.items():
             if isin in current_l1_isins:
@@ -551,6 +577,31 @@ class ETFMonitor:
             if isin not in current_l0_isins:
                 add_log(f"  USCITA L0: {isin}")
                 self.db.remove_l0_entry(isin)
+
+        # ── INVIO ALERT STOP LOSS TRIGGERATI ────────────────────────────────
+        for sl_exit in sl_triggered_exits:
+            add_log(f"  📧 Alert SL: {sl_exit['nome'][:40]} — Email inviata")
+            self.alert_system.send_l1_exit({
+                'isin': sl_exit['isin'],
+                'ticker': sl_exit['ticker'],
+                'nome': sl_exit['nome'],
+                'categoria': '',
+                'entry_date': sl_exit['entry_date'],
+                'entry_price': sl_exit['entry_price'],
+                'exit_price': sl_exit['exit_price'],
+                'days_in_l1': 0,
+                'pct_gain': sl_exit['pct_gain'],
+                'analysis': {
+                    'current_price': sl_exit['exit_price'],
+                    'ema10': None,
+                    'ema20': None,
+                    'sma50': None,
+                    'rsi': None,
+                    'adx': None,
+                },
+                'exit_rule': 'Stop Loss',  # Identifica SL triggerato
+            })
+            self.db.remove_l1_entry(sl_exit['isin'])
 
         # ── Invio email ────────────────────────────────────────────────────────
         if new_l1_entries or new_l0_entries:

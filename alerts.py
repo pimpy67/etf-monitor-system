@@ -179,8 +179,14 @@ class AlertSystem:
             key_map = {1:'A', 2:'B', 3:'C', 4:'D', 5:'E', 6:'F'}
             exit_rule_key = key_map.get(exit_rule_key, str(exit_rule_key))
 
-        rule_name, rule_color, rule_desc = REGOLE.get(
-            exit_rule_key, ('Uscita L1', '#555', 'Condizioni non più soddisfatte'))
+        # Gestisci "Stop Loss" come exit rule speciale
+        if exit_rule_key == 'Stop Loss':
+            rule_name = 'STOP LOSS TRIGGERATO'
+            rule_color = '#b71c1c'
+            rule_desc = 'Prezzo sceso sotto Stop Loss'
+        else:
+            rule_name, rule_color, rule_desc = REGOLE.get(
+                exit_rule_key, ('Uscita L1', '#555', 'Condizioni non più soddisfatte'))
 
         ep    = etf_info.get('entry_price')
         xp    = etf_info.get('exit_price')
@@ -233,10 +239,14 @@ class AlertSystem:
             f'<tr style="background:#f5f5f5">'
             f'<td style="padding:10px;border:1px solid #ddd"><strong>Prezzo uscita</strong></td>'
             f'<td style="padding:10px;border:1px solid #ddd">{"€{:.4f}".format(xp) if xp else "—"}</td></tr>'
-            f'<tr style="background:{pct_c};color:white">'
-            f'<td style="padding:12px;border:1px solid #ddd;font-weight:bold">{label}</td>'
-            f'<td style="padding:12px;border:1px solid #ddd;font-size:20px;font-weight:bold">{pct_s}</td></tr>'
-            f'</table>'
+            + (f'<tr style="background:#fff3cd">'
+               f'<td style="padding:10px;border:1px solid #ddd"><strong>Stop Loss Triggerato</strong></td>'
+               f'<td style="padding:10px;border:1px solid #ddd;font-weight:bold;color:#b71c1c">€{cond.get("stop_loss", xp):.4f}</td></tr>'
+               if exit_rule_key == 'Stop Loss' and 'analysis' not in cond else '')
+            + (f'<tr style="background:{pct_c};color:white">'
+               f'<td style="padding:12px;border:1px solid #ddd;font-weight:bold">{label}</td>'
+               f'<td style="padding:12px;border:1px solid #ddd;font-size:20px;font-weight:bold">{pct_s}</td></tr>'
+               f'</table>')
             + (f'<div style="font-size:12px;font-weight:bold;color:#555;margin-bottom:8px;text-transform:uppercase">'
                f'Indicatori al momento dell\'uscita</div>'
                f'<table style="width:100%;border-collapse:collapse;font-size:13px">{ind_rows}</table>'
