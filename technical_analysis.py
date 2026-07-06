@@ -864,9 +864,11 @@ class ETFTechnicalAnalyzer:
                 ema20_10d_ago = float(ema20.iloc[-11]) if pd.notna(ema20.iloc[-11]) else None
                 if ema20_10d_ago and ema20_10d_ago > 0:
                     ema20_pct_change = ((ema20_v - ema20_10d_ago) / ema20_10d_ago * 100)
+                    # DEBUG: log slope check
+                    print(f"[SLOPE-DEBUG] {ticker} | {family_name} | slope={ema20_pct_change:.2f}% vs threshold={ema20_slope_threshold}%")
                     if ema20_pct_change < ema20_slope_threshold:
                         suggested = 2
-                        reason    = f'EMA20 trend debole (+{ema20_pct_change:.2f}% vs 10gg fa): Watchlist'
+                        reason    = f'EMA20 trend debole (+{ema20_pct_change:.2f}% < {ema20_slope_threshold:.2f}%): Watchlist'
                         reason_codes.append('L2_WEAK_EMA_SLOPE')
                     else:
                         suggested = 1
