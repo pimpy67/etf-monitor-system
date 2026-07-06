@@ -798,6 +798,10 @@ class ETFTechnicalAnalyzer:
         elif buy_count_finale >= min_buy_required:
             # Soglia flessibile: accetta 5/6
             # MA: REGIME BULL è obbligatorio (fondamenta irrinunciabile)
+            # DEBUG: Log dei filtri per i 5/6
+            if int(buy_count) < 6:
+                print(f"[DEBUG] {current_level} → L1? buy_count={int(buy_count)}, ADX={adx_val}, dist={dist_ema20:.1f}, max_dist={p['ema_dist_max']}")
+
             if kill_switch:
                 suggested = current_level
                 chg_str = f'{daily_chg:.1f}' if daily_chg is not None else '?'
