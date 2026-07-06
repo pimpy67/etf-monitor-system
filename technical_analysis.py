@@ -313,6 +313,65 @@ class ETFTechnicalAnalyzer:
             return None
         return float(high.iloc[-1] - low.iloc[-1])
 
+    def calculate_stop_loss(self, current_price: float, atr: Optional[float],
+                           family_config: Dict, entry_price: float,
+                           current_gain_pct: float, regime_str: str = 'BULL') -> Dict:
+        """
+        Calcola lo stop loss dinamico a due fasi: iniziale + trailing
+
+        Args:
+            current_price: prezzo attuale
+            atr: valore ATR14 (None se non disponibile)
+            family_config: dict con parametri dalla famiglia YAML
+            entry_price: prezzo di entry L1
+            current_gain_pct: guadagno % attuale
+            regime_str: regime di mercato ('BULL', 'BEAR', 'LATERALE')
+
+        Returns:
+            dict con: stop_loss_initial, stop_loss_trailing, trigger_reason, should_use_trailing
+        """
+        # --- STOP LOSS INIZIALE ---
+        sl_atr_mult = family_config.get('sl_atr_multiplier')
+
+        if atr and sl_atr_mult:
+            # Usa ATR come base
+            sl_initial = current_price - (atr * sl_atr_mult)
+        else:
+            # Fallback: percentuale fissa dalla famiglia
+            fallback_pct = family_config.get('sl_initial_pct_fallback', 0.02)
+            sl_initial = entry_price * (1 - fallback_pct)
+
+        # Protezione minima: non scendere sotto il 95% di entry
+        sl_initial = max(sl_initial, entry_price * 0.95)
+
+        # --- STOP LOSS TRAILING (solo se in profitto) ---
+        sl_trailing = None
+        trigger_reason = None
+        should_use_trailing = False
+
+        if current_gain_pct > 0:
+            profit_trigger = family_config.get('sl_profit_trigger_pct', 2.0)
+
+            if current_gain_pct >= profit_trigger:
+                # Attiva trailing stretto
+                tight_pct = family_config.get('sl_trailing_tight_pct', 0.95)
+                sl_trailing = current_price * tight_pct
+                should_use_trailing = True
+                trigger_reason = f"Trailing: gain {current_gain_pct:.1f}% >= {profit_trigger}%"
+
+        # --- REGIME BEAR per CRYPTO ---
+        if family_config.get('sl_trailing_trigger') == 'REGIME_BEAR' and regime_str == 'BEAR':
+            sl_trailing = current_price * 0.90  # Exit immediato se regime cambia
+            should_use_trailing = True
+            trigger_reason = "REGIME_BEAR: Regime cambiato a BEAR"
+
+        return {
+            'stop_loss_initial': float(sl_initial),
+            'stop_loss_trailing': float(sl_trailing) if sl_trailing else None,
+            'trigger_reason': trigger_reason,
+            'should_use_trailing': should_use_trailing
+        }
+
     # ── Divergenza / recupero (copiato da fund system) ─────────────────────────
 
     def _detect_positive_divergence(self, prices: pd.Series, rsi: pd.Series,
@@ -821,6 +880,31 @@ class ETFTechnicalAnalyzer:
             reason    = 'Monitoraggio passivo'
             reason_codes.append('L3_MONITOR')
 
+        # ── CALCOLO STOP LOSS DINAMICO (solo per L1) ───────────────────────────
+        sl_data = None
+        if suggested == 1:  # Entry in L1
+            # Calcola ATR14
+            atr_val = None
+            if high is not None and low is not None:
+                try:
+                    atr_series = self._calculate_atr(high.astype(float), low.astype(float), close, period=14)
+                    atr_val = self._fval(atr_series)
+                except Exception:
+                    atr_val = None
+
+            # Calcola stop loss dinamico
+            sl_data = self.calculate_stop_loss(
+                current_price=current,
+                atr=atr_val,
+                family_config=self.p,
+                entry_price=current,
+                current_gain_pct=0.0,
+                regime_str=regime_str
+            )
+            conditions['stop_loss_initial'] = round(sl_data['stop_loss_initial'], 4)
+            conditions['stop_loss_reason'] = sl_data.get('trigger_reason', 'Entry L1 — SL iniziale')
+            conditions['atr14'] = round(atr_val, 4) if atr_val else None
+
         return {
             'suggested_level': suggested,
             'current_level':   current_level,
@@ -832,6 +916,7 @@ class ETFTechnicalAnalyzer:
             'buy_count_finale': round(buy_count_finale, 2),  # Score finale con penalità regime
             'regime_penalty':  round(regime_penalty, 2),
             'min_buy_required': min_buy_required,
+            'stop_loss_initial': sl_data['stop_loss_initial'] if sl_data else None,
         }
 
     # ── Full analysis ──────────────────────────────────────────────────────────

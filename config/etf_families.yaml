@@ -15,6 +15,12 @@ families:
     l0_drawdown: 15.0
     l0_rsi_max: 35
     min_buy_count: 5
+    # Stop Loss Dinamici
+    sl_atr_multiplier: 2.0
+    sl_trailing_trigger: "EMA20"
+    sl_profit_trigger_pct: 3.0
+    sl_trailing_tight_pct: 0.95
+    sl_initial_pct_fallback: 0.035
   mercati_emergenti:
     description: "Mercati emergenti \u2014 EM globale, Asia, LatAm, EMEA"
     rsi_entry_low: 40
@@ -31,6 +37,12 @@ families:
     l0_drawdown: 20.0
     l0_rsi_max: 38
     min_buy_count: 6
+    # Stop Loss Dinamici
+    sl_atr_multiplier: 2.2
+    sl_trailing_trigger: "EMA20"
+    sl_profit_trigger_pct: 4.0
+    sl_trailing_tight_pct: 0.94
+    sl_initial_pct_fallback: 0.040
   settoriali_growth:
     description: "Settoriali crescita \u2014 Tech, AI, Semi, Nasdaq, Digitale"
     rsi_entry_low: 48
@@ -47,6 +59,12 @@ families:
     l0_drawdown: 18.0
     l0_rsi_max: 38
     min_buy_count: 5
+    # Stop Loss Dinamici
+    sl_atr_multiplier: 2.3
+    sl_trailing_trigger: "EMA20"
+    sl_profit_trigger_pct: 5.0
+    sl_trailing_tight_pct: 0.93
+    sl_initial_pct_fallback: 0.045
   settoriali_difensivi:
     description: "Settoriali difensivi \u2014 Salute, Utilities, Insurance, Food"
     rsi_entry_low: 42
@@ -63,6 +81,12 @@ families:
     l0_drawdown: 15.0
     l0_rsi_max: 35
     min_buy_count: 5
+    # Stop Loss Dinamici
+    sl_atr_multiplier: 1.8
+    sl_trailing_trigger: "SMA50"
+    sl_profit_trigger_pct: 2.0
+    sl_trailing_tight_pct: 0.96
+    sl_initial_pct_fallback: 0.025
   bond_governativi:
     description: "Bond governativi EUR/USD \u2014 BTP, Bund, UST, Gov Euro, IL"
     rsi_entry_low: 38
@@ -79,6 +103,12 @@ families:
     l0_drawdown: 8.0
     l0_rsi_max: 38
     min_buy_count: 5
+    # Stop Loss Dinamici
+    sl_atr_multiplier: 1.5
+    sl_trailing_trigger: "SMA50"
+    sl_profit_trigger_pct: 1.0
+    sl_trailing_tight_pct: 0.97
+    sl_initial_pct_fallback: 0.015
   bond_corp_hy_em:
     description: "Bond corporate / HY / EM \u2014 Corp EUR/USD, HY, EM bond"
     rsi_entry_low: 42
@@ -95,6 +125,12 @@ families:
     l0_drawdown: 10.0
     l0_rsi_max: 38
     min_buy_count: 5
+    # Stop Loss Dinamici
+    sl_atr_multiplier: 1.6
+    sl_trailing_trigger: "SMA50"
+    sl_profit_trigger_pct: 1.5
+    sl_trailing_tight_pct: 0.97
+    sl_initial_pct_fallback: 0.020
   commodities:
     description: "Commodities broad \u2014 Bloomberg Comm, GSCI, Agri, Energia"
     rsi_entry_low: 40
@@ -111,6 +147,12 @@ families:
     l0_drawdown: 20.0
     l0_rsi_max: 40
     min_buy_count: 6
+    # Stop Loss Dinamici
+    sl_atr_multiplier: 2.2
+    sl_trailing_trigger: "EMA20"
+    sl_profit_trigger_pct: 4.0
+    sl_trailing_tight_pct: 0.94
+    sl_initial_pct_fallback: 0.050
   oro_metalli_preziosi:
     description: "Oro e metalli preziosi \u2014 Oro, Argento, Platino, Basket PM"
     rsi_entry_low: 38
@@ -127,6 +169,12 @@ families:
     l0_drawdown: 15.0
     l0_rsi_max: 35
     min_buy_count: 5
+    # Stop Loss Dinamici
+    sl_atr_multiplier: 2.0
+    sl_trailing_trigger: "SMA50"
+    sl_profit_trigger_pct: 3.0
+    sl_trailing_tight_pct: 0.95
+    sl_initial_pct_fallback: 0.035
   metalli_industriali:
     description: "Metalli industriali \u2014 Rame, Alluminio, Zinco, Nichel, Battery"
     rsi_entry_low: 38
@@ -143,6 +191,12 @@ families:
     l0_drawdown: 18.0
     l0_rsi_max: 38
     min_buy_count: 5
+    # Stop Loss Dinamici
+    sl_atr_multiplier: 2.2
+    sl_trailing_trigger: "EMA20"
+    sl_profit_trigger_pct: 4.0
+    sl_trailing_tight_pct: 0.94
+    sl_initial_pct_fallback: 0.045
   real_estate_reit:
     description: "Real Estate / REIT \u2014 EPRA Europe, NAREIT Global, REIT"
     rsi_entry_low: 42
@@ -159,6 +213,12 @@ families:
     l0_drawdown: 12.0
     l0_rsi_max: 38
     min_buy_count: 5
+    # Stop Loss Dinamici
+    sl_atr_multiplier: 1.8
+    sl_trailing_trigger: "SMA50"
+    sl_profit_trigger_pct: 2.0
+    sl_trailing_tight_pct: 0.96
+    sl_initial_pct_fallback: 0.030
   crypto_digital_assets:
     description: "Crypto / asset digitali \u2014 Bitcoin, Ethereum, Solana, Basket"
     rsi_entry_low: 35
@@ -175,6 +235,12 @@ families:
     l0_drawdown: 25.0
     l0_rsi_max: 40
     min_buy_count: 5
+    # Stop Loss Dinamici
+    sl_atr_multiplier: 3.0
+    sl_trailing_trigger: "REGIME_BEAR"
+    sl_profit_trigger_pct: 8.0
+    sl_trailing_tight_pct: 0.90
+    sl_initial_pct_fallback: 0.120
   leva_single_stock:
     description: "Leva / single stock / struct \u2014 ETP 3x long/short su singoli\
       \ titoli"
@@ -193,6 +259,12 @@ families:
     l0_rsi_max: 40
     hold_days_max: 30
     min_buy_count: 5
+    # Stop Loss Dinamici
+    sl_atr_multiplier: 2.5
+    sl_trailing_trigger: "EMA20"
+    sl_profit_trigger_pct: 5.0
+    sl_trailing_tight_pct: 0.92
+    sl_initial_pct_fallback: 0.080
   private_equity_buffer:
     description: "Private Equity / Buffer ETF \u2014 Listed PE, Buffer strategy"
     rsi_entry_low: 40
@@ -209,6 +281,12 @@ families:
     l0_drawdown: 15.0
     l0_rsi_max: 38
     min_buy_count: 5
+    # Stop Loss Dinamici
+    sl_atr_multiplier: 1.7
+    sl_trailing_trigger: "SMA50"
+    sl_profit_trigger_pct: 2.0
+    sl_trailing_tight_pct: 0.97
+    sl_initial_pct_fallback: 0.030
   monetario_liquidita:
     description: "Monetario / liquidit\xE0 \u2014 ETF overnight, short-term"
     rsi_entry_low: null
@@ -225,6 +303,12 @@ families:
     l0_drawdown: null
     l0_rsi_max: null
     min_buy_count: 6
+    # Stop Loss Dinamici
+    sl_atr_multiplier: null
+    sl_trailing_trigger: "NONE"
+    sl_profit_trigger_pct: null
+    sl_trailing_tight_pct: null
+    sl_initial_pct_fallback: null
 family_detection:
 - pattern:
   - monetario

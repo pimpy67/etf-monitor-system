@@ -235,6 +235,8 @@ class PriceDatabase:
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS is_partial BOOLEAN DEFAULT FALSE",
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS partial_exit_date DATE",
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS partial_exit_price DECIMAL(12,4)",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS stop_loss DECIMAL(12, 4)",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS stop_loss_updated_at TIMESTAMP",
                 ]:
                     cur.execute(col_sql)
 
@@ -568,7 +570,7 @@ class PriceDatabase:
         finally:
             conn.close()
 
-    def set_l1_entry(self, isin: str, entry_date: str, entry_price: float) -> bool:
+    def set_l1_entry(self, isin: str, entry_date: str, entry_price: float, stop_loss: float = None) -> bool:
         """
         Registra l'ingresso di un ETF in L1 (INSERT, non sovrascrive se già presente).
 
@@ -576,6 +578,7 @@ class PriceDatabase:
             isin: Codice ISIN
             entry_date: Data ingresso 'YYYY-MM-DD'
             entry_price: Prezzo al momento dell'ingresso
+            stop_loss: Stop loss iniziale calcolato dinamicamente
         """
         conn = self._get_connection()
         if not conn:
@@ -587,6 +590,15 @@ class PriceDatabase:
                     VALUES (%s, %s, %s)
                     ON CONFLICT (isin) DO NOTHING
                 """, (isin, entry_date, float(entry_price)))
+
+                # Se c'è uno stop loss, aggiorna la tabella portfolio_entries (per resoconto)
+                if stop_loss is not None:
+                    cur.execute("""
+                        UPDATE etf_portfolio_entries
+                        SET stop_loss = %s, stop_loss_updated_at = NOW()
+                        WHERE isin = %s
+                    """, (float(stop_loss), isin))
+
                 conn.commit()
                 return True
         except Exception as e:

@@ -408,11 +408,13 @@ class ETFMonitor:
                 current_l1_isins.add(isin)
                 if isin not in existing_l1:
                     if price:
-                        self.db.set_l1_entry(isin, today_str, price)
+                        sl_initial = a.get('stop_loss_initial')
+                        self.db.set_l1_entry(isin, today_str, price, stop_loss=sl_initial)
                     entry_date  = today
                     entry_price = float(price) if price else None
+                    sl_str = f" SL={a.get('stop_loss_initial'):.4f}" if a.get('stop_loss_initial') else ""
                     add_log(f"  NUOVO L1: {r['nome'][:40]}" +
-                            (f" — entrato a {entry_price:.4f}" if entry_price else ''))
+                            (f" — entrato a {entry_price:.4f}{sl_str}" if entry_price else ''))
                     new_l1_entries.append({
                         'isin':      isin,
                         'ticker':    r['ticker'],
