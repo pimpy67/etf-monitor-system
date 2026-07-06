@@ -376,7 +376,9 @@ class AlertSystem:
             from database import db
 
             # Leggi posizioni dal database
-            conn = db.get_connection()
+            conn = db._get_connection()
+            if not conn:
+                return True  # No DB connection available
             cur = conn.cursor()
             cur.execute("""
                 SELECT pe.ticker, pe.entry_price, pe.entry_date, pe.fund_name,
@@ -396,7 +398,9 @@ class AlertSystem:
             for ticker, entry_price, entry_date, fund_name, stop_loss in positions:
                 try:
                     # Ottieni prezzo corrente + data (da etf_price_history)
-                    conn = db.get_connection()
+                    conn = db._get_connection()
+                    if not conn:
+                        continue
                     cur = conn.cursor()
                     cur.execute("""
                         SELECT close, date FROM etf_price_history
