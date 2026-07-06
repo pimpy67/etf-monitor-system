@@ -371,7 +371,7 @@ class AlertSystem:
             cur.execute("""
                 SELECT pe.ticker, pe.entry_price, pe.entry_date, pe.fund_name,
                        COALESCE(pe.stop_loss, 0) as stop_loss
-                FROM portfolio_entries pe
+                FROM etf_portfolio_entries pe
                 WHERE pe.ticker IS NOT NULL
                 ORDER BY pe.entry_date DESC
             """)
@@ -385,32 +385,49 @@ class AlertSystem:
             rows = []
             for ticker, entry_price, entry_date, fund_name, stop_loss in positions:
                 try:
-                    # Ottieni prezzo corrente (semplice: da price_history)
+                    # Ottieni prezzo corrente + data (da etf_price_history)
                     conn = db.get_connection()
                     cur = conn.cursor()
                     cur.execute("""
-                        SELECT close FROM etf_price_history
+                        SELECT close, date FROM etf_price_history
                         WHERE ticker = %s ORDER BY date DESC LIMIT 1
                     """, (ticker,))
                     result = cur.fetchone()
                     conn.close()
 
-                    current_price = float(result[0]) if result else entry_price
+                    if result:
+                        current_price = float(result[0])
+                        price_date = result[1] if len(result) > 1 else datetime.now().date()
+                    else:
+                        current_price = entry_price
+                        price_date = datetime.now().date()
+
                     pct_change = ((current_price - entry_price) / entry_price * 100) if entry_price > 0 else 0
                     color = '#28a745' if pct_change >= 0 else '#dc3545'
                     sign = '+' if pct_change >= 0 else ''
 
-                    # Stop loss consigliato (5% sotto entry)
-                    suggested_sl = entry_price * 0.95
+                    # Stop loss consigliato (logica intelligente a 2 fasi)
+                    if pct_change <= 0:
+                        # In perdita: protezione stretta
+                        suggested_sl = entry_price * 0.98
+                    else:
+                        # In profitto: trailing stop = max(entry×0.98, current×0.95)
+                        suggested_sl = max(entry_price * 0.98, current_price * 0.95)
+
+                    # Formato data
+                    if hasattr(price_date, 'strftime'):
+                        date_str = price_date.strftime('%d/%m/%Y')
+                    else:
+                        date_str = str(price_date)[:10]
 
                     rows.append(
                         f'<tr style="background:{"#f8f9fa" if len(rows) % 2 == 0 else "white"}">'
                         f'<td style="padding:8px;border:1px solid #ddd"><strong>{ticker}</strong></td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">{entry_price:.4f}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">{current_price:.4f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{entry_price:.4f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{current_price:.4f} ({date_str})</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:{color}"><strong>{sign}{pct_change:.2f}%</strong></td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">{stop_loss:.4f}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">{suggested_sl:.4f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{stop_loss:.4f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{suggested_sl:.4f}</td>'
                         f'</tr>'
                     )
                 except Exception as e:
@@ -446,7 +463,10 @@ class AlertSystem:
                 f'<div style="padding:20px;background:white">'
                 f'{table_html}'
                 f'<p style="margin-top:20px;font-size:12px;color:#666">'
-                f'<strong>Legenda:</strong> SL Consigliato = 5% sotto prezzo di acquisto</p>'
+                f'<strong>Legenda SL Consigliato:</strong><br>'
+                f'• Se in perdita: 98% di acquisto (protezione stretta)<br>'
+                f'• Se in profitto: max(98% acquisto, 95% corrente) = trailing stop intelligente<br>'
+                f'• SL sale con il prezzo, non scende mai</p>'
                 f'</div>'
                 f'{_FOOTER.format(ts=ts)}</body></html>'
             )

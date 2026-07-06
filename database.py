@@ -623,6 +623,36 @@ class PriceDatabase:
         finally:
             conn.close()
 
+    def update_stop_loss_trailing(self, isin: str, new_stop_loss: float) -> bool:
+        """
+        Aggiorna lo SL se il nuovo valore è superiore al precedente (trailing stop).
+
+        Args:
+            isin: Codice ISIN
+            new_stop_loss: Nuovo valore SL trailing calcolato
+
+        Returns:
+            True se aggiornato, False se errore
+        """
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                # Aggiorna solo se il nuovo SL è più alto (trailing = non scende mai)
+                cur.execute("""
+                    UPDATE etf_portfolio_entries
+                    SET stop_loss = %s, stop_loss_updated_at = NOW()
+                    WHERE isin = %s AND (stop_loss IS NULL OR stop_loss < %s)
+                """, (float(new_stop_loss), isin, float(new_stop_loss)))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore update_stop_loss_trailing {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
     # ── L0 Tracking ──────────────────────────────────────────────────────────
 
     def get_all_l0_entries(self) -> Dict[str, Dict]:

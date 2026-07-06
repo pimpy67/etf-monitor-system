@@ -360,6 +360,48 @@ class ETFMonitor:
 
         return dashboard
 
+    def update_trailing_stops(self, results: list):
+        """
+        Aggiorna gli stop loss trailing per le posizioni L1.
+        Ogni giorno, per i profitti, il SL sale al 95% del prezzo corrente (ma non scende mai).
+        """
+        existing_l1 = self.db.get_all_l1_entries()
+
+        for r in results:
+            isin = r.get('isin', '') or r['ticker']
+            if isin not in existing_l1:
+                continue  # Non in L1
+
+            a = r['analysis']
+            current_price = a.get('current_price')
+            entry_price = existing_l1[isin].get('entry_price')
+
+            if not current_price or not entry_price:
+                continue
+
+            # Calcola guadagno % attuale
+            pct_gain = (float(current_price) - float(entry_price)) / float(entry_price) * 100
+
+            # Leggi config famiglia per SL
+            fam_cfg = self.analyzer.p if hasattr(self, 'analyzer') else {}
+            if not fam_cfg:
+                # Fallback se analyzer non disponibile
+                fam_cfg = {
+                    'sl_profit_trigger_pct': 3.0,
+                    'sl_trailing_tight_pct': 0.95
+                }
+
+            # Se in profitto e sopra soglia, attiva trailing
+            profit_trigger = fam_cfg.get('sl_profit_trigger_pct', 3.0)
+            if pct_gain >= profit_trigger:
+                tight_pct = fam_cfg.get('sl_trailing_tight_pct', 0.95)
+                sl_trailing = float(current_price) * tight_pct
+
+                # Aggiorna nel DB (non scende mai)
+                self.db.update_stop_loss_trailing(isin, sl_trailing)
+
+                add_log(f"  Trailing SL: {r['nome'][:30]} — gain {pct_gain:.1f}% → SL={sl_trailing:.4f}")
+
     def send_alerts(self, results: list):
         """
         Invia alert giornalieri:
@@ -600,13 +642,27 @@ class ETFMonitor:
             with open('data/dashboard_data.json', 'w') as f:
                 json.dump(dashboard, f, indent=2)
 
-        # 5. Invia alert (solo se run principale)
+        # 5. Aggiorna trailing stops (daily)
+        try:
+            add_log("Aggiornamento trailing stops...")
+            self.update_trailing_stops(results)
+        except Exception as e:
+            add_log(f"ERRORE Trailing stops: {e}")
+
+        # 6. Invia alert (solo se run principale)
         if send_daily_report:
             try:
                 add_log("Invio alert...")
                 self.send_alerts(results)
             except Exception as e:
                 add_log(f"ERRORE Alert: {e}")
+
+            # 7. Invia resoconto portafoglio
+            try:
+                add_log("Invio resoconto portafoglio...")
+                self.alert_system.send_portfolio_report()
+            except Exception as e:
+                add_log(f"ERRORE Resoconto portafoglio: {e}")
         else:
             add_log("Alert saltati (refresh silenzioso)")
 
