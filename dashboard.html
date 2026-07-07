@@ -428,18 +428,22 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
       <div id="detailExit"></div>
       <!-- Stop Loss Management -->
       <div id="slManagementPanel" style="background:rgba(58,166,255,0.08);border:1px solid rgba(58,166,255,0.2);border-radius:6px;padding:12px;margin-bottom:12px;display:none;">
-        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">
           <div style="flex:1;min-width:140px;">
             <label style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">SL Suggerito</label>
             <input type="text" id="slSuggestedInput" readonly style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#58a6ff;font-weight:600;font-size:0.9em;">
           </div>
           <div style="flex:1;min-width:140px;">
             <label style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">SL Personale</label>
-            <input type="number" id="slInsertedInput" placeholder="Valore SL" step="0.01" style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#fff;font-size:0.9em;">
+            <input type="number" id="slInsertedInput" placeholder="Valore SL" step="0.01" oninput="updatePLCalc()" style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#fff;font-size:0.9em;">
           </div>
           <div style="flex:1;min-width:120px;">
             <label style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">Quote</label>
-            <input type="number" id="sharesInput" placeholder="N. quote" step="0.01" min="0" style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#fff;font-size:0.9em;">
+            <input type="number" id="sharesInput" placeholder="N. quote" step="0.01" min="0" oninput="updatePLCalc()" style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#fff;font-size:0.9em;">
+          </div>
+          <div style="flex:1;min-width:140px;">
+            <label style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">P&L se attivi SL</label>
+            <div id="plCalcDisplay" style="padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#999;font-weight:600;font-size:0.9em;text-align:center;">—</div>
           </div>
           <button onclick="saveStopLoss()" style="padding:6px 12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;font-weight:600;font-size:0.85em;cursor:pointer;transition:background 0.2s;white-space:nowrap;">💾 Salva</button>
         </div>
@@ -2107,6 +2111,29 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── Stop Loss Management (detail view) ──────────────────────────────────────
+function updatePLCalc() {
+  const slValue = parseFloat(document.getElementById('slInsertedInput').value);
+  const shares = parseFloat(document.getElementById('sharesInput').value);
+  const slData = window.detailSLData;
+
+  if (!slData || !slData.entry_price || !slValue || slValue <= 0 || !shares || shares <= 0) {
+    document.getElementById('plCalcDisplay').textContent = '—';
+    document.getElementById('plCalcDisplay').style.color = '#999';
+    return;
+  }
+
+  const entryPrice = parseFloat(slData.entry_price);
+  const pctChange = ((slValue - entryPrice) / entryPrice) * 100;
+  const absGainLoss = (slValue - entryPrice) * shares;
+
+  const isLoss = absGainLoss < 0;
+  const color = isLoss ? '#f85149' : '#3fb950';
+  const sign = absGainLoss >= 0 ? '+' : '';
+
+  document.getElementById('plCalcDisplay').textContent = `${sign}${absGainLoss.toFixed(2)}€ (${sign}${pctChange.toFixed(2)}%)`;
+  document.getElementById('plCalcDisplay').style.color = color;
+}
+
 async function loadDetailSL() {
   const isin = currentDetailIsin;
   const ticker = currentDetailTicker;
@@ -2124,6 +2151,7 @@ async function loadDetailSL() {
       document.getElementById('slInsertedInput').value = pos.sl_inserted || '';
       document.getElementById('sharesInput').value = pos.shares || '';
       window.detailSLData = pos;
+      setTimeout(() => updatePLCalc(), 100); // Calcola P&L con i valori caricati
     } else {
       document.getElementById('slManagementPanel').style.display = 'none';
     }
