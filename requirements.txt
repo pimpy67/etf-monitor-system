@@ -32,3 +32,6 @@ psycopg2-binary>=2.9.9
 
 # YAML configuration (refactor v2.0)
 pyyaml>=6.0
+
+# Web scraping (Investing.com per ETF Directa locali)
+selenium>=4.0.0

@@ -1,14 +1,16 @@
 """
-data_fetcher.py - Recupero dati ETF da Yahoo Finance
-======================================================
+data_fetcher.py - Recupero dati ETF da Yahoo Finance + Investing.com
+=====================================================================
 Usa yfinance per OHLCV completo (Open, High, Low, Close, Volume).
 Ticker nel formato Yahoo Finance (es. SWDA.L, CSPX.L, EIMI.L).
+Fallback: scraping da Investing.com per ticker locali (es. USHYC).
 """
 
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import time
+from typing import Optional
 
 
 class ETFDataFetcher:
@@ -126,6 +128,87 @@ class ETFDataFetcher:
 
     def test_connection(self, ticker: str = 'SWDA.L') -> bool:
         return self.validate_ticker(ticker)
+
+    def get_price_from_investing(self, isin: str) -> Optional[dict]:
+        """
+        Scrapa prezzo da Investing.com usando ISIN (fallback per ticker locali).
+        Usa Selenium per caricare JavaScript dinamico.
+
+        Args:
+            isin: ISIN del fondo (es. 'LU1435356065')
+
+        Returns:
+            {'price': float, 'date': str, 'source': 'investing.com'} o None
+        """
+        try:
+            from selenium import webdriver
+            from selenium.webdriver.common.by import By
+            from selenium.webdriver.support.ui import WebDriverWait
+            from selenium.webdriver.support import expected_conditions as EC
+            from selenium.webdriver.chrome.options import Options
+        except ImportError:
+            print(f"  ⚠️  Selenium non installato - impossibile scrapare {isin}")
+            return None
+
+        options = Options()
+        options.add_argument('--headless')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+
+        try:
+            driver = webdriver.Chrome(options=options)
+            driver.set_page_load_timeout(10)
+
+            # Ricerca per ISIN su Investing.com
+            url = f'https://it.investing.com/search/?q={isin}'
+            driver.get(url)
+
+            # Aspetta che carichi i risultati
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_all_elements_located((By.CLASS_NAME, 'searchResultsTable'))
+            )
+
+            # Trova il primo link ETF
+            links = driver.find_elements(By.TAG_NAME, 'a')
+            etf_link = None
+            for link in links:
+                href = link.get_attribute('href') or ''
+                if 'etf' in href.lower():
+                    etf_link = href
+                    break
+
+            if not etf_link:
+                print(f"  ⚠️  ISIN {isin}: nessun ETF trovato su Investing.com")
+                driver.quit()
+                return None
+
+            # Visita la pagina dell'ETF
+            driver.get(etf_link)
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.CLASS_NAME, 'lastPrice'))
+            )
+
+            # Estrai il prezzo
+            price_elem = driver.find_element(By.CLASS_NAME, 'lastPrice')
+            price_text = price_elem.text.strip().replace(',', '.')
+            price = float(price_text)
+
+            driver.quit()
+
+            return {
+                'price': price,
+                'date': datetime.now().strftime('%Y-%m-%d'),
+                'source': 'investing.com'
+            }
+
+        except Exception as e:
+            print(f"  ❌ Errore scraping Investing.com per {isin}: {e}")
+            try:
+                driver.quit()
+            except:
+                pass
+            return None
 
 
 def test_fetcher():
