@@ -72,6 +72,11 @@ class ETFDataFetcher:
             return pd.DataFrame()
         except Exception as e:
             print(f"  Errore Yahoo Finance per {ticker}: {e}")
+            # Fallback: se Yahoo fallisce, cerca su altre fonti (es. Investing.com)
+            # Per ora: ritorna vuoto e il monitor userà i dati dal DB/Excel
+            if ticker.upper() in ['USHYC', 'WAT']:  # Ticker locali MTA
+                print(f"  ⚠️  {ticker} non trovato su Yahoo Finance (ticker locale MTA)")
+                print(f"     Usando prezzo dall'Excel/Database come fallback")
             return pd.DataFrame()
 
     def get_close_series(self, ticker: str, days: int = 250) -> pd.Series:
