@@ -98,6 +98,10 @@ class PriceDatabase:
                 return conn
             except Exception as e2:
                 print(f"Errore connessione database: {e2}")
+
+    def get_connection(self):
+        """Metodo pubblico per ottenere connessione al database"""
+        return self._get_connection()
                 return None
 
     def _init_table(self):
