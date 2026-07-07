@@ -426,11 +426,25 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
       <div id="detailRegime"></div>
       <div id="detailL0"></div>
       <div id="detailExit"></div>
+      <!-- Stop Loss Management -->
+      <div id="slManagementPanel" style="background:rgba(58,166,255,0.08);border:1px solid rgba(58,166,255,0.2);border-radius:6px;padding:12px;margin-bottom:12px;display:none;">
+        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+          <div style="flex:1;min-width:160px;">
+            <label style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">SL Suggerito</label>
+            <input type="text" id="slSuggestedInput" readonly style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#58a6ff;font-weight:600;font-size:0.9em;">
+          </div>
+          <div style="flex:1;min-width:160px;">
+            <label style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">SL Personale</label>
+            <input type="number" id="slInsertedInput" placeholder="Inserisci valore" step="0.01" style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#fff;font-size:0.9em;">
+          </div>
+          <button onclick="saveStopLoss()" style="padding:6px 12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;font-weight:600;font-size:0.85em;cursor:pointer;transition:background 0.2s;">💾 Salva</button>
+        </div>
+      </div>
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
         <span style="font-size:0.75em;color:#555;">Storico:</span>
         <button class="detail-days-btn active" id="dbtn30" onclick="changeDetailDays(30)">30gg</button>
         <button class="detail-days-btn" id="dbtn60" onclick="changeDetailDays(60)">60gg</button>
-        <button class="detail-days-btn" id="dbtn90" onclick="changeDetailDays(90)">90gg</button>
+        <button class="detail-days-btn" id="dbtn120" onclick="changeDetailDays(120)">120gg</button>
       </div>
       <div class="detail-chart-wrap"><canvas id="detailChart"></canvas></div>
       <div class="cond-section" id="detailConds"></div>
@@ -1493,7 +1507,7 @@ function closeDetail() {
 
 async function changeDetailDays(days) {
   currentDetailDays = days;
-  [30,60,90].forEach(d => document.getElementById('dbtn'+d).classList.toggle('active', d===days));
+  [30,60,120].forEach(d => document.getElementById('dbtn'+d).classList.toggle('active', d===days));
   await loadETFDetail(currentDetailTicker, currentDetailIsin, days);
 }
 
@@ -1522,6 +1536,7 @@ async function loadETFDetail(ticker, isin, days) {
     }
   }
   renderDetailModal(data, days);
+  loadDetailSL(); // Carica dati stop loss
 }
 
 function renderDetailModal(e, days) {
@@ -1800,6 +1815,42 @@ function renderDetailChart(history, days) {
           c.restore();
         }
       }
+
+      // LINEE VERTICALI (per dati SL da portafoglio)
+      const slData = window.detailSLData;
+      if (slData && slData.entry_date) {
+        // Linea verticale BIANCA — Entry date
+        const entryIdx = labels.findIndex(l => l >= slData.entry_date.substring(0,10));
+        if (entryIdx >= 0) {
+          const xPos = x.getPixelForValue(labels[entryIdx]);
+          if (xPos > chartArea.left && xPos < chartArea.right) {
+            c.save();
+            c.strokeStyle = '#ffffff'; c.lineWidth = 2; c.setLineDash([4,3]); c.globalAlpha = 0.6;
+            c.beginPath(); c.moveTo(xPos, chartArea.top); c.lineTo(xPos, chartArea.bottom); c.stroke();
+            c.setLineDash([]); c.fillStyle = '#ffffff'; c.globalAlpha = 0.85;
+            c.font = 'bold 8px sans-serif'; c.textAlign = 'center';
+            c.fillText('Entry', xPos, chartArea.top - 4);
+            c.restore();
+          }
+        }
+      }
+
+      if (slData && slData.sl_updated) {
+        // Linea verticale VERDE — SL Accepted date
+        const slIdx = labels.findIndex(l => l >= slData.sl_updated.substring(0,10));
+        if (slIdx >= 0 && slIdx !== labels.findIndex(l => l >= slData.entry_date?.substring(0,10))) {
+          const xPos = x.getPixelForValue(labels[slIdx]);
+          if (xPos > chartArea.left && xPos < chartArea.right) {
+            c.save();
+            c.strokeStyle = '#00FF88'; c.lineWidth = 2; c.setLineDash([4,3]); c.globalAlpha = 0.6;
+            c.beginPath(); c.moveTo(xPos, chartArea.top); c.lineTo(xPos, chartArea.bottom); c.stroke();
+            c.setLineDash([]); c.fillStyle = '#00FF88'; c.globalAlpha = 0.85;
+            c.font = 'bold 8px sans-serif'; c.textAlign = 'center';
+            c.fillText('SL OK', xPos, chartArea.top + 12);
+            c.restore();
+          }
+        }
+      }
     }
   };
 
@@ -2050,6 +2101,57 @@ document.addEventListener('DOMContentLoaded', () => {
   loadPortfolioSL();
   autoRefreshSL();
 });
+
+// ── Stop Loss Management (detail view) ──────────────────────────────────────
+async function loadDetailSL() {
+  const isin = currentDetailIsin;
+  const ticker = currentDetailTicker;
+  if (!isin && !ticker) return;
+
+  try {
+    const resp = await fetch('/api/portfolio-sl');
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    const pos = data.positions?.find(p => p.isin === isin || p.ticker === ticker);
+    if (pos) {
+      document.getElementById('slManagementPanel').style.display = 'flex';
+      document.getElementById('slSuggestedInput').value = pos.sl_suggested ? '€' + pos.sl_suggested.toFixed(4) : '—';
+      document.getElementById('slInsertedInput').value = pos.sl_inserted || '';
+      window.detailSLData = pos;
+    } else {
+      document.getElementById('slManagementPanel').style.display = 'none';
+    }
+  } catch(e) {
+    console.log('SL load error:', e);
+  }
+}
+
+async function saveStopLoss() {
+  const slValue = parseFloat(document.getElementById('slInsertedInput').value);
+  if (!slValue || slValue <= 0) {
+    alert('❌ Inserisci un valore valido');
+    return;
+  }
+
+  try {
+    const resp = await fetch('/api/accept-sl-suggestion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isin: currentDetailIsin, sl_value: slValue })
+    });
+
+    if (resp.ok) {
+      alert('✅ Stop Loss salvato!');
+      await loadDetailSL();
+      if (detailChart) detailChart.draw();
+    } else {
+      alert('❌ Errore nel salvataggio');
+    }
+  } catch(e) {
+    alert('❌ Errore: ' + e.message);
+  }
+}
 </script>
 </body>
 </html>
