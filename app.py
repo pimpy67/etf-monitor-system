@@ -22,6 +22,10 @@ db  = PriceDatabase()
 def index():
     return send_file('dashboard.html')
 
+@app.route('/portfolio')
+def portfolio():
+    return send_file('templates/portfolio.html')
+
 @app.route('/data/<path:filename>')
 def serve_data(filename):
     return send_from_directory('data', filename)
