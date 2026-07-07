@@ -275,10 +275,10 @@ def portfolio_sl():
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Leggi posizioni L1 da portfolio_entries
             cur.execute("""
-                SELECT pe.ticker, pe.entry_price, pe.entry_date, pe.fund_name,
+                SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
                        pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at
                 FROM etf_portfolio_entries pe
-                WHERE pe.ticker IS NOT NULL
+                WHERE pe.status = 'active'
                 ORDER BY pe.entry_date DESC
             """)
             positions = cur.fetchall()
@@ -286,16 +286,17 @@ def portfolio_sl():
             # Per ogni posizione, leggi prezzo corrente
             result = []
             for pos in positions:
-                ticker = pos['ticker']
+                isin = pos['isin']
                 cur.execute("""
-                    SELECT close, date FROM etf_price_history
-                    WHERE ticker = %s ORDER BY date DESC LIMIT 1
-                """, (ticker,))
+                    SELECT close, date, ticker FROM etf_price_history
+                    WHERE isin = %s ORDER BY date DESC LIMIT 1
+                """, (isin,))
                 price_row = cur.fetchone()
 
                 if price_row:
                     current_price = float(price_row['close'])
                     price_date = price_row['date']
+                    ticker = price_row.get('ticker', isin)
                     pct_change = ((current_price - float(pos['entry_price'])) /
                                  float(pos['entry_price']) * 100) if pos['entry_price'] > 0 else 0
 
@@ -307,6 +308,7 @@ def portfolio_sl():
                         suggested_sl = max(entry_price * 0.98, current_price * 0.95)
 
                     result.append({
+                        'isin': isin,
                         'ticker': ticker,
                         'fund_name': pos['fund_name'],
                         'entry_price': float(entry_price),
