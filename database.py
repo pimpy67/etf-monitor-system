@@ -102,7 +102,6 @@ class PriceDatabase:
     def get_connection(self):
         """Metodo pubblico per ottenere connessione al database"""
         return self._get_connection()
-                return None
 
     def _init_table(self):
         """Crea la tabella etf_price_history se non esiste"""
