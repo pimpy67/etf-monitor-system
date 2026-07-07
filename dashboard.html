@@ -57,6 +57,10 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 .search-clear:hover { color:#e6edf3; }
 .search-clear.visible { display:block; }
 
+/* ── Navigation links ─────────────────────────────────────────────── */
+.nav-link { color:#58a6ff; text-decoration:none; font-size:0.8em; font-weight:600; padding:6px 12px; border-radius:6px; transition:background 0.15s; }
+.nav-link:hover { background:rgba(88,166,255,0.2); color:#79c0ff; }
+
 /* ── Column header (sticky below main header) ─────────────────────────── */
 .col-header { position:sticky; top:42px; z-index:199; background:rgba(10,15,30,0.97); backdrop-filter:blur(10px); border-bottom:2px solid rgba(255,255,255,0.15); padding:0 20px; }
 .col-header table { width:100%; max-width:1640px; margin:0 auto; border-collapse:collapse; table-layout:fixed; }
@@ -331,6 +335,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 <div class="header">
   <div class="header-left">
     <h1>ETF Monitor</h1>
+    <a href="/portfolio" class="nav-link" title="Visualizza portafoglio con stop loss">📊 Portafoglio</a>
     <div class="summary-bar">
       <div class="sitem tot"><span class="num" id="totCount">–</span><span class="lbl">Totali</span></div>
       <div class="sitem l0"><span class="num" id="l0Count">–</span><span class="lbl">L0</span></div>
