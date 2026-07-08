@@ -1174,7 +1174,30 @@ async function loadPortfolio() {
     const countEl = document.getElementById('portfolioCount');
     if (countEl) countEl.textContent = pf.length + ' ETF';
     renderPortfolio(pf);
+    // Load SL data for all portfolio entries
+    loadAllPortfolioSLData();
   } catch(e) { console.error('Portfolio load error', e); }
+}
+
+async function loadAllPortfolioSLData() {
+  try {
+    const resp = await fetch('/api/portfolio-sl');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const positions = data.positions || [];
+
+    positions.forEach(pos => {
+      const isin = pos.isin;
+      document.getElementById('sl-sugg-' + isin).textContent = pos.sl_suggested ? '€' + pos.sl_suggested.toFixed(4) : '—';
+      const slPersInput = document.getElementById('sl-pers-' + isin);
+      const sharesInput = document.getElementById('shares-' + isin);
+      if (slPersInput && !slPersInput.value) slPersInput.value = pos.sl_inserted || '';
+      if (sharesInput && !sharesInput.value) sharesInput.value = pos.shares || '';
+      updatePortfolioP_L(isin, pos.entry_price);
+    });
+  } catch(e) {
+    console.log('Error loading portfolio SL data:', e);
+  }
 }
 
 function renderPortfolio(portfolio) {
@@ -1216,7 +1239,7 @@ function renderPortfolio(portfolio) {
     const partialBadgePf = p.is_partial
       ? `<span style="display:inline-block;background:rgba(255,140,0,0.18);color:#ff8c00;font-size:0.62em;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;border:1px solid rgba(255,140,0,0.4);vertical-align:middle;" title="Piede Dentro: 90% venduto il ${p.partial_exit_date||'?'} a ${p.partial_exit_price||'?'}">&#129463; 10%</span>`
       : '';
-    return `<tr id="pf-row-${isin}" style="cursor:pointer;" onclick="openETFDetail('${(allEtfMap[isin]?.ticker||'').replace(/'/g,"\\'")}','${isin}');togglePortfolioSL('${isin}')">
+    return `<tr id="pf-row-${isin}" style="cursor:pointer;" onclick="openETFDetail('${(allEtfMap[isin]?.ticker||'').replace(/'/g,"\\'")}','${isin}')">
       <td style="font-weight:600">${p.fund_name||isin}${partialBadgePf}<br><span style="font-family:monospace;font-size:0.7em;color:#555">${isin}</span></td>
       <td style="color:#8b949e;font-size:0.83em">${p.entry_date||'-'}</td>
       <td style="font-family:monospace;font-size:0.85em">${prAcq}</td>
@@ -1232,7 +1255,7 @@ function renderPortfolio(portfolio) {
         <button class="btn-remove" onclick="event.stopPropagation();removeFromPortfolio('${isin}')" title="Rimuovi">&#10005;</button>
       </td>
     </tr>
-    <tr class="sl-row" id="pf-sl-${isin}" style="background:rgba(88,166,255,0.04);display:none;">
+    <tr class="sl-row" id="pf-sl-${isin}" style="background:rgba(88,166,255,0.04);">
       <td colspan="10" style="padding:12px;">
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;font-size:0.85em;">
           <div><strong>Pr. Carico</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;">€${prAcq}</span></div>
