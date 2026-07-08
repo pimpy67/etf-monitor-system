@@ -1260,8 +1260,8 @@ function renderPortfolio(portfolio) {
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;font-size:0.85em;">
           <div><strong>Pr. Carico</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;">€${prAcq}</span></div>
           <div><strong>SL Suggerito</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;" id="sl-sugg-${isin}">—</span></div>
-          <div><strong>SL Personale</strong><br><input type="text" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="sl-pers-${isin}" placeholder="Inserisci SL" oninput="updatePortfolioP_L('${isin}',${prAcq})"></div>
-          <div><strong>Quote</strong><br><input type="number" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="shares-${isin}" placeholder="N. quote" min="1" oninput="updatePortfolioP_L('${isin}',${prAcq})"></div>
+          <div><strong>SL Personale</strong><br><input type="text" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="sl-pers-${isin}" placeholder="Inserisci SL" oninput="updatePortfolioP_L('${isin}',${prAcq})" onchange="savePortfolioSL('${isin}')"></div>
+          <div><strong>Quote</strong><br><input type="number" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="shares-${isin}" placeholder="N. quote" min="1" oninput="updatePortfolioP_L('${isin}',${prAcq})" onchange="savePortfolioSL('${isin}')"></div>
           <div><strong>P&L se attivi SL</strong><br><span style="font-family:monospace;font-size:1.1em;" id="pnl-${isin}">—</span></div>
         </div>
       </td>
@@ -1328,13 +1328,41 @@ function updatePortfolioP_L(isin, entryPrice) {
     return;
   }
 
-  const pnl = (entryPrice - sl) * shares;
+  // Formula corretta: (SL - Prezzo Carico) × Quote
+  const pnl = (sl - entryPrice) * shares;
   const pnlPct = (pnl / (entryPrice * shares)) * 100;
   const pnlClass = pnl > 0 ? '#3fb950' : pnl < 0 ? '#f85149' : '#8b949e';
   const sign = pnl >= 0 ? '+' : '';
 
   pnlSpan.textContent = `${sign}${pnl.toFixed(2)}€ (${sign}${pnlPct.toFixed(2)}%)`;
   pnlSpan.style.color = pnlClass;
+}
+
+async function savePortfolioSL(isin) {
+  const slValue = document.getElementById('sl-pers-' + isin)?.value;
+  const sharesValue = document.getElementById('shares-' + isin)?.value;
+
+  if (!slValue || !sharesValue) return;
+
+  try {
+    const resp = await fetch('/api/accept-sl-suggestion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        isin: isin,
+        sl_value: parseFloat(slValue),
+        shares: parseFloat(sharesValue)
+      })
+    });
+
+    if (resp.ok) {
+      console.log('✅ SL salvato per ' + isin);
+    } else {
+      console.log('❌ Errore salvataggio SL');
+    }
+  } catch(e) {
+    console.log('Errore:', e);
+  }
 }
 
 async function toggleEtfHistory(isin) {
