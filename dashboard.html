@@ -1257,12 +1257,13 @@ function renderPortfolio(portfolio) {
     </tr>
     <tr class="sl-row" id="pf-sl-${isin}" style="background:rgba(88,166,255,0.04);">
       <td colspan="10" style="padding:12px;">
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;font-size:0.85em;">
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:16px;font-size:0.85em;align-items:end;">
           <div><strong>Pr. Carico</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;">€${prAcq}</span></div>
           <div><strong>SL Suggerito</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;" id="sl-sugg-${isin}">—</span></div>
-          <div><strong>SL Personale</strong><br><input type="text" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="sl-pers-${isin}" placeholder="Inserisci SL" oninput="updatePortfolioP_L('${isin}',${prAcq})" onchange="savePortfolioSL('${isin}')"></div>
-          <div><strong>Quote</strong><br><input type="number" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="shares-${isin}" placeholder="N. quote" min="1" oninput="updatePortfolioP_L('${isin}',${prAcq})" onchange="savePortfolioSL('${isin}')"></div>
+          <div><strong>SL Personale</strong><br><input type="text" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="sl-pers-${isin}" placeholder="Inserisci SL" oninput="updatePortfolioP_L('${isin}',${prAcq})"></div>
+          <div><strong>Quote</strong><br><input type="number" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="shares-${isin}" placeholder="N. quote" min="1" oninput="updatePortfolioP_L('${isin}',${prAcq})"></div>
           <div><strong>P&L se attivi SL</strong><br><span style="font-family:monospace;font-size:1.1em;" id="pnl-${isin}">—</span></div>
+          <div><button class="btn-pf-save" onclick="savePortfolioSL('${isin}')" style="background:#238636;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:600;">💾 Salva</button></div>
         </div>
       </td>
     </tr>
