@@ -1216,7 +1216,7 @@ function renderPortfolio(portfolio) {
     const partialBadgePf = p.is_partial
       ? `<span style="display:inline-block;background:rgba(255,140,0,0.18);color:#ff8c00;font-size:0.62em;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;border:1px solid rgba(255,140,0,0.4);vertical-align:middle;" title="Piede Dentro: 90% venduto il ${p.partial_exit_date||'?'} a ${p.partial_exit_price||'?'}">&#129463; 10%</span>`
       : '';
-    return `<tr id="pf-row-${isin}" style="cursor:pointer;" onclick="openETFDetail('${(allEtfMap[isin]?.ticker||'').replace(/'/g,"\\'")}','${isin}')">
+    return `<tr id="pf-row-${isin}" style="cursor:pointer;" onclick="openETFDetail('${(allEtfMap[isin]?.ticker||'').replace(/'/g,"\\'")}','${isin}');togglePortfolioSL('${isin}')">
       <td style="font-weight:600">${p.fund_name||isin}${partialBadgePf}<br><span style="font-family:monospace;font-size:0.7em;color:#555">${isin}</span></td>
       <td style="color:#8b949e;font-size:0.83em">${p.entry_date||'-'}</td>
       <td style="font-family:monospace;font-size:0.85em">${prAcq}</td>
@@ -1232,6 +1232,17 @@ function renderPortfolio(portfolio) {
         <button class="btn-remove" onclick="event.stopPropagation();removeFromPortfolio('${isin}')" title="Rimuovi">&#10005;</button>
       </td>
     </tr>
+    <tr class="sl-row" id="pf-sl-${isin}" style="background:rgba(88,166,255,0.04);display:none;">
+      <td colspan="10" style="padding:12px;">
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;font-size:0.85em;">
+          <div><strong>Pr. Carico</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;">€${prAcq}</span></div>
+          <div><strong>SL Suggerito</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;" id="sl-sugg-${isin}">—</span></div>
+          <div><strong>SL Personale</strong><br><input type="text" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="sl-pers-${isin}" placeholder="Inserisci SL" oninput="updatePortfolioP_L('${isin}',${prAcq})"></div>
+          <div><strong>Quote</strong><br><input type="number" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="shares-${isin}" placeholder="N. quote" min="1" oninput="updatePortfolioP_L('${isin}',${prAcq})"></div>
+          <div><strong>P&L se attivi SL</strong><br><span style="font-family:monospace;font-size:1.1em;" id="pnl-${isin}">—</span></div>
+        </div>
+      </td>
+    </tr>
     <tr class="history-row" id="pf-hist-${isin}" style="display:none;">
       <td colspan="10"><div id="hist-wrap-${isin}" style="padding:12px;color:#555;text-align:center;font-size:0.8em">Caricamento...</div></td>
     </tr>`;
@@ -1245,6 +1256,62 @@ function togglePortfolioSection() {
   if (body) body.style.display = portfolioSectionOpen ? 'block' : 'none';
   if (tog)  tog.innerHTML = portfolioSectionOpen ? '&#9650;' : '&#9660;';
   if (portfolioSectionOpen) loadPortfolio();
+}
+
+function togglePortfolioSL(isin) {
+  const slRow = document.getElementById('pf-sl-' + isin);
+  if (!slRow) return;
+  const isOpen = slRow.style.display !== 'none';
+  if (isOpen) {
+    slRow.style.display = 'none';
+  } else {
+    slRow.style.display = 'table-row';
+    // Load SL data for this ISIN
+    loadPortfolioSLData(isin);
+  }
+}
+
+async function loadPortfolioSLData(isin) {
+  try {
+    const resp = await fetch('/api/portfolio-sl?isin=' + encodeURIComponent(isin));
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const pos = data.positions?.[0];
+    if (pos) {
+      document.getElementById('sl-sugg-' + isin).textContent = pos.sl_suggested ? '€' + pos.sl_suggested.toFixed(4) : '—';
+      if (!document.getElementById('sl-pers-' + isin).value) {
+        document.getElementById('sl-pers-' + isin).value = pos.sl_inserted || '';
+      }
+      if (!document.getElementById('shares-' + isin).value) {
+        document.getElementById('shares-' + isin).value = pos.shares || '';
+      }
+      updatePortfolioP_L(isin, pos.entry_price);
+    }
+  } catch(e) {
+    console.log('Error loading portfolio SL:', e);
+  }
+}
+
+function updatePortfolioP_L(isin, entryPrice) {
+  const slInput = document.getElementById('sl-pers-' + isin);
+  const sharesInput = document.getElementById('shares-' + isin);
+  const pnlSpan = document.getElementById('pnl-' + isin);
+
+  const sl = parseFloat(slInput?.value);
+  const shares = parseFloat(sharesInput?.value);
+
+  if (!sl || !shares || sl <= 0 || shares <= 0) {
+    pnlSpan.textContent = '—';
+    return;
+  }
+
+  const pnl = (entryPrice - sl) * shares;
+  const pnlPct = (pnl / (entryPrice * shares)) * 100;
+  const pnlClass = pnl > 0 ? '#3fb950' : pnl < 0 ? '#f85149' : '#8b949e';
+  const sign = pnl >= 0 ? '+' : '';
+
+  pnlSpan.textContent = `${sign}${pnl.toFixed(2)}€ (${sign}${pnlPct.toFixed(2)}%)`;
+  pnlSpan.style.color = pnlClass;
 }
 
 async function toggleEtfHistory(isin) {
