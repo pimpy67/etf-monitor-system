@@ -265,7 +265,7 @@ def get_prices():
 
 @app.route('/api/portfolio-sl')
 def portfolio_sl():
-    """Restituisce SL attuali per tutte le posizioni L1."""
+    """Restituisce SL attuali per tutte le posizioni L1, opzionalmente filtrate per ISIN."""
     try:
         conn = db.get_connection()
         if not conn:
@@ -273,14 +273,25 @@ def portfolio_sl():
 
         from psycopg2.extras import RealDictCursor
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # Leggi posizioni L1 da portfolio_entries
-            cur.execute("""
-                SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
-                       pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at
-                FROM etf_portfolio_entries pe
-                WHERE pe.status = 'active'
-                ORDER BY pe.entry_date DESC
-            """)
+            # Leggi posizioni L1 da portfolio_entries, opzionalmente filtrate per ISIN
+            isin_filter = request.args.get('isin', '').strip()
+
+            if isin_filter:
+                cur.execute("""
+                    SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
+                           pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at
+                    FROM etf_portfolio_entries pe
+                    WHERE pe.status = 'active' AND pe.isin = %s
+                    ORDER BY pe.entry_date DESC
+                """, (isin_filter,))
+            else:
+                cur.execute("""
+                    SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
+                           pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at
+                    FROM etf_portfolio_entries pe
+                    WHERE pe.status = 'active'
+                    ORDER BY pe.entry_date DESC
+                """)
             positions = cur.fetchall()
 
             # Per ogni posizione, leggi prezzo corrente
