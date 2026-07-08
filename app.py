@@ -346,27 +346,48 @@ def portfolio_sl():
 
 @app.route('/api/accept-sl-suggestion', methods=['POST'])
 def accept_sl_suggestion():
-    """Accetta il suggerimento SL per un ETF."""
+    """Salva lo SL personale e il numero di quote per un ETF nel portafoglio."""
     try:
         data = request.get_json()
         isin = data.get('isin')
-        ticker = data.get('ticker')
+        sl_value = data.get('sl_value')
+        shares = data.get('shares')
 
-        identifier = isin or ticker
-        if not identifier:
-            return jsonify({'error': 'ISIN or ticker required'}), 400
+        if not isin:
+            return jsonify({'error': 'ISIN required'}), 400
 
-        # Accetta il suggerimento SL
-        if db.accept_stop_loss_suggestion(identifier):
-            return jsonify({
-                'status': 'accepted',
-                'identifier': identifier,
-                'timestamp': datetime.now().isoformat()
-            })
-        else:
-            return jsonify({'error': 'Failed to accept suggestion'}), 500
+        if sl_value is None or shares is None:
+            return jsonify({'error': 'sl_value and shares required'}), 400
+
+        # Salva SL personale e shares nel database
+        conn = db.get_connection()
+        if not conn:
+            return jsonify({'error': 'Database unavailable'}), 500
+
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE etf_portfolio_entries
+                    SET stop_loss_inserted = %s, shares = %s, stop_loss_updated_at = NOW()
+                    WHERE isin = %s AND status = 'active'
+                """, (float(sl_value), int(shares), isin))
+                conn.commit()
+
+                if cur.rowcount > 0:
+                    return jsonify({
+                        'status': 'saved',
+                        'isin': isin,
+                        'sl_inserted': float(sl_value),
+                        'shares': int(shares),
+                        'timestamp': datetime.now().isoformat()
+                    })
+                else:
+                    return jsonify({'error': 'Portfolio entry not found'}), 404
+        finally:
+            conn.close()
 
     except Exception as e:
+        print(f"Errore accept_sl_suggestion: {e}")
         return jsonify({'error': str(e)}), 500
 
 
