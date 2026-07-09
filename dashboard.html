@@ -445,7 +445,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
             <label style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">P&L se attivi SL</label>
             <div id="plCalcDisplay" style="padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#999;font-weight:600;font-size:0.9em;text-align:center;">—</div>
           </div>
-          <button onclick="saveStopLoss()" style="padding:6px 12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;font-weight:600;font-size:0.85em;cursor:pointer;transition:background 0.2s;white-space:nowrap;">💾 Salva</button>
+          <button onclick="event.stopPropagation();saveStopLoss()" style="padding:6px 12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;font-weight:600;font-size:0.85em;cursor:pointer;transition:background 0.2s;white-space:nowrap;">💾 Salva</button>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
@@ -2300,20 +2300,28 @@ async function loadDetailSL() {
 }
 
 async function saveStopLoss() {
-  const slValue = parseFloat(document.getElementById('slInsertedInput').value);
-  const shares = parseFloat(document.getElementById('sharesInput').value);
-
-  if (!slValue || slValue <= 0) {
-    alert('❌ Inserisci un valore SL valido');
-    return;
-  }
-
-  if (!shares || shares <= 0) {
-    alert('❌ Inserisci un numero di quote valido');
-    return;
-  }
-
   try {
+    const slValue = parseFloat(document.getElementById('slInsertedInput').value);
+    const shares = parseFloat(document.getElementById('sharesInput').value);
+
+    console.log('saveStopLoss: slValue=', slValue, 'shares=', shares, 'isin=', currentDetailIsin);
+
+    if (!slValue || slValue <= 0) {
+      alert('❌ Inserisci un valore SL valido');
+      return;
+    }
+
+    if (!shares || shares <= 0) {
+      alert('❌ Inserisci un numero di quote valido');
+      return;
+    }
+
+    if (!currentDetailIsin) {
+      alert('❌ ISIN non trovato — ricarica il modal');
+      console.error('currentDetailIsin is undefined');
+      return;
+    }
+
     const resp = await fetch('/api/accept-sl-suggestion', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2324,14 +2332,18 @@ async function saveStopLoss() {
       })
     });
 
+    const respText = await resp.text();
+    console.log('Server response:', resp.status, respText);
+
     if (resp.ok) {
       alert('✅ Stop Loss e Quote salvati!');
       await loadDetailSL();
       if (detailChart) detailChart.draw();
     } else {
-      alert('❌ Errore nel salvataggio');
+      alert('❌ Errore nel salvataggio (status ' + resp.status + ')');
     }
   } catch(e) {
+    console.error('saveStopLoss error:', e);
     alert('❌ Errore: ' + e.message);
   }
 }
