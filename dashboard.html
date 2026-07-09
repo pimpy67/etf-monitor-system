@@ -451,13 +451,14 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
           <button onclick="event.stopPropagation();saveStopLoss()" style="padding:6px 12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;font-weight:600;font-size:0.85em;cursor:pointer;transition:background 0.2s;white-space:nowrap;">💾 Salva</button>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-        <span style="font-size:0.75em;color:#555;">Storico:</span>
-        <button class="detail-days-btn active" id="dbtn30" onclick="changeDetailDays(30)">30gg</button>
-        <button class="detail-days-btn" id="dbtn60" onclick="changeDetailDays(60)">60gg</button>
-        <button class="detail-days-btn" id="dbtn120" onclick="changeDetailDays(120)">120gg</button>
+      <div class="detail-chart-wrap">
+        <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px;z-index:1000;">
+          <button class="detail-days-btn active" id="dbtn30" onclick="event.stopPropagation();changeDetailDays(30)" style="font-size:0.7em;padding:4px 8px;">30gg</button>
+          <button class="detail-days-btn" id="dbtn60" onclick="event.stopPropagation();changeDetailDays(60)" style="font-size:0.7em;padding:4px 8px;">60gg</button>
+          <button class="detail-days-btn" id="dbtn120" onclick="event.stopPropagation();changeDetailDays(120)" style="font-size:0.7em;padding:4px 8px;">120gg</button>
+        </div>
+        <canvas id="detailChart"></canvas>
       </div>
-      <div class="detail-chart-wrap"><canvas id="detailChart"></canvas></div>
       <div class="cond-section" id="detailConds"></div>
       <div class="reason-box" id="detailReason" style="display:none;"></div>
       <div class="detail-hist-wrap">
