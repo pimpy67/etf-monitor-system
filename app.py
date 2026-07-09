@@ -968,6 +968,57 @@ def market_regime_api():
         }), 500
 
 
+@app.route('/api/parameters')
+def get_parameters():
+    """Serve i parametri ETF dal YAML — sempre sincronizzati con il codice."""
+    try:
+        import yaml
+        with open('config/etf_families.yaml', 'r') as f:
+            config = yaml.safe_load(f)
+
+        families = config.get('families', {})
+        result = {}
+
+        for family_name, params in families.items():
+            result[family_name] = {
+                'description': params.get('description', ''),
+                'rsi_entry_low': params.get('rsi_entry_low'),
+                'rsi_entry_high': params.get('rsi_entry_high'),
+                'rsi_exit_min': params.get('rsi_exit_min'),
+                'rsi_overbought': params.get('rsi_overbought'),
+                'adx_entry': params.get('adx_entry'),
+                'ema_dist_max': params.get('ema_dist_max'),
+                'lateral_band': params.get('lateral_band'),
+                'atr_max': params.get('atr_max'),
+                'aum_min': params.get('aum_min'),
+                'days_above_ema': params.get('days_above_ema'),
+                'mm200_filter': params.get('mm200_filter'),
+                'l0_drawdown': params.get('l0_drawdown'),
+                'l0_rsi_max': params.get('l0_rsi_max'),
+                'min_buy_count': params.get('min_buy_count'),
+                'ema20_slope_min': params.get('ema20_slope_min'),
+                'hold_days_max': params.get('hold_days_max'),
+                'sl_atr_multiplier': params.get('sl_atr_multiplier'),
+                'sl_trailing_trigger': params.get('sl_trailing_trigger'),
+                'sl_profit_trigger_pct': params.get('sl_profit_trigger_pct'),
+                'sl_trailing_tight_pct': params.get('sl_trailing_tight_pct'),
+                'sl_initial_pct_fallback': params.get('sl_initial_pct_fallback'),
+            }
+
+        return jsonify({
+            'families': result,
+            'timestamp': datetime.now().isoformat(),
+            'total_families': len(result)
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 if __name__ == '__main__':
     os.makedirs('data', exist_ok=True)
     if not os.path.exists('data/dashboard_data.json'):

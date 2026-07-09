@@ -2275,9 +2275,96 @@ async function autoRefreshSL() {
 }
 
 // Chiama al caricamento iniziale
+// Carica parametri dinamicamente dal server
+async function loadAndDisplayParameters() {
+  try {
+    const resp = await fetch('/api/parameters');
+    const data = await resp.json();
+    const families = data.families || {};
+
+    let html = '<div class="param-section-title">⚙️ Parametri Dinamici (Auto-aggiornati da Config)</div>';
+    html += '<div style="font-size:0.75em;color:#8b949e;margin:10px 0;padding:8px;background:rgba(0,176,80,0.08);border-radius:4px;border-left:3px solid #00B050;"><strong style="color:#00B050;">✓ Aggiornato automaticamente dal file config/etf_families.yaml</strong></div>';
+
+    for (const [familyName, params] of Object.entries(families)) {
+      html += `
+        <div style="margin-top:16px;padding:12px;background:rgba(255,255,255,0.03);border-radius:6px;border-left:3px solid #58a6ff;">
+          <div style="font-weight:700;color:#58a6ff;margin-bottom:8px;font-size:0.85em;">${params.description || familyName}</div>
+          <table style="width:100%;font-size:0.75em;border-collapse:collapse;">
+            <tbody>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:4px 8px;color:#8b949e;">RSI Entry</td>
+                <td style="padding:4px 8px;color:#fff;font-weight:bold;">${params.rsi_entry_low !== null ? params.rsi_entry_low + '–' + params.rsi_entry_high : '—'}</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:4px 8px;color:#8b949e;">ADX Min</td>
+                <td style="padding:4px 8px;color:#fff;font-weight:bold;">${params.adx_entry !== null ? '>' + params.adx_entry : '—'}</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:4px 8px;color:#8b949e;">Dist EMA20 Max</td>
+                <td style="padding:4px 8px;color:#fff;font-weight:bold;">${(params.ema_dist_max * 100).toFixed(1)}%</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:4px 8px;color:#8b949e;">Giorni Sopra EMA20</td>
+                <td style="padding:4px 8px;color:#fff;font-weight:bold;">${params.days_above_ema}</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:4px 8px;color:#8b949e;"><strong>⭐ EMA20 Slope Min</strong></td>
+                <td style="padding:4px 8px;color:#fff;font-weight:bold;">${(params.ema20_slope_min * 100).toFixed(2)}%</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:4px 8px;color:#8b949e;"><strong>⭐ Min Buy Count</strong></td>
+                <td style="padding:4px 8px;color:#fff;font-weight:bold;">${params.min_buy_count}/6</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:4px 8px;color:#8b949e;">AUM Min</td>
+                <td style="padding:4px 8px;color:#fff;font-weight:bold;">$${params.aum_min}M</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:4px 8px;color:#8b949e;">SMA200 Filter</td>
+                <td style="padding:4px 8px;color:#fff;font-weight:bold;">${params.mm200_filter ? '✓ Sì' : '✗ No'}</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:4px 8px;color:#8b949e;">L0 Drawdown</td>
+                <td style="padding:4px 8px;color:#fff;font-weight:bold;">${params.l0_drawdown !== null ? params.l0_drawdown + '%' : '—'}</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:4px 8px;color:#8b949e;">L0 RSI Max</td>
+                <td style="padding:4px 8px;color:#fff;font-weight:bold;">${params.l0_rsi_max !== null ? params.l0_rsi_max : '—'}</td>
+              </tr>
+              ${params.hold_days_max ? '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);"><td style="padding:4px 8px;color:#8b949e;">Hold Days Max</td><td style="padding:4px 8px;color:#fff;font-weight:bold;">' + params.hold_days_max + '</td></tr>' : ''}
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:4px 8px;color:#8b949e;">SL ATR Multiplier</td>
+                <td style="padding:4px 8px;color:#fff;font-weight:bold;">${params.sl_atr_multiplier !== null ? params.sl_atr_multiplier : '—'}</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:4px 8px;color:#8b949e;">SL Trailing Trigger</td>
+                <td style="padding:4px 8px;color:#fff;font-weight:bold;">${params.sl_trailing_trigger || '—'}</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                <td style="padding:4px 8px;color:#8b949e;">SL Profit Trigger %</td>
+                <td style="padding:4px 8px;color:#fff;font-weight:bold;">${params.sl_profit_trigger_pct !== null ? params.sl_profit_trigger_pct + '%' : '—'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    const container = document.getElementById('paramRefBody');
+    if (container) {
+      const dynamicSection = document.createElement('div');
+      dynamicSection.innerHTML = html;
+      container.insertBefore(dynamicSection, container.firstChild);
+    }
+  } catch (e) {
+    console.error('Errore caricamento parametri:', e);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   loadPortfolioSL();
   autoRefreshSL();
+  loadAndDisplayParameters();  // Carica parametri dinamici dal server
 });
 
 // ── Stop Loss Management (detail view) ──────────────────────────────────────
