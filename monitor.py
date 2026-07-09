@@ -635,6 +635,9 @@ class ETFMonitor:
         df_etfs = self.load_etfs()
         if df_etfs.empty:
             add_log("ERRORE: Nessun ETF da monitorare")
+        # Aggiorna stop loss suggerito per portafoglio personale (formula continua)
+        self._update_portfolio_sl_suggested(data)
+
             return
 
         # 2. Analizza ogni ETF
@@ -731,3 +734,72 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+    def _update_portfolio_sl_suggested(self, dashboard_data):
+        """Aggiorna il stop loss suggerito per tutte le entry attive del portafoglio."""
+        try:
+            from technical_analysis import ETFTechnicalAnalyzer
+            
+            # Query: leggi tutte le entry attive del portafoglio
+            query = """
+                SELECT id, isin, entry_price, entry_date
+                FROM etf_portfolio_entries
+                WHERE status = 'active'
+            """
+            result = self.db.conn.execute(query)
+            rows = result.fetchall()
+            
+            for row in rows:
+                entry_id, isin, entry_price, entry_date = row
+                entry_price = float(entry_price)
+                
+                # Leggi l'ultimo prezzo disponibile
+                price_query = """
+                    SELECT close FROM etf_price_history 
+                    WHERE isin = %s 
+                    ORDER BY date DESC LIMIT 1
+                """
+                price_result = self.db.conn.execute(price_query, (isin,))
+                price_row = price_result.fetchone()
+                
+                if not price_row:
+                    continue
+                    
+                current_price = float(price_row[0])
+                current_gain_pct = ((current_price - entry_price) / entry_price) * 100
+                
+                # Leggi i dati ETF da dashboard per ottenere la famiglia
+                family = 'equity_sviluppati'  # default
+                for level_etfs in dashboard_data.get('levels', {}).values():
+                    for etf_data in level_etfs:
+                        if etf_data.get('isin') == isin:
+                            family = etf_data.get('etf_type', 'equity_sviluppati')
+                            break
+                
+                # Calcola SL con formula continua
+                analyzer = ETFTechnicalAnalyzer(famiglia=family)
+                sl_result = analyzer.calculate_stop_loss(
+                    current_price=current_price,
+                    atr=None,
+                    family_config=analyzer.p,
+                    entry_price=entry_price,
+                    current_gain_pct=current_gain_pct,
+                    regime_str='BULL'
+                )
+                
+                stop_loss_trailing = sl_result.get('stop_loss_trailing')
+                stop_loss_initial = sl_result.get('stop_loss_initial')
+                sl_suggested = stop_loss_trailing or stop_loss_initial
+                
+                if sl_suggested:
+                    # Salva nel database
+                    update_query = """
+                        UPDATE etf_portfolio_entries 
+                        SET stop_loss_suggested = %s, stop_loss_updated_at = now()
+                        WHERE id = %s
+                    """
+                    self.db.conn.execute(update_query, (round(sl_suggested, 4), entry_id))
+                    self.db.conn.commit()
+                    
+        except Exception as e:
+            print(f"⚠️  Errore aggiornamento portfolio SL: {e}")
