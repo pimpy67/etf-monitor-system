@@ -279,7 +279,7 @@ def portfolio_sl():
             if isin_filter:
                 cur.execute("""
                     SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
-                           pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at
+                           pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at, pe.shares
                     FROM etf_portfolio_entries pe
                     WHERE pe.status = 'active' AND pe.isin = %s
                     ORDER BY pe.entry_date DESC
@@ -287,7 +287,7 @@ def portfolio_sl():
             else:
                 cur.execute("""
                     SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
-                           pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at
+                           pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at, pe.shares
                     FROM etf_portfolio_entries pe
                     WHERE pe.status = 'active'
                     ORDER BY pe.entry_date DESC
@@ -330,6 +330,7 @@ def portfolio_sl():
                         'sl_inserted': float(pos['stop_loss_inserted']) if pos['stop_loss_inserted'] else None,
                         'sl_suggested': float(pos['stop_loss_suggested']) if pos['stop_loss_suggested'] else round(suggested_sl, 4),
                         'sl_updated': str(pos['stop_loss_updated_at']) if pos['stop_loss_updated_at'] else None,
+                        'shares': float(pos['shares']) if pos['shares'] else None,
                     })
 
         conn.close()
@@ -370,7 +371,7 @@ def accept_sl_suggestion():
                     UPDATE etf_portfolio_entries
                     SET stop_loss_inserted = %s, shares = %s, stop_loss_updated_at = NOW()
                     WHERE isin = %s AND status = 'active'
-                """, (float(sl_value), int(shares), isin))
+                """, (float(sl_value), float(shares), isin))
                 conn.commit()
 
                 if cur.rowcount > 0:
@@ -378,7 +379,7 @@ def accept_sl_suggestion():
                         'status': 'saved',
                         'isin': isin,
                         'sl_inserted': float(sl_value),
-                        'shares': int(shares),
+                        'shares': float(shares),
                         'timestamp': datetime.now().isoformat()
                     })
                 else:
