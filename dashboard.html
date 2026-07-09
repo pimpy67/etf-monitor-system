@@ -419,7 +419,10 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
         <div class="detail-title" id="detailTitle">-</div>
         <div class="detail-sub" id="detailSub">-</div>
       </div>
-      <button class="detail-close" onclick="closeDetail()">&times;</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="detail-close" onclick="toggleChartFullscreen()" title="Espandi grafico a schermo intero" style="color:#555;cursor:pointer;border:none;background:none;font-size:1.2em;">🔍</button>
+        <button class="detail-close" onclick="closeDetail()">&times;</button>
+      </div>
     </div>
     <div class="detail-body">
       <div class="detail-kpis" id="detailKpis"></div>
@@ -1643,9 +1646,28 @@ async function openETFDetail(ticker, isin) {
   await loadDetailSL();  // Carica dati SL per la retta verticale di acquisto
 }
 
+function toggleChartFullscreen() {
+  const chartElement = document.getElementById('detailChart');
+  if (!chartElement) return;
+
+  if (!document.fullscreenElement) {
+    // Entra in fullscreen
+    chartElement.requestFullscreen().catch(err => {
+      alert(`Errore fullscreen: ${err.message}`);
+    });
+  } else {
+    // Esci da fullscreen
+    document.exitFullscreen();
+  }
+}
+
 function closeDetail() {
   document.getElementById('detailOverlay').classList.remove('open');
   if (detailChart) { detailChart.destroy(); detailChart = null; }
+  // Esci da fullscreen se attivo
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  }
 }
 
 async function changeDetailDays(days) {
