@@ -1638,6 +1638,7 @@ async function openETFDetail(ticker, isin) {
     if (btn) btn.classList.toggle('active', d===30);
   });
   await loadETFDetail(ticker, isin, 30);
+  await loadDetailSL();  // Carica dati SL per la retta verticale di acquisto
 }
 
 function closeDetail() {
