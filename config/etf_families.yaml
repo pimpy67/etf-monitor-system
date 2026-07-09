@@ -25,7 +25,7 @@ families:
     trailing_gain_threshold: 3.0
     trailing_base_pct: 0.05
     trailing_sensitivity: 0.0035
-    trailing_min_pct: 0.93
+    trailing_min_pct: 0.94
   mercati_emergenti:
     description: Mercati emergenti — EM globale, Asia, LatAm, EMEA
     rsi_entry_low: 40
@@ -52,7 +52,7 @@ families:
     trailing_gain_threshold: 3.0
     trailing_base_pct: 0.06
     trailing_sensitivity: 0.003
-    trailing_min_pct: 0.91
+    trailing_min_pct: 0.92
   settoriali_growth:
     description: Settoriali crescita — Tech, AI, Semi, Nasdaq, Digitale
     rsi_entry_low: 48
@@ -79,7 +79,7 @@ families:
     trailing_gain_threshold: 3.0
     trailing_base_pct: 0.06
     trailing_sensitivity: 0.0032
-    trailing_min_pct: 0.91
+    trailing_min_pct: 0.92
   settoriali_difensivi:
     description: Settoriali difensivi — Salute, Utilities, Insurance, Food
     rsi_entry_low: 42
@@ -106,7 +106,7 @@ families:
     trailing_gain_threshold: 2.0
     trailing_base_pct: 0.04
     trailing_sensitivity: 0.004
-    trailing_min_pct: 0.94
+    trailing_min_pct: 0.95
   bond_governativi:
     description: Bond governativi EUR/USD — BTP, Bund, UST, Gov Euro, IL
     rsi_entry_low: 38
@@ -133,7 +133,7 @@ families:
     trailing_gain_threshold: 1.5
     trailing_base_pct: 0.025
     trailing_sensitivity: 0.005
-    trailing_min_pct: 0.96
+    trailing_min_pct: 0.97
   bond_corp_hy_em:
     description: Bond corporate / HY / EM — Corp EUR/USD, HY, EM bond
     rsi_entry_low: 42
@@ -160,7 +160,7 @@ families:
     trailing_gain_threshold: 2.0
     trailing_base_pct: 0.03
     trailing_sensitivity: 0.0045
-    trailing_min_pct: 0.95
+    trailing_min_pct: 0.96
   commodities:
     description: Commodities broad — Bloomberg Comm, GSCI, Agri, Energia
     rsi_entry_low: 40
@@ -187,7 +187,7 @@ families:
     trailing_gain_threshold: 3.5
     trailing_base_pct: 0.07
     trailing_sensitivity: 0.0025
-    trailing_min_pct: 0.9
+    trailing_min_pct: 0.91
   oro_metalli_preziosi:
     description: Oro e metalli preziosi — Oro, Argento, Platino, Basket PM
     rsi_entry_low: 38
@@ -214,7 +214,7 @@ families:
     trailing_gain_threshold: 3.0
     trailing_base_pct: 0.05
     trailing_sensitivity: 0.0032
-    trailing_min_pct: 0.92
+    trailing_min_pct: 0.93
   metalli_industriali:
     description: Metalli industriali — Rame, Alluminio, Zinco, Nichel, Battery
     rsi_entry_low: 38
@@ -241,7 +241,7 @@ families:
     trailing_gain_threshold: 3.0
     trailing_base_pct: 0.06
     trailing_sensitivity: 0.003
-    trailing_min_pct: 0.91
+    trailing_min_pct: 0.92
   real_estate_reit:
     description: Real Estate / REIT — EPRA Europe, NAREIT Global, REIT
     rsi_entry_low: 42
@@ -268,7 +268,7 @@ families:
     trailing_gain_threshold: 2.5
     trailing_base_pct: 0.035
     trailing_sensitivity: 0.004
-    trailing_min_pct: 0.94
+    trailing_min_pct: 0.95
   crypto_digital_assets:
     description: Crypto / asset digitali — Bitcoin, Ethereum, Solana, Basket
     rsi_entry_low: 35
@@ -295,7 +295,7 @@ families:
     trailing_gain_threshold: 5.0
     trailing_base_pct: 0.12
     trailing_sensitivity: 0.0015
-    trailing_min_pct: 0.85
+    trailing_min_pct: 0.86
   leva_single_stock:
     description: Leva / single stock / struct — ETP 3x long/short su singoli titoli
     rsi_entry_low: 45
@@ -323,7 +323,7 @@ families:
     trailing_gain_threshold: 2.5
     trailing_base_pct: 0.08
     trailing_sensitivity: 0.0035
-    trailing_min_pct: 0.92
+    trailing_min_pct: 0.93
   private_equity_buffer:
     description: Private Equity / Buffer ETF — Listed PE, Buffer strategy
     rsi_entry_low: 40
@@ -350,7 +350,7 @@ families:
     trailing_gain_threshold: 2.5
     trailing_base_pct: 0.035
     trailing_sensitivity: 0.004
-    trailing_min_pct: 0.94
+    trailing_min_pct: 0.95
   monetario_liquidita:
     description: Monetario / liquidità — ETF overnight, short-term
     rsi_entry_low: null
@@ -377,7 +377,7 @@ families:
     trailing_gain_threshold: 0.5
     trailing_base_pct: 0.01
     trailing_sensitivity: 0.01
-    trailing_min_pct: 0.985
+    trailing_min_pct: 0.99
 family_detection:
 - pattern:
   - monetario
