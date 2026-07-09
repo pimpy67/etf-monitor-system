@@ -1633,7 +1633,10 @@ async function openETFDetail(ticker, isin) {
   document.getElementById('detailConds').innerHTML   = '';
   document.getElementById('detailReason').style.display = 'none';
   document.getElementById('detailTableBody').innerHTML = '';
-  [30,60,90].forEach(d => document.getElementById('dbtn'+d).classList.toggle('active', d===30));
+  [30,60,120].forEach(d => {
+    const btn = document.getElementById('dbtn'+d);
+    if (btn) btn.classList.toggle('active', d===30);
+  });
   await loadETFDetail(ticker, isin, 30);
 }
 
@@ -1644,7 +1647,10 @@ function closeDetail() {
 
 async function changeDetailDays(days) {
   currentDetailDays = days;
-  [30,60,120].forEach(d => document.getElementById('dbtn'+d).classList.toggle('active', d===days));
+  [30,60,120].forEach(d => {
+    const btn = document.getElementById('dbtn'+d);
+    if (btn) btn.classList.toggle('active', d===days);
+  });
   await loadETFDetail(currentDetailTicker, currentDetailIsin, days);
 }
 
