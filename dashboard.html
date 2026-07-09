@@ -658,6 +658,9 @@ async function loadMarketRegime() {
 function renderDashboard() {
   if (!allData) return;
 
+  // Salva lo stato del portfolio prima di ri-renderizzare
+  const wasPortfolioOpen = portfolioSectionOpen;
+
   const s = allData.summary || {};
   document.getElementById('totCount').textContent = s.total_etfs || 0;
   document.getElementById('l0Count').textContent  = s.l0_count  || 0;
@@ -721,6 +724,12 @@ function renderDashboard() {
   sections.push(renderParamRef());
 
   document.getElementById('mainContent').innerHTML = sections.join('');
+
+  // Ripristina lo stato del portfolio se era aperto
+  if (wasPortfolioOpen) {
+    portfolioSectionOpen = false; // Reset per il toggle
+    togglePortfolioSection();
+  }
 
 }
 
@@ -872,7 +881,7 @@ function renderETFRow(e, lvl) {
 function renderPortfolioSection() {
   return `
   <div class="portfolio-section" id="portfolioSection">
-    <div class="portfolio-header" onclick="togglePortfolioSection()">
+    <div class="portfolio-header" onclick="event.stopPropagation();togglePortfolioSection()">
       <h3>&#128200; Portafoglio Personale</h3>
       <div style="display:flex;align-items:center;gap:12px;">
         <span id="portfolioCount" style="font-size:0.78em;color:#555">0 ETF</span>
