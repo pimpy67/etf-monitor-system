@@ -23,8 +23,8 @@ families:
     sl_trailing_tight_pct: 0.95
     sl_initial_pct_fallback: 0.035
     trailing_gain_threshold: 3.0
-    trailing_base_pct: 0.05
-    trailing_sensitivity: 0.0035
+    trailing_base_pct: 0.08
+    trailing_sensitivity: 0.005
     trailing_min_pct: 0.94
   mercati_emergenti:
     description: Mercati emergenti — EM globale, Asia, LatAm, EMEA
@@ -50,8 +50,8 @@ families:
     sl_trailing_tight_pct: 0.94
     sl_initial_pct_fallback: 0.04
     trailing_gain_threshold: 3.0
-    trailing_base_pct: 0.06
-    trailing_sensitivity: 0.003
+    trailing_base_pct: 0.09
+    trailing_sensitivity: 0.004
     trailing_min_pct: 0.92
   settoriali_growth:
     description: Settoriali crescita — Tech, AI, Semi, Nasdaq, Digitale
@@ -77,8 +77,8 @@ families:
     sl_trailing_tight_pct: 0.93
     sl_initial_pct_fallback: 0.045
     trailing_gain_threshold: 3.0
-    trailing_base_pct: 0.06
-    trailing_sensitivity: 0.0032
+    trailing_base_pct: 0.09
+    trailing_sensitivity: 0.0045
     trailing_min_pct: 0.92
   settoriali_difensivi:
     description: Settoriali difensivi — Salute, Utilities, Insurance, Food
@@ -104,8 +104,8 @@ families:
     sl_trailing_tight_pct: 0.96
     sl_initial_pct_fallback: 0.025
     trailing_gain_threshold: 2.0
-    trailing_base_pct: 0.04
-    trailing_sensitivity: 0.004
+    trailing_base_pct: 0.06
+    trailing_sensitivity: 0.005
     trailing_min_pct: 0.95
   bond_governativi:
     description: Bond governativi EUR/USD — BTP, Bund, UST, Gov Euro, IL
@@ -131,8 +131,8 @@ families:
     sl_trailing_tight_pct: 0.97
     sl_initial_pct_fallback: 0.015
     trailing_gain_threshold: 1.5
-    trailing_base_pct: 0.025
-    trailing_sensitivity: 0.005
+    trailing_base_pct: 0.035
+    trailing_sensitivity: 0.008
     trailing_min_pct: 0.97
   bond_corp_hy_em:
     description: Bond corporate / HY / EM — Corp EUR/USD, HY, EM bond
@@ -158,8 +158,8 @@ families:
     sl_trailing_tight_pct: 0.97
     sl_initial_pct_fallback: 0.02
     trailing_gain_threshold: 2.0
-    trailing_base_pct: 0.03
-    trailing_sensitivity: 0.0045
+    trailing_base_pct: 0.05
+    trailing_sensitivity: 0.007
     trailing_min_pct: 0.96
   commodities:
     description: Commodities broad — Bloomberg Comm, GSCI, Agri, Energia
@@ -185,9 +185,9 @@ families:
     sl_trailing_tight_pct: 0.94
     sl_initial_pct_fallback: 0.05
     trailing_gain_threshold: 3.5
-    trailing_base_pct: 0.07
-    trailing_sensitivity: 0.0025
-    trailing_min_pct: 0.91
+    trailing_base_pct: 0.11
+    trailing_sensitivity: 0.003
+    trailing_min_pct: 0.9
   oro_metalli_preziosi:
     description: Oro e metalli preziosi — Oro, Argento, Platino, Basket PM
     rsi_entry_low: 38
@@ -212,8 +212,8 @@ families:
     sl_trailing_tight_pct: 0.95
     sl_initial_pct_fallback: 0.035
     trailing_gain_threshold: 3.0
-    trailing_base_pct: 0.05
-    trailing_sensitivity: 0.0032
+    trailing_base_pct: 0.08
+    trailing_sensitivity: 0.005
     trailing_min_pct: 0.93
   metalli_industriali:
     description: Metalli industriali — Rame, Alluminio, Zinco, Nichel, Battery
@@ -239,8 +239,8 @@ families:
     sl_trailing_tight_pct: 0.94
     sl_initial_pct_fallback: 0.045
     trailing_gain_threshold: 3.0
-    trailing_base_pct: 0.06
-    trailing_sensitivity: 0.003
+    trailing_base_pct: 0.09
+    trailing_sensitivity: 0.004
     trailing_min_pct: 0.92
   real_estate_reit:
     description: Real Estate / REIT — EPRA Europe, NAREIT Global, REIT
@@ -266,8 +266,8 @@ families:
     sl_trailing_tight_pct: 0.96
     sl_initial_pct_fallback: 0.03
     trailing_gain_threshold: 2.5
-    trailing_base_pct: 0.035
-    trailing_sensitivity: 0.004
+    trailing_base_pct: 0.055
+    trailing_sensitivity: 0.006
     trailing_min_pct: 0.95
   crypto_digital_assets:
     description: Crypto / asset digitali — Bitcoin, Ethereum, Solana, Basket
@@ -293,9 +293,9 @@ families:
     sl_trailing_tight_pct: 0.9
     sl_initial_pct_fallback: 0.12
     trailing_gain_threshold: 5.0
-    trailing_base_pct: 0.12
-    trailing_sensitivity: 0.0015
-    trailing_min_pct: 0.86
+    trailing_base_pct: 0.18
+    trailing_sensitivity: 0.002
+    trailing_min_pct: 0.84
   leva_single_stock:
     description: Leva / single stock / struct — ETP 3x long/short su singoli titoli
     rsi_entry_low: 45
@@ -321,9 +321,9 @@ families:
     sl_trailing_tight_pct: 0.92
     sl_initial_pct_fallback: 0.08
     trailing_gain_threshold: 2.5
-    trailing_base_pct: 0.08
-    trailing_sensitivity: 0.0035
-    trailing_min_pct: 0.93
+    trailing_base_pct: 0.11
+    trailing_sensitivity: 0.005
+    trailing_min_pct: 0.91
   private_equity_buffer:
     description: Private Equity / Buffer ETF — Listed PE, Buffer strategy
     rsi_entry_low: 40
@@ -348,8 +348,8 @@ families:
     sl_trailing_tight_pct: 0.97
     sl_initial_pct_fallback: 0.03
     trailing_gain_threshold: 2.5
-    trailing_base_pct: 0.035
-    trailing_sensitivity: 0.004
+    trailing_base_pct: 0.055
+    trailing_sensitivity: 0.006
     trailing_min_pct: 0.95
   monetario_liquidita:
     description: Monetario / liquidità — ETF overnight, short-term
@@ -375,9 +375,9 @@ families:
     sl_trailing_tight_pct: null
     sl_initial_pct_fallback: null
     trailing_gain_threshold: 0.5
-    trailing_base_pct: 0.01
-    trailing_sensitivity: 0.01
-    trailing_min_pct: 0.99
+    trailing_base_pct: 0.02
+    trailing_sensitivity: 0.02
+    trailing_min_pct: 0.985
 family_detection:
 - pattern:
   - monetario
