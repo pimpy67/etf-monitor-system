@@ -345,20 +345,40 @@ class ETFTechnicalAnalyzer:
         # Protezione minima: non scendere sotto il 95% di entry
         sl_initial = max(sl_initial, entry_price * 0.95)
 
-        # --- STOP LOSS TRAILING (solo se in profitto) ---
+        # --- STOP LOSS TRAILING DINAMICO (progredisce con guadagni) ---
         sl_trailing = None
         trigger_reason = None
         should_use_trailing = False
 
         if current_gain_pct > 0:
-            profit_trigger = family_config.get('sl_profit_trigger_pct', 2.0)
-
-            if current_gain_pct >= profit_trigger:
-                # Attiva trailing stretto
-                tight_pct = family_config.get('sl_trailing_tight_pct', 0.95)
-                sl_trailing = current_price * tight_pct
-                should_use_trailing = True
-                trigger_reason = f"Trailing: gain {current_gain_pct:.1f}% >= {profit_trigger}%"
+            # Verifica trailing_levels: applica la regola più stringente per il guadagno attuale
+            trailing_levels = family_config.get('trailing_levels', [])
+            
+            if trailing_levels:
+                # Ordina per gain_threshold crescente
+                sorted_levels = sorted(trailing_levels, key=lambda x: x['gain_threshold'])
+                
+                # Trova il livello applicabile: il massimo gain_threshold che non supera current_gain_pct
+                applicable_level = None
+                for level in sorted_levels:
+                    if current_gain_pct >= level['gain_threshold']:
+                        applicable_level = level
+                    else:
+                        break
+                
+                if applicable_level:
+                    trailing_pct = applicable_level['trailing_pct']
+                    sl_trailing = current_price * trailing_pct
+                    should_use_trailing = True
+                    trigger_reason = f"Trailing dinamico: gain {current_gain_pct:.1f}% → SL@{trailing_pct*100:.1f}% di prezzo"
+            else:
+                # Fallback al vecchio sistema se trailing_levels non definito
+                profit_trigger = family_config.get('sl_profit_trigger_pct', 2.0)
+                if current_gain_pct >= profit_trigger:
+                    tight_pct = family_config.get('sl_trailing_tight_pct', 0.95)
+                    sl_trailing = current_price * tight_pct
+                    should_use_trailing = True
+                    trigger_reason = f"Trailing: gain {current_gain_pct:.1f}% >= {profit_trigger}%"
 
         # --- REGIME BEAR per CRYPTO ---
         if family_config.get('sl_trailing_trigger') == 'REGIME_BEAR' and regime_str == 'BEAR':

@@ -1004,6 +1004,7 @@ def get_parameters():
                 'sl_profit_trigger_pct': params.get('sl_profit_trigger_pct'),
                 'sl_trailing_tight_pct': params.get('sl_trailing_tight_pct'),
                 'sl_initial_pct_fallback': params.get('sl_initial_pct_fallback'),
+                'trailing_levels': params.get('trailing_levels', []),
             }
 
         return jsonify({
