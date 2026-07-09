@@ -345,40 +345,42 @@ class ETFTechnicalAnalyzer:
         # Protezione minima: non scendere sotto il 95% di entry
         sl_initial = max(sl_initial, entry_price * 0.95)
 
-        # --- STOP LOSS TRAILING DINAMICO (progredisce con guadagni) ---
+        # --- STOP LOSS TRAILING CONTINUO (formula lineare progressiva) ---
         sl_trailing = None
         trigger_reason = None
         should_use_trailing = False
 
         if current_gain_pct > 0:
-            # Verifica trailing_levels: applica la regola più stringente per il guadagno attuale
-            trailing_levels = family_config.get('trailing_levels', [])
+            # Usa parametri continui se definiti
+            threshold = family_config.get('trailing_gain_threshold')
             
-            if trailing_levels:
-                # Ordina per gain_threshold crescente
-                sorted_levels = sorted(trailing_levels, key=lambda x: x['gain_threshold'])
-                
-                # Trova il livello applicabile: il massimo gain_threshold che non supera current_gain_pct
-                applicable_level = None
-                for level in sorted_levels:
-                    if current_gain_pct >= level['gain_threshold']:
-                        applicable_level = level
-                    else:
-                        break
-                
-                if applicable_level:
-                    trailing_pct = applicable_level['trailing_pct']
+            if threshold is not None:
+                # Formula continua: SL si stringe gradualmente man mano che i guadagni aumentano
+                if current_gain_pct >= threshold:
+                    base_pct = family_config.get('trailing_base_pct', 0.05)  # es. 5%
+                    sensitivity = family_config.get('trailing_sensitivity', 0.003)  # es. 0.3% per 1%
+                    min_pct = family_config.get('trailing_min_pct', 0.93)  # protezione minima
+                    
+                    # Calcola distanza progressiva
+                    excess_gain = current_gain_pct - threshold
+                    distance = base_pct - (excess_gain * sensitivity)
+                    
+                    # Applica protezione minima
+                    min_distance = 1.0 - min_pct
+                    distance = max(distance, min_distance)
+                    
+                    trailing_pct = 1.0 - distance
                     sl_trailing = current_price * trailing_pct
                     should_use_trailing = True
-                    trigger_reason = f"Trailing dinamico: gain {current_gain_pct:.1f}% → SL@{trailing_pct*100:.1f}% di prezzo"
+                    trigger_reason = f"Trailing continuo: gain {current_gain_pct:.1f}% → SL@{trailing_pct*100:.2f}%"
             else:
-                # Fallback al vecchio sistema se trailing_levels non definito
+                # Fallback al vecchio sistema se parametri continui non definiti
                 profit_trigger = family_config.get('sl_profit_trigger_pct', 2.0)
                 if current_gain_pct >= profit_trigger:
                     tight_pct = family_config.get('sl_trailing_tight_pct', 0.95)
                     sl_trailing = current_price * tight_pct
                     should_use_trailing = True
-                    trigger_reason = f"Trailing: gain {current_gain_pct:.1f}% >= {profit_trigger}%"
+                    trigger_reason = f"Trailing legacy: gain {current_gain_pct:.1f}% >= {profit_trigger}%"
 
         # --- REGIME BEAR per CRYPTO ---
         if family_config.get('sl_trailing_trigger') == 'REGIME_BEAR' and regime_str == 'BEAR':
