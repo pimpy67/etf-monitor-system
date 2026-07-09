@@ -720,8 +720,83 @@ class ETFMonitor:
         else:
             add_log("Alert saltati (refresh silenzioso)")
 
+        # Aggiorna stop loss suggerito per portafoglio (formula continua)
+        try:
+            self._update_portfolio_sl_suggested()
+        except Exception as e:
+            add_log(f"⚠️  Errore aggiornamento portfolio SL: {e}")
+
         add_log(f"Completato — {datetime.now().strftime('%H:%M')}")
         add_log("=" * 50)
+
+
+    def _update_portfolio_sl_suggested(self):
+        """Aggiorna il stop loss suggerito per tutte le entry attive del portafoglio.
+        Usa la formula continua basata su guadagno % e parametri della famiglia.
+        """
+        try:
+            from technical_analysis import ETFTechnicalAnalyzer
+            
+            # Query: leggi tutte le entry attive
+            query = "SELECT id, isin, entry_price, fund_name FROM etf_portfolio_entries WHERE status = 'active'"
+            try:
+                result = self.db.conn.execute(query)
+                rows = result.fetchall()
+            except:
+                # Se la connessione è chiusa, non fare nulla
+                return
+            
+            if not rows:
+                return
+            
+            for entry_id, isin, entry_price, fund_name in rows:
+                try:
+                    entry_price = float(entry_price)
+                    if entry_price <= 0:
+                        continue
+                    
+                    # Leggi prezzo corrente
+                    price_query = "SELECT close FROM etf_price_history WHERE isin = %s ORDER BY date DESC LIMIT 1"
+                    price_result = self.db.conn.execute(price_query, (isin,))
+                    price_row = price_result.fetchone()
+                    
+                    if not price_row:
+                        continue
+                    
+                    current_price = float(price_row[0])
+                    
+                    # Calcola guadagno %
+                    current_gain_pct = ((current_price - entry_price) / entry_price) * 100
+                    
+                    # Rileva famiglia da nome fondo
+                    family = ETFTechnicalAnalyzer.detect_family(fund_name)
+                    
+                    # Crea analyzer e calcola SL
+                    analyzer = ETFTechnicalAnalyzer(famiglia=family)
+                    sl_result = analyzer.calculate_stop_loss(
+                        current_price=current_price,
+                        atr=None,
+                        family_config=analyzer.p,
+                        entry_price=entry_price,
+                        current_gain_pct=current_gain_pct,
+                        regime_str='BULL'
+                    )
+                    
+                    # Prendi il SL trailing se disponibile, altrimenti initial
+                    sl_suggested = sl_result.get('stop_loss_trailing') or sl_result.get('stop_loss_initial')
+                    
+                    if sl_suggested and sl_suggested > 0:
+                        # Salva nel DB
+                        update_query = "UPDATE etf_portfolio_entries SET stop_loss_suggested = %s, stop_loss_updated_at = now() WHERE id = %s"
+                        self.db.conn.execute(update_query, (round(float(sl_suggested), 4), entry_id))
+                        self.db.conn.commit()
+                        
+                except Exception as e:
+                    add_log(f"  ⚠️  Errore SL per {isin}: {e}")
+                    continue
+                    
+        except Exception as e:
+            add_log(f"⚠️  Errore generale portfolio SL: {e}")
 
 
 def main():
