@@ -1179,6 +1179,8 @@ async function loadPortfolio() {
         is_partial: p.is_partial || false,
         partial_exit_date: p.partial_exit_date || null,
         partial_exit_price: p.partial_exit_price || null,
+        stop_loss_inserted: p.stop_loss_inserted || null,
+        shares: p.shares || null,
       };
     });
     const countEl = document.getElementById('portfolioCount');
