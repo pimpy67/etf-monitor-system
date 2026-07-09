@@ -330,14 +330,15 @@ class ETFTechnicalAnalyzer:
         Returns:
             dict con: stop_loss_initial, stop_loss_trailing, trigger_reason, should_use_trailing
         """
-        # --- STOP LOSS INIZIALE ---
-        sl_atr_mult = family_config.get('sl_atr_multiplier')
+        # --- STOP LOSS INIZIALE (REGOLA ESPLICITA PER FAMIGLIA) ---
+        # Usa parametro sl_initial_pct dalla famiglia YAML (regola trasparente)
+        sl_initial_pct = family_config.get('sl_initial_pct')
 
-        if atr and sl_atr_mult:
-            # Usa ATR come base
-            sl_initial = current_price - (atr * sl_atr_mult)
+        if sl_initial_pct is not None:
+            # Regola esplicita dalla famiglia
+            sl_initial = entry_price * (1 - sl_initial_pct)
         else:
-            # Fallback: percentuale fissa dalla famiglia
+            # Fallback (solo se sl_initial_pct non definito)
             fallback_pct = family_config.get('sl_initial_pct_fallback', 0.02)
             sl_initial = entry_price * (1 - fallback_pct)
 

@@ -17,6 +17,7 @@ families:
     min_buy_count: 5
     ema20_slope_min: 1.5
     # Stop Loss Dinamici
+    sl_initial_pct: 0.05              # SL INIZIALE: -5.0% (REGOLA ESPLICITA)
     sl_atr_multiplier: 2.0
     sl_trailing_trigger: "EMA20"
     sl_profit_trigger_pct: 3.0
@@ -40,6 +41,7 @@ families:
     min_buy_count: 6
     ema20_slope_min: 1.0
     # Stop Loss Dinamici
+    sl_initial_pct: 0.06              # SL INIZIALE: -6.0%
     sl_atr_multiplier: 2.2
     sl_trailing_trigger: "EMA20"
     sl_profit_trigger_pct: 4.0
@@ -63,6 +65,7 @@ families:
     min_buy_count: 5
     ema20_slope_min: 1.0
     # Stop Loss Dinamici
+    sl_initial_pct: 0.06              # SL INIZIALE: -6.0%
     sl_atr_multiplier: 2.3
     sl_trailing_trigger: "EMA20"
     sl_profit_trigger_pct: 5.0
@@ -86,6 +89,7 @@ families:
     min_buy_count: 5
     ema20_slope_min: 0.4
     # Stop Loss Dinamici
+    sl_initial_pct: 0.04              # SL INIZIALE: -4.0%
     sl_atr_multiplier: 1.8
     sl_trailing_trigger: "SMA50"
     sl_profit_trigger_pct: 2.0
@@ -109,6 +113,7 @@ families:
     min_buy_count: 5
     ema20_slope_min: 0.15
     # Stop Loss Dinamici
+    sl_initial_pct: 0.025             # SL INIZIALE: -2.5%
     sl_atr_multiplier: 1.5
     sl_trailing_trigger: "SMA50"
     sl_profit_trigger_pct: 1.0
@@ -132,6 +137,7 @@ families:
     min_buy_count: 5
     ema20_slope_min: 0.2
     # Stop Loss Dinamici
+    sl_initial_pct: 0.03              # SL INIZIALE: -3.0%
     sl_atr_multiplier: 1.6
     sl_trailing_trigger: "SMA50"
     sl_profit_trigger_pct: 1.5
@@ -155,6 +161,7 @@ families:
     min_buy_count: 6
     ema20_slope_min: 0.5
     # Stop Loss Dinamici
+    sl_initial_pct: 0.07              # SL INIZIALE: -7.0%
     sl_atr_multiplier: 2.2
     sl_trailing_trigger: "EMA20"
     sl_profit_trigger_pct: 4.0
@@ -178,6 +185,7 @@ families:
     min_buy_count: 5
     ema20_slope_min: 0.3
     # Stop Loss Dinamici
+    sl_initial_pct: 0.05              # SL INIZIALE: -5.0%
     sl_atr_multiplier: 2.0
     sl_trailing_trigger: "SMA50"
     sl_profit_trigger_pct: 3.0
@@ -201,6 +209,7 @@ families:
     min_buy_count: 5
     ema20_slope_min: 0.4
     # Stop Loss Dinamici
+    sl_initial_pct: 0.06              # SL INIZIALE: -6.0%
     sl_atr_multiplier: 2.2
     sl_trailing_trigger: "EMA20"
     sl_profit_trigger_pct: 4.0
@@ -224,6 +233,7 @@ families:
     min_buy_count: 5
     ema20_slope_min: 0.25
     # Stop Loss Dinamici
+    sl_initial_pct: 0.035             # SL INIZIALE: -3.5%
     sl_atr_multiplier: 1.8
     sl_trailing_trigger: "SMA50"
     sl_profit_trigger_pct: 2.0
@@ -247,6 +257,7 @@ families:
     min_buy_count: 5
     ema20_slope_min: 1.2
     # Stop Loss Dinamici
+    sl_initial_pct: 0.12              # SL INIZIALE: -12.0%
     sl_atr_multiplier: 3.0
     sl_trailing_trigger: "REGIME_BEAR"
     sl_profit_trigger_pct: 8.0
@@ -272,6 +283,7 @@ families:
     min_buy_count: 5
     ema20_slope_min: 0.5
     # Stop Loss Dinamici
+    sl_initial_pct: 0.08              # SL INIZIALE: -8.0%
     sl_atr_multiplier: 2.5
     sl_trailing_trigger: "EMA20"
     sl_profit_trigger_pct: 5.0
@@ -295,6 +307,7 @@ families:
     min_buy_count: 5
     ema20_slope_min: 0.2
     # Stop Loss Dinamici
+    sl_initial_pct: 0.035             # SL INIZIALE: -3.5%
     sl_atr_multiplier: 1.7
     sl_trailing_trigger: "SMA50"
     sl_profit_trigger_pct: 2.0
@@ -318,6 +331,7 @@ families:
     min_buy_count: 6
     ema20_slope_min: 0.0
     # Stop Loss Dinamici
+    sl_initial_pct: 0.01              # SL INIZIALE: -1.0%
     sl_atr_multiplier: null
     sl_trailing_trigger: "NONE"
     sl_profit_trigger_pct: null
