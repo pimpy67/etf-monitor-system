@@ -894,6 +894,7 @@ function renderPortfolioSection() {
           <span style="color:#374151;">Usa il pulsante <strong style="color:#58a6ff;">+ Port.</strong> accanto a un ETF per aggiungerlo.</span>
         </div>
       </div>
+      <div id="slPanel" style="margin-top:20px;"></div>
     </div>
   </div>`;
 }
@@ -2117,18 +2118,28 @@ function adxColor(v) {
 async function loadPortfolioSL() {
   try {
     const resp = await fetch('/api/portfolio-sl');
-    if (!resp.ok) return;
+    if (!resp.ok) {
+      console.warn('loadPortfolioSL: API error status', resp.status);
+      return;
+    }
     const data = await resp.json();
     if (data.positions && data.positions.length > 0) {
+      console.log('loadPortfolioSL: rendering', data.positions.length, 'positions');
       renderPortfolioSL(data.positions);
+    } else {
+      console.log('loadPortfolioSL: no positions found');
     }
   } catch (e) {
-    console.warn('Errore caricamento portfolio SL:', e);
+    console.error('Errore caricamento portfolio SL:', e);
   }
 }
 
 function renderPortfolioSL(positions) {
   const slPanel2 = document.getElementById('slPanel');
+  if (!slPanel2) {
+    console.warn('renderPortfolioSL: slPanel non trovato nel DOM');
+    return;
+  }
 
   let html = `
     <div style="font-weight: 600; font-size: 16px; margin-bottom: 15px; color: #58a6ff;">
