@@ -435,11 +435,11 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
           </div>
           <div style="flex:1;min-width:140px;">
             <label style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">SL Personale</label>
-            <input type="number" id="slInsertedInput" placeholder="Valore SL" step="0.01" oninput="updatePLCalc()" style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#fff;font-size:0.9em;">
+            <input type="number" id="slInsertedInput" placeholder="Valore SL" step="0.01" oninput="event.stopPropagation();updatePLCalc()" onclick="event.stopPropagation()" style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#fff;font-size:0.9em;">
           </div>
           <div style="flex:1;min-width:120px;">
             <label style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">Quote</label>
-            <input type="number" id="sharesInput" placeholder="N. quote" step="0.01" min="0" oninput="updatePLCalc()" style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#fff;font-size:0.9em;">
+            <input type="number" id="sharesInput" placeholder="N. quote" step="0.01" min="0" oninput="event.stopPropagation();updatePLCalc()" onclick="event.stopPropagation()" style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#fff;font-size:0.9em;">
           </div>
           <div style="flex:1;min-width:140px;">
             <label style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">P&L se attivi SL</label>
@@ -2231,26 +2231,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Stop Loss Management (detail view) ──────────────────────────────────────
 function updatePLCalc() {
-  const slValue = parseFloat(document.getElementById('slInsertedInput').value);
-  const shares = parseFloat(document.getElementById('sharesInput').value);
-  const slData = window.detailSLData;
+  try {
+    const plDisplay = document.getElementById('plCalcDisplay');
+    if (!plDisplay) return;
 
-  if (!slData || !slData.entry_price || !slValue || slValue <= 0 || !shares || shares <= 0) {
-    document.getElementById('plCalcDisplay').textContent = '—';
-    document.getElementById('plCalcDisplay').style.color = '#999';
-    return;
+    const slValue = parseFloat(document.getElementById('slInsertedInput').value);
+    const shares = parseFloat(document.getElementById('sharesInput').value);
+    const slData = window.detailSLData;
+
+    if (!slData || !slData.entry_price || !slValue || slValue <= 0 || !shares || shares <= 0) {
+      plDisplay.textContent = '—';
+      plDisplay.style.color = '#999';
+      return;
+    }
+
+    const entryPrice = parseFloat(slData.entry_price);
+    const pctChange = ((slValue - entryPrice) / entryPrice) * 100;
+    const absGainLoss = (slValue - entryPrice) * shares;
+
+    const isLoss = absGainLoss < 0;
+    const color = isLoss ? '#f85149' : '#3fb950';
+    const sign = absGainLoss >= 0 ? '+' : '';
+
+    plDisplay.textContent = `${sign}${absGainLoss.toFixed(2)}€ (${sign}${pctChange.toFixed(2)}%)`;
+    plDisplay.style.color = color;
+  } catch(e) {
+    console.error('Errore in updatePLCalc:', e);
   }
-
-  const entryPrice = parseFloat(slData.entry_price);
-  const pctChange = ((slValue - entryPrice) / entryPrice) * 100;
-  const absGainLoss = (slValue - entryPrice) * shares;
-
-  const isLoss = absGainLoss < 0;
-  const color = isLoss ? '#f85149' : '#3fb950';
-  const sign = absGainLoss >= 0 ? '+' : '';
-
-  document.getElementById('plCalcDisplay').textContent = `${sign}${absGainLoss.toFixed(2)}€ (${sign}${pctChange.toFixed(2)}%)`;
-  document.getElementById('plCalcDisplay').style.color = color;
 }
 
 async function loadDetailSL() {
