@@ -998,6 +998,7 @@ def get_parameters():
                 'min_buy_count': params.get('min_buy_count'),
                 'ema20_slope_min': params.get('ema20_slope_min'),
                 'hold_days_max': params.get('hold_days_max'),
+                'sl_initial_pct': params.get('sl_initial_pct'),
                 'sl_atr_multiplier': params.get('sl_atr_multiplier'),
                 'sl_trailing_trigger': params.get('sl_trailing_trigger'),
                 'sl_profit_trigger_pct': params.get('sl_profit_trigger_pct'),
