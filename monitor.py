@@ -720,6 +720,14 @@ class ETFMonitor:
         else:
             add_log("Alert saltati (refresh silenzioso)")
 
+        # STEP 4 — Aggiorna SL/SG suggerito per portafoglio L1
+        try:
+            add_log("Aggiornamento SL/SG suggerito L1...")
+            self._update_portfolio_l1_suggerito(results)
+        except Exception as e:
+            add_log(f"⚠️  Errore aggiornamento L1 suggerito: {e}")
+            add_log(traceback.format_exc())
+
         # Aggiorna stop loss suggerito per portafoglio (formula continua)
         try:
             self._update_portfolio_sl_suggested()
@@ -729,6 +737,118 @@ class ETFMonitor:
         add_log(f"Completato — {datetime.now().strftime('%H:%M')}")
         add_log("=" * 50)
 
+
+    def _update_portfolio_l1_suggerito(self, results: list):
+        """
+        STEP 4 — Aggiorna SL/SG suggerito per posizioni L1 attive.
+
+        Per ogni entry in portafoglio L1:
+        1. Recupera dati di mercato (price, ema20, ema10, rsi_5, ema20_series, etc)
+        2. Chiama calculate_sl_suggerito_l1() → SL ibrido
+        3. Chiama calculate_sg_suggerito_l1() → SG dinamico
+        4. Salva nel DB sl_suggerito e sg_suggerito
+        5. Controlla regole exit con check_l1_exit()
+        """
+        try:
+            # Leggi tutte le entry L1 attive
+            query = """
+                SELECT id, isin, entry_date, entry_price, fund_name
+                FROM etf_portfolio_entries
+                WHERE status = 'active' AND portafoglio = 'L1'
+            """
+            conn = self.db.get_connection()
+            if not conn:
+                add_log("  ⚠️  Nessuna connessione DB")
+                return
+
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(query)
+                    rows = cur.fetchall()
+            except Exception as e:
+                add_log(f"  ⚠️  Errore query portfolio L1: {e}")
+                conn.close()
+                return
+
+            if not rows:
+                add_log("  — Nessuna posizione L1 da aggiornare")
+                conn.close()
+                return
+
+            add_log(f"  Aggiornamento {len(rows)} posizioni L1...")
+
+            for entry_id, isin, entry_date_str, entry_price_str, fund_name in rows:
+                try:
+                    entry_price = float(entry_price_str) if entry_price_str else None
+                    if not entry_price or entry_price <= 0:
+                        continue
+
+                    # Trova il risultato corrispondente per recuperare i dati di mercato
+                    result = None
+                    for r in results:
+                        if (r.get('isin') == isin or r.get('ticker') == isin):
+                            result = r
+                            break
+
+                    if not result or not result.get('analysis'):
+                        continue
+
+                    a = result['analysis']
+                    current_price = a.get('current_price')
+                    if not current_price:
+                        continue
+
+                    current_price = float(current_price)
+
+                    # Recupera famiglia dall'analyzer per i parametri
+                    famiglia = ETFTechnicalAnalyzer.detect_family(fund_name or result.get('categoria', ''))
+                    analyzer = ETFTechnicalAnalyzer(famiglia=famiglia)
+
+                    # Dati di mercato per SL/SG
+                    ema20 = a.get('ema20')
+                    ema10 = a.get('ema10')
+                    rsi_5 = a.get('rsi_5')  # Se non disponibile nel result, calcoleremo
+
+                    # Se rsi_5 non è nel result, prova a calcolarlo da close series (fallback)
+                    if rsi_5 is None and 'close_series' in a:
+                        try:
+                            rsi_5_series = analyzer._rsi(a['close_series'].tail(10))
+                            rsi_5 = float(rsi_5_series.iloc[-1]) if len(rsi_5_series) > 0 else None
+                        except:
+                            rsi_5 = None
+
+                    # EMA20 series (ultimi 10 periodi per calcolo slope)
+                    ema20_series = None
+                    if 'ema20_series' in a:
+                        ema20_series = a['ema20_series'].tail(10) if hasattr(a['ema20_series'], 'tail') else a['ema20_series'][-10:]
+
+                    # CALCOLA SL SUGGERITO — formula ibrida
+                    sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, current_price, ema20)
+                    sl_suggerito = sl_data.get('sl_suggerito')
+
+                    # CALCOLA SG SUGGERITO — target dinamico
+                    sg_data = analyzer.calculate_sg_suggerito_l1(entry_price, current_price, ema20_series, rsi_5)
+                    sg_suggerito = sg_data.get('sg_suggerito')
+
+                    # SALVA NEL DB
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            UPDATE etf_portfolio_entries
+                            SET sl_suggerito = %s, sg_suggerito = %s, stop_loss_updated_at = now()
+                            WHERE id = %s
+                        """, (sl_suggerito, sg_suggerito, entry_id))
+                        conn.commit()
+
+                    add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ | SG: {sg_suggerito:.2f}€")
+
+                except Exception as e:
+                    add_log(f"    ⚠️  Errore L1 {isin}: {type(e).__name__}: {e}")
+                    continue
+
+            conn.close()
+
+        except Exception as e:
+            add_log(f"  ⚠️  Errore generale L1: {e}")
 
     def _update_portfolio_sl_suggested(self):
         """Aggiorna il stop loss suggerito per tutte le entry attive del portafoglio.
