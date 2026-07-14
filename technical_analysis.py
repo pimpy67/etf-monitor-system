@@ -984,6 +984,216 @@ class ETFTechnicalAnalyzer:
             'stop_loss_initial': sl_data['stop_loss_initial'] if sl_data else None,
         }
 
+    # ── STEP 3 — Funzioni L1 per portafoglio breve termine ─────────────────────
+
+    def calculate_sl_suggerito_l1(self, entry_price: float, current_price: float,
+                                   ema20: Optional[float]) -> Dict:
+        """
+        Calcola Stop Loss suggerito per posizioni L1 — formula ibrida.
+
+        SCELTA CONFERMATA: Stop Loss ibrido C
+        - Profitto < 2%  → SL largo = EMA20 − buffer_famiglia
+        - Profitto ≥ 2%  → SL stretto = EMA20 − 1%
+
+        Args:
+            entry_price: Prezzo di carico della posizione
+            current_price: Prezzo corrente
+            ema20: Media mobile 20 periodi
+
+        Returns:
+            Dict con 'sl_suggerito', 'profit_pct', 'formula_used'
+        """
+        if ema20 is None or entry_price is None or entry_price <= 0:
+            return {'sl_suggerito': None, 'profit_pct': 0, 'formula_used': None}
+
+        profit_pct = (current_price - entry_price) / entry_price
+
+        buffer = self.p.get('sl_buffer_wide', 0.020)  # default 2%
+
+        if profit_pct < 0.02:
+            # Profitto < 2% → SL largo
+            sl = ema20 * (1 - buffer)
+            formula = f'LARGO: EMA20 × (1 - {buffer:.1%})'
+        else:
+            # Profitto ≥ 2% → SL stretto (1%)
+            sl = ema20 * 0.99
+            formula = f'STRETTO: EMA20 × 0.99'
+
+        return {
+            'sl_suggerito': round(sl, 4),
+            'profit_pct': round(profit_pct * 100, 2),
+            'formula_used': formula
+        }
+
+    def calculate_sg_suggerito_l1(self, entry_price: float, current_price: float,
+                                   ema20_series: Optional[pd.Series],
+                                   rsi_5: Optional[float]) -> Dict:
+        """
+        Calcola Stop Gain suggerito per posizioni L1 — target dinamico.
+
+        SCELTA CONFERMATA: Target variabile per famiglia, dal prezzo di carico
+
+        Formula:
+        - target_pct iniziale da sg_target_pct per famiglia
+        - si riduce con decadimento giornaliero (sg_decay_day × giorni_in_trade)
+        - si aumenta se EMA20 accelera (slope positivo)
+        - trigger RSI: se RSI(5) scende sotto sg_rsi_exit con profitto > 1%
+
+        Args:
+            entry_price: Prezzo di carico
+            current_price: Prezzo corrente
+            ema20_series: Serie EMA20 (ultimi 10-20 periodi)
+            rsi_5: RSI a 5 periodi
+
+        Returns:
+            Dict con 'sg_suggerito', 'target_pct', 'should_exit', 'trigger'
+        """
+        if entry_price is None or entry_price <= 0:
+            return {
+                'sg_suggerito': None,
+                'target_pct': 0,
+                'should_exit': False,
+                'trigger': None
+            }
+
+        profit_pct = (current_price - entry_price) / entry_price
+        days_held = len(ema20_series) if ema20_series is not None else 0
+
+        target_max = self.p.get('sg_target_pct', 0.05)
+        target_min = self.p.get('sg_floor_pct', 0.025)
+        decay = self.p.get('sg_decay_day', 0.002)
+        slope_window = 5
+        rsi_exit = self.p.get('sg_rsi_exit', 65)
+
+        # Decadimento temporale
+        time_decay = days_held * decay
+
+        # Pendenza EMA20
+        slope_pct = 0.0
+        if ema20_series is not None and len(ema20_series) >= slope_window:
+            recent = ema20_series.tail(slope_window).dropna()
+            if len(recent) >= 2:
+                slope_pct = (float(recent.iloc[-1]) - float(recent.iloc[0])) / float(recent.iloc[0]) / slope_window
+
+        # Target dinamico
+        target_pct = max(
+            min(target_max - time_decay + slope_pct * 0.8, target_max),
+            target_min
+        )
+        target_price = entry_price * (1 + target_pct)
+
+        # Trigger uscita
+        should_exit = False
+        trigger = None
+
+        if current_price >= target_price:
+            should_exit = True
+            trigger = 'target_raggiunto'
+        elif rsi_5 is not None and rsi_5 < rsi_exit and profit_pct > 0.01:
+            should_exit = True
+            trigger = 'rsi_momentum_esaurito'
+
+        return {
+            'sg_suggerito': round(target_price, 4),
+            'target_pct': round(target_pct * 100, 2),
+            'should_exit': should_exit,
+            'trigger': trigger
+        }
+
+    def check_l1_exit(self, market_data: Dict, position_data: Dict) -> Dict:
+        """
+        Controlla regole di uscita per posizioni L1.
+
+        SCELTA CONFERMATA: Ordine priorità
+        1. F — Kill Switch: calo giornaliero ≤ -3%
+        2. SL ibrido: prezzo ≤ SL suggerito
+        3. B — Trailing: EMA10 < EMA20
+        4. C — Stanchezza: RSI_prev ≥ 70 AND RSI < 70 (solo non-bond)
+        5. SG dinamico: prezzo ≥ SG suggerito OR RSI(5) < 65 con profitto > 1%
+        6. E — ADX debole: ADX < 18 AND prezzo < EMA20 (solo equity/commodity)
+
+        Args:
+            market_data: Dict con 'close', 'ema10', 'ema20', 'rsi_14', 'rsi_5',
+                         'rsi_14_prev', 'adx', 'daily_change_pct', 'ema20_series'
+            position_data: Dict con 'entry_price', 'famiglia'
+
+        Returns:
+            Dict con 'exit', 'reason', 'priority', 'exit_price' (se exit=True)
+        """
+        is_bond = self.etf_type == 'bond' or self.p.get('rsi_entry_low') is not None and \
+                  self.p.get('rsi_entry_low', 0) < 40
+        is_equity_commodity = self.etf_type in {'equity_developed', 'equity_sector',
+                                                  'equity_emerging', 'commodity', 'thematic'}
+
+        price = market_data.get('close', 0)
+        daily_chg = market_data.get('daily_change_pct', 0)
+        ema10 = market_data.get('ema10')
+        ema20 = market_data.get('ema20')
+        rsi = market_data.get('rsi_14')
+        rsi_5 = market_data.get('rsi_5')
+        rsi_prev = market_data.get('rsi_14_prev', rsi)
+        adx = market_data.get('adx')
+        ema20_series = market_data.get('ema20_series')
+
+        entry_price = position_data.get('entry_price', 0)
+
+        # P1 — Kill Switch
+        if daily_chg is not None and daily_chg <= -3.0:
+            return {
+                'exit': True,
+                'reason': f'F_kill_switch: calo {daily_chg:.1f}%',
+                'priority': 1
+            }
+
+        # P2 — Stop Loss ibrido
+        sl_data = self.calculate_sl_suggerito_l1(entry_price, price, ema20)
+        sl = sl_data.get('sl_suggerito')
+        if sl is not None and price <= sl:
+            return {
+                'exit': True,
+                'reason': f'SL_ibrido: prezzo {price:.2f} ≤ SL {sl:.2f}',
+                'priority': 2,
+                'sl_level': sl
+            }
+
+        # P3 — Trailing EMA10 < EMA20
+        if ema10 is not None and ema20 is not None and ema10 < ema20:
+            return {
+                'exit': True,
+                'reason': f'B_trailing: EMA10 {ema10:.2f} < EMA20 {ema20:.2f}',
+                'priority': 3
+            }
+
+        # P4 — Stanchezza RSI (solo non-bond)
+        if (not is_bond and rsi is not None and rsi_prev is not None
+                and rsi_prev >= 70 and rsi < 70):
+            return {
+                'exit': True,
+                'reason': f'C_stanchezza: RSI {rsi_prev:.0f}→{rsi:.0f}',
+                'priority': 4
+            }
+
+        # P5 — Stop Gain dinamico
+        sg_data = self.calculate_sg_suggerito_l1(entry_price, price, ema20_series, rsi_5)
+        if sg_data.get('should_exit'):
+            return {
+                'exit': True,
+                'reason': f'SG_{sg_data["trigger"]}: {sg_data["sg_suggerito"]:.2f}',
+                'priority': 5,
+                'sg_level': sg_data['sg_suggerito']
+            }
+
+        # P6 — ADX debole (solo equity/commodity)
+        if (is_equity_commodity and adx is not None and adx < 18
+                and ema20 is not None and price < ema20):
+            return {
+                'exit': True,
+                'reason': f'E_adx_debole: ADX {adx:.0f} < 18',
+                'priority': 6
+            }
+
+        return {'exit': False, 'reason': None}
+
     # ── Full analysis ──────────────────────────────────────────────────────────
 
     def analyze_etf(self, df: pd.DataFrame, current_level: int = 3, ticker: str = None) -> Dict:
