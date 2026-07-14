@@ -149,14 +149,175 @@ scheduler.py
 | 5 | E ADX debole | ADX < 18 AND prezzo < EMA20 |
 | 6 | D Uscita Parziale | RSI > 78 → vendi 90%, mantieni 10% + acquista XEON |
 
-### Profili parametri per tipo ETF
-| Parametro | equity_developed | equity_sector | equity_emerging | commodity | bond | thematic |
-|-----------|:---:|:---:|:---:|:---:|:---:|:---:|
-| RSI entry range | 50–70 | 50–70 | 50–65 | 50–65 | 48–62 | 50–70 |
-| Dist max EMA20 | 4% | 5% | 5% | 5% | 2% | 6% |
-| ADX min | 20 | 22 | 20 | 22 | 15 | 22 |
-| Giorni sopra EMA20 | 3 | 3 | 3 | 3 | 3 | 3 |
-| SMA200 filter | Sì | Sì | Sì | Sì | No | Sì |
+### Profili parametri FAMIGLIE ETF — 14 Classi (aggiornato 2026-07-14)
+
+> **FONTE AUTOREVOLE**: `config/etf_families.yaml` — questa tabella è sincronizzata al YAML. Qualsiasi modifica ai parametri DEVE essere applicata contemporaneamente qui.
+
+| Famiglia | RSI entry | ADX | days_ema | min_buy | ema_dist_max | l0_dd % | sl_buffer | sg_target | sg_floor | sg_decay | sg_rsi |
+|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **equity_sviluppati** | 45–55 | 22 | 5 | 5 | 4.0% | 15% | 2.0% | 4.0% | 2.0% | 0.002 | 65 |
+| **mercati_emergenti** | 40–52 | 22 | 3 | 6 | 5.0% | 20% | 2.5% | 5.0% | 2.5% | 0.002 | 65 |
+| **settoriali_growth** | 48–58 | 25 | 5 | 5 | 5.0% | 18% | 3.0% | 7.0% | 3.5% | 0.002 | 65 |
+| **settoriali_difensivi** | 42–50 | 18 | 5 | 5 | 2.5% | 15% | 1.5% | 3.0% | 1.5% | 0.002 | 65 |
+| **bond_governativi** | 38–48 | 12 | 3 | 5 | 1.5% | 8% | 1.0% | 2.0% | 1.0% | 0.001 | 65 |
+| **bond_corp_hy_em** | 42–52 | 15 | 3 | 5 | 2.0% | 10% | 1.5% | 3.0% | 1.5% | 0.001 | 65 |
+| **commodities** | 40–55 | 22 | 3 | 6 | 3.0% | 20% | 3.0% | 6.0% | 3.0% | 0.002 | 65 |
+| **oro_metalli_preziosi** | 38–52 | 18 | 3 | 5 | 2.5% | 15% | 2.5% | 5.0% | 2.5% | 0.002 | 65 |
+| **metalli_industriali** | 38–50 | 20 | 3 | 5 | 3.0% | 18% | 2.5% | 5.0% | 2.5% | 0.002 | 65 |
+| **real_estate_reit** | 42–52 | 15 | 3 | 5 | 2.0% | 12% | 2.0% | 4.0% | 2.0% | 0.001 | 65 |
+| **crypto_digital_assets** | 35–52 | 28 | 3 | 5 | 6.0% | 25% | 5.0% | 12.0% | 6.0% | 0.003 | 65 |
+| **leva_single_stock** | 45–58 | 28 | 3 | 5 | 4.0% | 20% | 4.0% | 15.0% | 7.5% | 0.003 | 65 |
+| **private_equity_buffer** | 40–55 | 15 | 3 | 5 | 2.5% | 15% | 1.5% | 3.0% | 1.5% | 0.001 | 65 |
+| **monetario_liquidita** | n/a | n/a | 3 | 6 | 0.5% | n/a | 0.5% | 0.5% | 0.2% | 0.0 | 97 |
+
+**Legenda colonne**:
+- **RSI entry**: range RSI per triggering L1
+- **ADX**: soglia ADX minima per L1 (null = non applicabile)
+- **days_ema**: giorni consecutivi sopra EMA20 richiesti
+- **min_buy**: numero minimo condizioni 6/6 da soddisfare (non usato, sempre 6)
+- **ema_dist_max**: distanza massima da EMA20 in percentuale
+- **l0_dd %**: drawdown minimo per attivare L0 (null = no L0)
+- **sl_buffer**: distanza buffer stop-loss iniziale (STEP 2 — ibrido)
+- **sg_target**: stop-gain target (STEP 2)
+- **sg_floor**: stop-gain floor minimo (STEP 2)
+- **sg_decay**: decadimento giornaliero SG (STEP 2)
+- **sg_rsi**: RSI exit per stop-gain (STEP 2)
+
+### Struttura L0 Entry — Parametri per famiglia (Nuovi 2026-07-14)
+
+Ogni famiglia ETF ha parametri specifici per triggerare l'entrata in L0 (deep recovery):
+
+| Famiglia | enabled | dd_threshold | rsi_max | lookback_days | recovery_min % | Note |
+|----------|:---:|:---:|:---:|:---:|:---:|------|
+| **equity_sviluppati** | ✓ | 6.5% | 45 | 3 | 1.5% | Deep value — trigger conservativo |
+| **mercati_emergenti** | ✓ | 8.5% | 42 | 3 | 2.0% | Volatilità moderata |
+| **settoriali_growth** | ✓ | 10.0% | 42 | 2 | 2.5% | Tech/AI — drawdown ampio |
+| **settoriali_difensivi** | ✓ | 5.0% | 48 | 3 | 1.0% | Defensive — trigger stretto |
+| **bond_governativi** | ✓ | 4.0% | 42 | 5 | 0.8% | Gov bonds — protezione massima |
+| **bond_corp_hy_em** | ✓ | 5.5% | 44 | 3 | 1.2% | Corp bonds — moderato |
+| **commodities** | ✓ | 10.0% | 40 | 3 | 2.5% | Commodity — drawdown ampio |
+| **oro_metalli_preziosi** | ✓ | 8.0% | 42 | 3 | 2.0% | PM — volatilità commodity |
+| **metalli_industriali** | ✓ | 8.0% | 42 | 3 | 2.0% | Battery metals — moderato |
+| **real_estate_reit** | ✓ | 7.0% | 44 | 3 | 1.5% | REIT — dividend safe |
+| **crypto_digital_assets** | ✓ | 25.0% | 38 | 2 | 5.0% | Crypto — drawdown estremo |
+| **leva_single_stock** | ✗ | n/a | n/a | n/a | n/a | Disabilitato — troppo rischioso per deep recovery |
+| **private_equity_buffer** | ✓ | 7.0% | 42 | 3 | 1.5% | Listed PE — conservative |
+| **monetario_liquidita** | ✗ | n/a | n/a | n/a | n/a | Disabilitato — no logica recovery |
+
+**Legenda L0 entry**:
+- **enabled**: se true, l'ETF è candidato per L0; false disabilita completamente
+- **dd_threshold**: drawdown minimo (% sotto picco storico) per attivare L0
+- **rsi_max**: soglia RSI massima per ipervenduto (triggering L0)
+- **lookback_days**: giorni di lookback per verificare il divergenza rialzista
+- **recovery_min %**: minimo recupero richiesto per confermare ingresso L0
+
+**Entrata L0** — tutte 4 condizioni obbligatorie:
+1. Prezzo almeno `dd_threshold`% sotto il picco (vedi tabella)
+2. RSI < `rsi_max` (ipervenduto)
+3. Divergenza rialzista (prezzo minimo più basso, RSI minimo più alto negli ultimi `lookback_days`)
+4. Segnale recupero: RSI > 32 OPPURE micro-breakout ≥ 0.3% su 5 giorni
+
+**Uscita L0** — basta 1:
+- γ: Prezzo > EMA20 → promozione a L2
+- β: RSI < 25 dopo ingresso → trappola ribassista
+- α: Prezzo < panic_low (minimo 30gg all'ingresso) → stop assoluto
+- ε: Nessun recupero dopo 30 giorni → exit in monitor.py
+
+---
+
+## Trailing Stop Dinamico Continuo (STEP 2 — 2026-07-10)
+
+Il trailing stop per L1 segue una **formula lineare continua** che protegge i profitti senza salti rigidi.
+
+**Formula**:
+```
+excess_gain = max(0, current_gain_pct - trailing_gain_threshold)
+distance = max(trailing_base_pct - (excess_gain × trailing_sensitivity), trailing_min_pct)
+SL_percent = 1.0 - distance
+SL_price = entry_price × SL_percent
+```
+
+**Parametri per famiglia** (dal YAML):
+
+| Famiglia | trailing_base | trailing_sens | trailing_gain_th | trailing_min | Profilo |
+|----------|:---:|:---:|:---:|:---:|-----------|
+| **equity_sviluppati** | 8.0% | 0.005 | 3.0% | 94% | Moderato |
+| **mercati_emergenti** | 9.0% | 0.004 | 3.0% | 92% | Ampio |
+| **settoriali_growth** | 9.0% | 0.0045 | 3.0% | 92% | Ampio |
+| **settoriali_difensivi** | 6.0% | 0.005 | 2.0% | 95% | Stretto |
+| **bond_governativi** | 3.5% | 0.008 | 1.5% | 97% | Molto stretto |
+| **bond_corp_hy_em** | 5.0% | 0.007 | 2.0% | 96% | Stretto |
+| **commodities** | 11.0% | 0.003 | 3.5% | 90% | Molto ampio |
+| **oro_metalli_preziosi** | 8.0% | 0.005 | 3.0% | 93% | Ampio |
+| **metalli_industriali** | 9.0% | 0.004 | 3.0% | 92% | Ampio |
+| **real_estate_reit** | 5.5% | 0.006 | 2.5% | 95% | Stretto |
+| **crypto_digital_assets** | 18.0% | 0.002 | 5.0% | 84% | Massimamente ampio |
+| **leva_single_stock** | 11.0% | 0.005 | 2.5% | 91% | Molto ampio |
+| **private_equity_buffer** | 5.5% | 0.006 | 2.5% | 95% | Stretto |
+| **monetario_liquidita** | 2.0% | 0.02 | 0.5% | 98.5% | Ultra-conservativo |
+
+**Esempi pratici** (Entry €100, usando equity_sviluppati):
+
+| Guadagno | excess_gain | distance | SL_percent | SL_price |
+|:---:|:---:|:---:|:---:|:---:|
+| 0% | 0% | 8.0% (base) | 92% | €92.00 |
+| +3% | 0% | 8.0% (base) | 92% | €92.00 |
+| +5% | +2% | 7.9% (8.0 - 2×0.5%) | 92.1% | €92.10 |
+| +8% | +5% | 7.75% (8.0 - 5×0.5%) | 92.25% | €92.25 |
+| +15% | +12% | 7.4% (8.0 - 12×0.5%) | 92.6% | €92.60 |
+| +25% | +22% | 6.9% → **94%** floor | **94%** | **€94.00** |
+
+**Vantaggi formula continua**:
+- Nessun salto rigido — il SL si muove fluidamente con il prezzo
+- Immune al noise di mercato (±0.1% non attiva/disattiva)
+- Protect base per CDA e monetario (trailing_min_pct garantito)
+- Ogni giorno il monitor recalcola con il prezzo attuale
+
+---
+
+## Stop Loss L1 Ibrido — Formula Parametrizzata (STEP 2 — 2026-07-09)
+
+Alla entry di una posizione L1, il stop loss iniziale segue una **logica ibrida** che distingue tra phase di accumulazione e take-profit.
+
+**Regola ibrida**:
+
+1. **Se profitto corrente < 2%** (accumulation phase):
+   ```
+   SL = EMA20 × (1 − sl_buffer_wide)
+   ```
+   Mantiene il SL più largo per evitare uscite premature.
+   
+2. **Se profitto corrente ≥ 2%** (profit protection phase):
+   ```
+   SL = EMA20 × 0.99  (tight 1%)
+   ```
+   Stringe il SL per proteggere i guadagni già accumulati.
+
+**Parametro `sl_buffer_wide` per famiglia** (vedi tabella profili colonna "sl_buffer"):
+
+| Famiglia | sl_buffer_wide | Entry €100 / Gain 0% | Entry €100 / Gain +3% |
+|----------|:---:|:---:|:---:|
+| **bond_governativi** | 1.0% | SL €99.00 | SL €99.00 (tight) |
+| **settoriali_difensivi** | 1.5% | SL €98.50 | SL €99.00 (tight) |
+| **real_estate_reit** | 2.0% | SL €98.00 | SL €99.00 (tight) |
+| **equity_sviluppati** | 2.0% | SL €98.00 | SL €99.00 (tight) |
+| **bond_corp_hy_em** | 1.5% | SL €98.50 | SL €99.00 (tight) |
+| **oro_metalli_preziosi** | 2.5% | SL €97.50 | SL €99.00 (tight) |
+| **metalli_industriali** | 2.5% | SL €97.50 | SL €99.00 (tight) |
+| **mercati_emergenti** | 2.5% | SL €97.50 | SL €99.00 (tight) |
+| **settoriali_growth** | 3.0% | SL €97.00 | SL €99.00 (tight) |
+| **commodities** | 3.0% | SL €97.00 | SL €99.00 (tight) |
+| **leva_single_stock** | 4.0% | SL €96.00 | SL €99.00 (tight) |
+| **crypto_digital_assets** | 5.0% | SL €95.00 | SL €99.00 (tight) |
+| **private_equity_buffer** | 1.5% | SL €98.50 | SL €99.00 (tight) |
+| **monetario_liquidita** | 0.5% | SL €99.50 | SL €99.00 (tight) |
+
+**Implementazione nel codice**:
+- `technical_analysis.py::calculate_stop_loss()` legge `sl_buffer_wide` dal profilo famiglia
+- Calcola il profitto corrente: `current_gain_pct = (current_price - entry_price) / entry_price`
+- Se `current_gain_pct < 0.02`: applica formula wide (buffer)
+- Se `current_gain_pct >= 0.02`: applica formula tight (1%)
+- Risultato salvato in DB come `stop_loss_suggested` per il portafoglio
 
 ---
 
