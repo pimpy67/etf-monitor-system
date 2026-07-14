@@ -391,8 +391,7 @@ class AlertSystem:
             cur = conn.cursor()
             cur.execute("""
                 SELECT pe.id, pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
-                       pe.stop_loss, pe.portafoglio,
-                       pe.sl_suggerito, pe.sg_suggerito
+                       pe.portafoglio, pe.sl_suggerito, pe.sg_suggerito
                 FROM etf_portfolio_entries pe
                 WHERE pe.status = 'active'
                 ORDER BY pe.entry_date DESC
@@ -404,15 +403,15 @@ class AlertSystem:
                 return True  # No positions, no email needed
 
             # Separa L1 e L0
-            l1_positions = [p for p in positions if p[6] == 'L1']  # portafoglio column
-            l0_positions = [p for p in positions if p[6] == 'L0']
+            l1_positions = [p for p in positions if p[5] == 'L1']  # portafoglio column (index 5)
+            l0_positions = [p for p in positions if p[5] == 'L0']
 
             # ── SEZIONE L1 ──────────────────────────────────────────────────
             l1_rows = []
             l1_total_gain = 0
             l1_total_notional = 0
 
-            for entry_id, isin, entry_price, entry_date, fund_name, stop_loss, portafoglio, sl_sug, sg_sug in l1_positions:
+            for entry_id, isin, entry_price, entry_date, fund_name, portafoglio, sl_sug, sg_sug in l1_positions:
                 try:
                     entry_price = float(entry_price) if entry_price else 0
                     if entry_price <= 0:
@@ -476,7 +475,7 @@ class AlertSystem:
 
             # ── SEZIONE L0 ──────────────────────────────────────────────────
             l0_rows = []
-            for entry_id, isin, entry_price, entry_date, fund_name, stop_loss, portafoglio, sl_sug, sg_sug in l0_positions:
+            for entry_id, isin, entry_price, entry_date, fund_name, portafoglio, sl_sug, sg_sug in l0_positions:
                 try:
                     entry_price = float(entry_price) if entry_price else 0
                     if entry_price <= 0:
