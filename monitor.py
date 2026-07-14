@@ -820,11 +820,16 @@ class ETFMonitor:
 
             # È un candidato L0
             isin = result.get('isin')
+            ticker = result.get('ticker')
             price = result.get('analysis', {}).get('current_price')
+
+            # DEBUG: log candidati L0
+            add_log(f"  L0 CANDIDATO: {ticker} | ISIN: {isin} | Price: {price} | DD: {l0_signal.get('dd_from_high'):.1f}%")
 
             # SALVA il segnale L0 nel DB (se non esiste già)
             if isin and price:
                 self.db.set_l0_entry(isin, datetime.now().strftime('%Y-%m-%d'), float(price))
+                add_log(f"    ✓ Salvato in etf_l0_tracking")
 
             candidate = {
                 'ticker': result.get('ticker'),
