@@ -1194,6 +1194,246 @@ class ETFTechnicalAnalyzer:
 
         return {'exit': False, 'reason': None}
 
+    # ── STEP 6 — Funzioni L0 per portafoglio medio/lungo termine ──────────────
+
+    def check_l0_entry(self, close_series: pd.Series, rsi_14: Optional[float],
+                       ema_fast_period: int = 10, famiglia: Optional[str] = None) -> Dict:
+        """
+        Controlla condizioni di ingresso L0 — Deep Recovery.
+
+        SCELTA CONFERMATA: parametri pragmatici (sezione 3.1 del piano)
+
+        4 condizioni TUTTE obbligatorie:
+        1. Drawdown dai massimi 63 giorni ≥ dd_threshold per famiglia
+        2. RSI scarico (non in panico) < rsi_max per famiglia
+        3. Inversione confermata: prezzo > EMA fast E prezzo > max(N giorni precedenti)
+        4. Recupero minimo dai minimi 10gg ≥ recovery_min_pct per famiglia
+
+        Args:
+            close_series: Serie prezzi di chiusura
+            rsi_14: RSI a 14 periodi
+            ema_fast_period: Periodo EMA veloce (es. 10, 8, ecc per famiglia)
+            famiglia: Nome famiglia (usato fallback a self.famiglia)
+
+        Returns:
+            Dict con 'l0_signal', 'alert_only', 'conditions', 'dd_from_high', ecc
+        """
+        cfg = self.p.get('l0_entry', {})
+
+        if not cfg.get('enabled', True):
+            return {
+                'l0_signal': False,
+                'reason': 'L0 disabled for this family'
+            }
+
+        if len(close_series) < 63:
+            return {
+                'l0_signal': False,
+                'reason': 'Insufficient data (<63 days)'
+            }
+
+        close_today = float(close_series.iloc[-1])
+        close_series_f = close_series.astype(float)
+
+        # ① Drawdown dai massimi 63 giorni
+        high_63d = float(close_series_f.tail(63).max())
+        dd_from_high = (high_63d - close_today) / high_63d if high_63d > 0 else 0
+        dd_threshold = cfg.get('dd_threshold', 0.065)
+        cond1 = dd_from_high >= dd_threshold
+
+        # ② RSI scarico
+        rsi_max = cfg.get('rsi_max', 45)
+        cond2 = rsi_14 is not None and rsi_14 < rsi_max
+
+        # ③ Inversione: prezzo > EMA fast E prezzo > max(N giorni precedenti)
+        try:
+            ema_fast = self._ema(close_series_f, ema_fast_period)
+            ema_fast_val = self._fval(ema_fast)
+            cond3a = ema_fast_val is not None and close_today > ema_fast_val
+        except:
+            cond3a = False
+            ema_fast_val = None
+
+        lookback = cfg.get('lookback_high_days', 3)
+        if len(close_series) > lookback:
+            prev_high = float(close_series_f.iloc[-(lookback+1):-1].max())
+            cond3b = close_today > prev_high
+        else:
+            cond3b = False
+
+        cond3 = cond3a and cond3b
+
+        # ④ Recupero minimo dai minimi 10 giorni
+        if len(close_series) >= 10:
+            low_10d = float(close_series_f.tail(10).min())
+            recovery_pct = (close_today - low_10d) / low_10d if low_10d > 0 else 0
+        else:
+            recovery_pct = 0
+
+        recovery_min = cfg.get('recovery_min_pct', 0.015)
+        cond4 = recovery_pct >= recovery_min
+
+        # Segnale finale
+        l0_signal = cond1 and cond2 and cond3 and cond4
+
+        return {
+            'l0_signal': l0_signal,
+            'alert_only': True,  # Primi 30gg: solo alert, non auto-open
+            'famiglia': self.famiglia or famiglia,
+            'dd_from_high': round(dd_from_high * 100, 2),
+            'rsi_current': round(rsi_14, 1) if rsi_14 else None,
+            'recovery_pct': round(recovery_pct * 100, 2),
+            'ema_fast': round(ema_fast_val, 4) if ema_fast_val else None,
+            'conditions': {
+                '①_drawdown': cond1,
+                '②_rsi': cond2,
+                '③a_ema_fast': cond3a,
+                '③b_high_Ngg': cond3b,
+                '④_recovery': cond4,
+            },
+            'reason': 'tutte_ok' if l0_signal else 'condizioni_mancanti',
+        }
+
+    def calculate_sl_suggerito_l0(self, entry_price: float, current_price: float) -> Dict:
+        """
+        Calcola Stop Loss suggerito per L0 — trailing progressivo.
+
+        SCELTA CONFERMATA: Protezione capitale + graduale riduzione del rischio
+
+        Formula:
+        - Profitto < 5%   → SL = entry × 0.98  (non perdere il capitale)
+        - Profitto 5-15%  → SL = entry × 1.01  (almeno in pareggio)
+        - Profitto > 15%  → SL = entry × (1 + profitto - 0.08)
+                             (proteggi circa metà del gain accumulato)
+
+        Args:
+            entry_price: Prezzo di carico
+            current_price: Prezzo corrente
+
+        Returns:
+            Dict con 'sl_suggerito', 'profit_pct', 'stage'
+        """
+        if entry_price is None or entry_price <= 0:
+            return {'sl_suggerito': None, 'profit_pct': 0, 'stage': None}
+
+        profit_pct = (current_price - entry_price) / entry_price
+
+        if profit_pct < 0.05:
+            # < 5% → protezione stretta
+            sl = entry_price * 0.98
+            stage = 'protezione_capitale'
+        elif profit_pct < 0.15:
+            # 5-15% → almeno pareggio
+            sl = entry_price * 1.01
+            stage = 'pareggio'
+        else:
+            # > 15% → protezione metà gain
+            sl = entry_price * (1 + profit_pct - 0.08)
+            stage = 'protezione_guadagno'
+
+        return {
+            'sl_suggerito': round(sl, 4),
+            'profit_pct': round(profit_pct * 100, 2),
+            'stage': stage
+        }
+
+    def check_l0_exit(self, market_data: Dict, position_data: Dict) -> Dict:
+        """
+        Controlla regole di uscita per posizioni L0.
+
+        SCELTA CONFERMATA: Ordine priorità
+        1. F — Kill Switch: calo giornaliero ≤ -3%
+        2. β — Bear Trap: RSI scende sotto 25 dopo ingresso
+        3. α — Stop Assoluto: prezzo < minimo 30 giorni
+        4. Trailing Stop: prezzo ≤ SL suggerito (progressivo)
+        5. ε — Timeout: 45 giorni senza superare EMA20
+
+        Promozione (NON è uscita — solo display):
+        - γ: Prezzo > EMA20 → livello sale da L0 a L2 (ma posizione rimane in P_L0)
+
+        Args:
+            market_data: Dict con 'close', 'rsi_14', 'ema20', 'daily_change_pct', 'close_series'
+            position_data: Dict con 'entry_price', 'entry_date'
+
+        Returns:
+            Dict con 'exit', 'reason', 'priority' se exit=True
+        """
+        price = market_data.get('close', 0)
+        daily_chg = market_data.get('daily_change_pct', 0)
+        rsi = market_data.get('rsi_14')
+        ema20 = market_data.get('ema20')
+        close_series = market_data.get('close_series')
+
+        entry_price = position_data.get('entry_price', 0)
+
+        # P1 — Kill Switch
+        if daily_chg is not None and daily_chg <= -3.0:
+            return {
+                'exit': True,
+                'reason': f'F_kill_switch: calo {daily_chg:.1f}%',
+                'priority': 1
+            }
+
+        # P2 — Bear Trap: RSI < 25
+        if rsi is not None and rsi < 25:
+            return {
+                'exit': True,
+                'reason': f'β_bear_trap: RSI {rsi:.0f} < 25',
+                'priority': 2
+            }
+
+        # P3 — Stop Assoluto: prezzo < minimo 30gg
+        if close_series is not None and len(close_series) >= 30:
+            min_30d = float(close_series.tail(30).min())
+            if price < min_30d:
+                return {
+                    'exit': True,
+                    'reason': f'α_stop_assoluto: prezzo {price:.2f} < min30 {min_30d:.2f}',
+                    'priority': 3
+                }
+
+        # P4 — Trailing Stop
+        sl_data = self.calculate_sl_suggerito_l0(entry_price, price)
+        sl = sl_data.get('sl_suggerito')
+        if sl is not None and price <= sl:
+            return {
+                'exit': True,
+                'reason': f'trailing_stop: prezzo {price:.2f} ≤ SL {sl:.2f}',
+                'priority': 4,
+                'sl_level': sl
+            }
+
+        # P5 — Timeout 45 giorni senza EMA20
+        days_no_recovery = position_data.get('days_no_recovery', 0)
+        if ema20 is not None and price < ema20:
+            days_no_recovery += 1
+        else:
+            days_no_recovery = 0
+
+        if days_no_recovery >= 45:
+            return {
+                'exit': True,
+                'reason': f'ε_timeout_45gg: {days_no_recovery} giorni senza EMA20',
+                'priority': 5
+            }
+
+        # Promozione γ (NON è uscita — aggiorna solo il livello display)
+        livello_display = 'L0'
+        if ema20 is not None and price > ema20:
+            livello_display = 'L2'
+            if ema20 is not None and close_series is not None:
+                sma50 = self._sma(close_series.astype(float), 50)
+                sma50_v = self._fval(sma50)
+                if sma50_v is not None and price > sma50_v:
+                    livello_display = 'L1'  # Tecnicalmente L1 ma posizione rimane P_L0
+
+        return {
+            'exit': False,
+            'reason': None,
+            'days_no_recovery': days_no_recovery,
+            'livello_display': livello_display
+        }
+
     # ── Full analysis ──────────────────────────────────────────────────────────
 
     def analyze_etf(self, df: pd.DataFrame, current_level: int = 3, ticker: str = None) -> Dict:
