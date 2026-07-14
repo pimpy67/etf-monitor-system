@@ -241,6 +241,18 @@ class PriceDatabase:
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS stop_loss_inserted DECIMAL(12, 4)",
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS stop_loss_suggested DECIMAL(12, 4)",
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS stop_loss_updated_at TIMESTAMP",
+                    # STEP 1 — Nuovi campi per sistema L0-L1 a due portafogli
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS portafoglio VARCHAR(3) DEFAULT 'L1'",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS entry_confidence DECIMAL(3, 2) DEFAULT 1.00",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS entry_quality INTEGER DEFAULT 0",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS entry_layer VARCHAR(2) DEFAULT 'L1'",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS capital_pct DECIMAL(5, 4) DEFAULT 1.0000",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS stop_gain_target DECIMAL(12, 4)",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS sg_suggerito DECIMAL(12, 4)",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS sl_suggerito DECIMAL(12, 4)",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS days_no_recovery INTEGER DEFAULT 0",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS stallo_counter INTEGER DEFAULT 0",
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS add_history TEXT DEFAULT '[]'",
                 ]:
                     cur.execute(col_sql)
 
