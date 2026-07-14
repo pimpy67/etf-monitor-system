@@ -371,20 +371,30 @@ class AlertSystem:
         return self._send_email(subject, body_html)
 
     def send_portfolio_report(self) -> bool:
-        """Invia resoconto giornaliero del portafoglio."""
+        """
+        STEP 5 — Invia resoconto giornaliero del portafoglio con SL/SG suggerito.
+
+        Per ogni posizione L1 attiva, mostra:
+        - Prezzo di carico
+        - Prezzo corrente
+        - Performance %
+        - SL Suggerito (formula ibrida calcolata da STEP 4)
+        - SG Suggerito (target dinamico calcolato da STEP 4)
+        """
         try:
             from database import db
 
-            # Leggi posizioni dal database
+            # Leggi posizioni dal database — includi nuovi campi SL/SG suggerito
             conn = db._get_connection()
             if not conn:
                 return True  # No DB connection available
             cur = conn.cursor()
             cur.execute("""
-                SELECT pe.ticker, pe.entry_price, pe.entry_date, pe.fund_name,
-                       COALESCE(pe.stop_loss, 0) as stop_loss
+                SELECT pe.id, pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
+                       pe.stop_loss, pe.portafoglio,
+                       pe.sl_suggerito, pe.sg_suggerito
                 FROM etf_portfolio_entries pe
-                WHERE pe.ticker IS NOT NULL
+                WHERE pe.status = 'active'
                 ORDER BY pe.entry_date DESC
             """)
             positions = cur.fetchall()
@@ -393,19 +403,30 @@ class AlertSystem:
             if not positions:
                 return True  # No positions, no email needed
 
-            # Costruisci tabella HTML
-            rows = []
-            for ticker, entry_price, entry_date, fund_name, stop_loss in positions:
+            # Separa L1 e L0
+            l1_positions = [p for p in positions if p[6] == 'L1']  # portafoglio column
+            l0_positions = [p for p in positions if p[6] == 'L0']
+
+            # ── SEZIONE L1 ──────────────────────────────────────────────────
+            l1_rows = []
+            l1_total_gain = 0
+            l1_total_notional = 0
+
+            for entry_id, isin, entry_price, entry_date, fund_name, stop_loss, portafoglio, sl_sug, sg_sug in l1_positions:
                 try:
-                    # Ottieni prezzo corrente + data (da etf_price_history)
+                    entry_price = float(entry_price) if entry_price else 0
+                    if entry_price <= 0:
+                        continue
+
+                    # Ottieni prezzo corrente da etf_price_history (cerca per ISIN)
                     conn = db._get_connection()
                     if not conn:
                         continue
                     cur = conn.cursor()
                     cur.execute("""
                         SELECT close, date FROM etf_price_history
-                        WHERE ticker = %s ORDER BY date DESC LIMIT 1
-                    """, (ticker,))
+                        WHERE isin = %s OR ticker = %s ORDER BY date DESC LIMIT 1
+                    """, (isin, isin))
                     result = cur.fetchone()
                     conn.close()
 
@@ -417,70 +438,146 @@ class AlertSystem:
                         price_date = datetime.now().date()
 
                     pct_change = ((current_price - entry_price) / entry_price * 100) if entry_price > 0 else 0
+                    abs_gain = current_price - entry_price
                     color = '#28a745' if pct_change >= 0 else '#dc3545'
                     sign = '+' if pct_change >= 0 else ''
 
-                    # Stop loss consigliato (logica intelligente a 2 fasi)
-                    if pct_change <= 0:
-                        # In perdita: protezione stretta
-                        suggested_sl = entry_price * 0.98
-                    else:
-                        # In profitto: trailing stop = max(entry×0.98, current×0.95)
-                        suggested_sl = max(entry_price * 0.98, current_price * 0.95)
+                    # Accumula per totale
+                    l1_total_notional += current_price
+                    l1_total_gain += abs_gain
 
                     # Formato data
                     if hasattr(price_date, 'strftime'):
-                        date_str = price_date.strftime('%d/%m/%Y')
+                        date_str = price_date.strftime('%d/%m')
                     else:
-                        date_str = str(price_date)[:10]
+                        date_str = str(price_date)[:5]
 
-                    rows.append(
-                        f'<tr style="background:{"#f8f9fa" if len(rows) % 2 == 0 else "white"}">'
-                        f'<td style="padding:8px;border:1px solid #ddd"><strong>{ticker}</strong></td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{entry_price:.4f}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{current_price:.4f} ({date_str})</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:{color}"><strong>{sign}{pct_change:.2f}%</strong></td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{stop_loss:.4f}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{suggested_sl:.4f}</td>'
+                    # Formatta SL/SG suggerito se disponibile
+                    sl_sug_str = f'€{float(sl_sug):.2f}' if sl_sug else '—'
+                    sg_sug_str = f'€{float(sg_sug):.2f}' if sg_sug else '—'
+
+                    # Indicatore status
+                    status_icon = '⚠️' if pct_change < -2 else ('✓' if pct_change >= 0 else '◆')
+
+                    l1_rows.append(
+                        f'<tr style="background:{"#f8f9fa" if len(l1_rows) % 2 == 0 else "white"}">'
+                        f'<td style="padding:8px;border:1px solid #ddd"><strong>{fund_name[:35]}</strong><br>'
+                        f'<small style="color:#888">{isin}</small></td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{entry_price:.2f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{current_price:.2f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:{color}"><strong>{status_icon} {sign}{pct_change:.1f}%</strong></td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{sl_sug_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{sg_sug_str}</td>'
                         f'</tr>'
                     )
                 except Exception as e:
-                    print(f"⚠️ Errore lettura prezzo {ticker}: {e}")
+                    print(f"⚠️ Errore L1 {isin}: {e}")
                     continue
 
-            if not rows:
+            # ── SEZIONE L0 ──────────────────────────────────────────────────
+            l0_rows = []
+            for entry_id, isin, entry_price, entry_date, fund_name, stop_loss, portafoglio, sl_sug, sg_sug in l0_positions:
+                try:
+                    entry_price = float(entry_price) if entry_price else 0
+                    if entry_price <= 0:
+                        continue
+
+                    # Ottieni prezzo corrente
+                    conn = db._get_connection()
+                    if not conn:
+                        continue
+                    cur = conn.cursor()
+                    cur.execute("""
+                        SELECT close FROM etf_price_history
+                        WHERE isin = %s OR ticker = %s ORDER BY date DESC LIMIT 1
+                    """, (isin, isin))
+                    result = cur.fetchone()
+                    conn.close()
+
+                    current_price = float(result[0]) if result else entry_price
+                    pct_change = ((current_price - entry_price) / entry_price * 100) if entry_price > 0 else 0
+                    color = '#28a745' if pct_change >= 0 else '#dc3545'
+                    sign = '+' if pct_change >= 0 else ''
+
+                    # SL suggerito per L0
+                    sl_sug_str = f'€{float(sl_sug):.2f}' if sl_sug else '—'
+
+                    l0_rows.append(
+                        f'<tr style="background:{"#f8f9fa" if len(l0_rows) % 2 == 0 else "white"}">'
+                        f'<td style="padding:8px;border:1px solid #ddd"><strong>{fund_name[:35]}</strong><br>'
+                        f'<small style="color:#888">{isin}</small></td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{entry_price:.2f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{current_price:.2f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:{color}"><strong>{sign}{pct_change:.1f}%</strong></td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{sl_sug_str}</td>'
+                        f'</tr>'
+                    )
+                except Exception as e:
+                    print(f"⚠️ Errore L0 {isin}: {e}")
+                    continue
+
+            # ── Costruisci HTML ────────────────────────────────────────────
+            l1_section = ''
+            if l1_rows:
+                l1_total_pct = (l1_total_gain / l1_total_notional * 100) if l1_total_notional > 0 else 0
+                l1_section = (
+                    f'<h2 style="color:#00B050;margin:12px 0 8px">🟢 PORTAFOGLIO L1 — Breve Termine</h2>'
+                    f'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px">'
+                    f'<tr style="background:#00B050;color:white">'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:left">ETF</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Carico</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Perf</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">SL Sug.</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">SG Sug.</th>'
+                    f'</tr>'
+                    f'{"".join(l1_rows)}'
+                    f'</table>'
+                    f'<p style="margin:0;font-size:11px;color:#666">'
+                    f'<strong>Totale L1:</strong> €{l1_total_gain:+.2f} ({l1_total_pct:+.2f}%)</p>'
+                )
+
+            l0_section = ''
+            if l0_rows:
+                l0_section = (
+                    f'<h2 style="color:#E65100;margin:16px 0 8px">🟠 PORTAFOGLIO L0 — Medio/Lungo Termine</h2>'
+                    f'<p style="margin:0 0 8px;font-size:11px;color:#666">Posizioni in deep recovery con trailing stop progressivo.</p>'
+                    f'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+                    f'<tr style="background:#E65100;color:white">'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:left">ETF</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Carico</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Perf</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">SL Sug.</th>'
+                    f'</tr>'
+                    f'{"".join(l0_rows)}'
+                    f'</table>'
+                )
+
+            if not l1_rows and not l0_rows:
                 return True  # No valid positions
 
-            table_html = (
-                '<table style="width:100%;border-collapse:collapse;font-size:13px">'
-                '<tr style="background:#007bff;color:white">'
-                '<th style="padding:8px;border:1px solid #ddd;text-align:left">Ticker</th>'
-                '<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Acquisto</th>'
-                '<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Odierno</th>'
-                '<th style="padding:8px;border:1px solid #ddd;text-align:right">Gain/Loss %</th>'
-                '<th style="padding:8px;border:1px solid #ddd;text-align:right">SL Inserito</th>'
-                '<th style="padding:8px;border:1px solid #ddd;text-align:right">SL Consigliato</th>'
-                '</tr>'
-                f'{"".join(rows)}'
-                '</table>'
-            )
+            table_html = l1_section + l0_section
 
             today = datetime.now().strftime('%d/%m/%Y %H:%M')
-            subject = f'📊 Resoconto Portafoglio ETF — {today}'
+            subject = f'📊 Portafoglio L1/L0 — {datetime.now().strftime("%d/%m/%Y")}'
             ts = datetime.now().strftime('%d/%m/%Y %H:%M')
 
             body_html = (
                 f'<html><body style="{_BODY_STYLE}">'
-                f'<div style="background:#007bff;color:white;padding:20px;text-align:center">'
-                f'<h1 style="margin:0;font-size:18px">📊 RESOCONTO PORTAFOGLIO ETF</h1>'
-                f'<p style="margin:4px 0 0;font-size:13px">{today}</p></div>'
+                f'<div style="background:linear-gradient(135deg,#00B050,#E65100);color:white;padding:20px;text-align:center">'
+                f'<h1 style="margin:0;font-size:18px">📊 PORTAFOGLIO GIORNALIERO</h1>'
+                f'<p style="margin:4px 0 0;font-size:13px">ETF Monitor — {today}</p></div>'
                 f'<div style="padding:20px;background:white">'
                 f'{table_html}'
-                f'<p style="margin-top:20px;font-size:12px;color:#666">'
-                f'<strong>Legenda SL Consigliato:</strong><br>'
-                f'• Se in perdita: 98% di acquisto (protezione stretta)<br>'
-                f'• Se in profitto: max(98% acquisto, 95% corrente) = trailing stop intelligente<br>'
-                f'• SL sale con il prezzo, non scende mai</p>'
+                f'<hr style="border:none;border-top:1px solid #ccc;margin:20px 0">'
+                f'<p style="margin:12px 0;font-size:11px;color:#666">'
+                f'<strong>📌 Legenda:</strong><br>'
+                f'• <strong>SL Sug.</strong> = Stop Loss suggerito (formula ibrida L1: largo &lt;2%, stretto ≥2%)<br>'
+                f'• <strong>SG Sug.</strong> = Stop Gain suggerito (target dinamico, L1 only)<br>'
+                f'• <strong>⚠️</strong> = Performance &lt; -2% (attenzione)<br>'
+                f'• <strong>✓</strong> = In profitto<br>'
+                f'• <strong>◆</strong> = In perdita ma &gt; -2%</p>'
                 f'</div>'
                 f'{_FOOTER.format(ts=ts)}</body></html>'
             )
