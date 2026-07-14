@@ -728,6 +728,14 @@ class ETFMonitor:
             add_log(f"⚠️  Errore aggiornamento L1 suggerito: {e}")
             add_log(traceback.format_exc())
 
+        # STEP 7 — Aggiorna SL suggerito per portafoglio L0
+        try:
+            add_log("Aggiornamento SL suggerito L0...")
+            self._update_portfolio_l0_suggerito(results)
+        except Exception as e:
+            add_log(f"⚠️  Errore aggiornamento L0 suggerito: {e}")
+            add_log(traceback.format_exc())
+
         # Aggiorna stop loss suggerito per portafoglio (formula continua)
         try:
             self._update_portfolio_sl_suggested()
@@ -737,6 +745,123 @@ class ETFMonitor:
         add_log(f"Completato — {datetime.now().strftime('%H:%M')}")
         add_log("=" * 50)
 
+
+    def _update_portfolio_l0_suggerito(self, results: list):
+        """
+        STEP 7 — Aggiorna SL suggerito per posizioni L0 attive.
+
+        Per ogni entry in portafoglio L0:
+        1. Recupera dati di mercato (price, ema20, rsi, close_series)
+        2. Chiama calculate_sl_suggerito_l0() → SL trailing progressivo
+        3. Controlla regole exit con check_l0_exit()
+        4. Salva nel DB sl_suggerito e aggiorna contatori
+        """
+        try:
+            # Leggi tutte le entry L0 attive
+            query = """
+                SELECT id, isin, entry_date, entry_price, fund_name,
+                       days_no_recovery, stallo_counter
+                FROM etf_portfolio_entries
+                WHERE status = 'active' AND portafoglio = 'L0'
+            """
+            conn = self.db.get_connection()
+            if not conn:
+                add_log("  ⚠️  Nessuna connessione DB")
+                return
+
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(query)
+                    rows = cur.fetchall()
+            except Exception as e:
+                add_log(f"  ⚠️  Errore query portfolio L0: {e}")
+                conn.close()
+                return
+
+            if not rows:
+                add_log("  — Nessuna posizione L0 da aggiornare")
+                conn.close()
+                return
+
+            add_log(f"  Aggiornamento {len(rows)} posizioni L0...")
+
+            for entry_id, isin, entry_date_str, entry_price_str, fund_name, days_no_rec, stallo_cnt in rows:
+                try:
+                    entry_price = float(entry_price_str) if entry_price_str else None
+                    if not entry_price or entry_price <= 0:
+                        continue
+
+                    # Trova il risultato corrispondente per recuperare i dati di mercato
+                    result = None
+                    for r in results:
+                        if (r.get('isin') == isin or r.get('ticker') == isin):
+                            result = r
+                            break
+
+                    if not result or not result.get('analysis'):
+                        continue
+
+                    a = result['analysis']
+                    current_price = a.get('current_price')
+                    if not current_price:
+                        continue
+
+                    current_price = float(current_price)
+
+                    # Recupera famiglia per i parametri L0
+                    famiglia = ETFTechnicalAnalyzer.detect_family(fund_name or result.get('categoria', ''))
+                    analyzer = ETFTechnicalAnalyzer(famiglia=famiglia)
+
+                    # Dati di mercato per SL
+                    ema20 = a.get('ema20')
+
+                    # CALCOLA SL SUGGERITO — trailing progressivo
+                    sl_data = analyzer.calculate_sl_suggerito_l0(entry_price, current_price)
+                    sl_suggerito = sl_data.get('sl_suggerito')
+                    stage = sl_data.get('stage')
+
+                    # Aggiorna contatori
+                    rsi = a.get('rsi')
+                    profit_pct = (current_price - entry_price) / entry_price if entry_price > 0 else 0
+
+                    # Contatore stallo: se profit è tra -1% e +2%
+                    if -0.01 <= profit_pct <= 0.02:
+                        stallo_cnt = (stallo_cnt or 0) + 1
+                    else:
+                        stallo_cnt = 0
+
+                    # Contatore days_no_recovery: se price < EMA20
+                    if ema20 is not None and current_price < ema20:
+                        days_no_rec = (days_no_rec or 0) + 1
+                    else:
+                        days_no_rec = 0
+
+                    # SALVA NEL DB
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            UPDATE etf_portfolio_entries
+                            SET sl_suggerito = %s, days_no_recovery = %s,
+                                stallo_counter = %s, stop_loss_updated_at = now()
+                            WHERE id = %s
+                        """, (sl_suggerito, days_no_rec, stallo_cnt, entry_id))
+                        conn.commit()
+
+                    alert_msg = ''
+                    if stallo_cnt and stallo_cnt >= 20:
+                        alert_msg = f' ⚠️ STALLO {stallo_cnt}gg'
+                    elif days_no_rec and days_no_rec >= 40:
+                        alert_msg = f' ⏱️ TIMEOUT {days_no_rec}gg'
+
+                    add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ ({stage}){alert_msg}")
+
+                except Exception as e:
+                    add_log(f"    ⚠️  Errore L0 {isin}: {type(e).__name__}: {e}")
+                    continue
+
+            conn.close()
+
+        except Exception as e:
+            add_log(f"  ⚠️  Errore generale L0: {e}")
 
     def _update_portfolio_l1_suggerito(self, results: list):
         """
