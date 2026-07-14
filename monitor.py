@@ -133,7 +133,27 @@ class ETFMonitor:
             return self._empty_result(ticker, isin, nome, categoria, borsa, level,
                                       f'{type(e).__name__}: {e}')
 
-        return {
+        # STEP 9 — Detecta segnali L0 durante l'analisi
+        l0_entry_signal = {}
+        try:
+            if level != 0:  # Se non già in L0
+                close_series = hist['Close'] if 'Close' in hist else hist.iloc[:, 0]
+                rsi_14 = analysis.get('rsi')
+                ema_fast_period = 10  # default; potrebbe venire dalla famiglia
+
+                l0_check = analyzer.check_l0_entry(close_series, rsi_14, ema_fast_period)
+                if l0_check.get('l0_signal'):
+                    l0_entry_signal = {
+                        'l0_signal': True,
+                        'dd_from_high': l0_check.get('dd_from_high'),
+                        'rsi': l0_check.get('rsi_current'),
+                        'recovery': l0_check.get('recovery_pct'),
+                        'alert_only': l0_check.get('alert_only', True),
+                    }
+        except Exception as e:
+            add_log(f"    ⚠️  L0 check error: {e}")
+
+        result = {
             'ticker':    ticker,
             'isin':      isin,
             'nome':      nome,
@@ -142,7 +162,10 @@ class ETFMonitor:
             'livello':   level,
             'etf_type':  etf_type,
             'analysis':  analysis,
+            'l0_signal': l0_entry_signal,  # NUOVO
         }
+
+        return result
 
     def _empty_result(self, ticker, isin, nome, categoria, borsa, level, reason):
         famiglia = ETFTechnicalAnalyzer.detect_family(categoria)
@@ -736,6 +759,15 @@ class ETFMonitor:
             add_log(f"⚠️  Errore aggiornamento L0 suggerito: {e}")
             add_log(traceback.format_exc())
 
+        # STEP 9 — Prepara candidati L0 per email
+        try:
+            add_log("Raccolta candidati L0...")
+            l0_candidates = self._collect_l0_candidates(results)
+            if l0_candidates:
+                add_log(f"  Trovati {len(l0_candidates)} segnali L0 (alert-only)")
+        except Exception as e:
+            add_log(f"⚠️  Errore raccolta L0 candidati: {e}")
+
         # Aggiorna stop loss suggerito per portafoglio (formula continua)
         try:
             self._update_portfolio_sl_suggested()
@@ -745,6 +777,62 @@ class ETFMonitor:
         add_log(f"Completato — {datetime.now().strftime('%H:%M')}")
         add_log("=" * 50)
 
+
+    def _collect_l0_candidates(self, results: list) -> list:
+        """
+        STEP 9 — Raccoglie gli ETF con segnali L0 candidati (alert-only).
+
+        Riporta gli ETF che hanno segnali L0 validi ma non sono ancora
+        in portafoglio. Usato per suggerire nuovi ingressi L0.
+
+        Returns:
+            Lista di dict con candidati L0
+        """
+        l0_candidates = []
+
+        try:
+            # Leggi ETF già in L0 portafoglio
+            conn = self.db.get_connection()
+            if not conn:
+                return []
+
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT DISTINCT isin FROM etf_portfolio_entries
+                    WHERE portafoglio = 'L0' AND status = 'active'
+                """)
+                existing_l0 = {row[0] for row in cur.fetchall()}
+            conn.close()
+
+        except Exception as e:
+            add_log(f"  ⚠️  Errore lettura L0 esistenti: {e}")
+            existing_l0 = set()
+
+        # Filtra candidati L0 dai risultati dell'analisi
+        for result in results:
+            # Salta se già in L0 portafoglio
+            if result.get('isin') in existing_l0:
+                continue
+
+            l0_signal = result.get('l0_signal', {})
+            if not l0_signal.get('l0_signal'):
+                continue
+
+            # È un candidato L0
+            candidate = {
+                'ticker': result.get('ticker'),
+                'isin': result.get('isin'),
+                'nome': result.get('nome'),
+                'categoria': result.get('categoria'),
+                'price': result.get('analysis', {}).get('current_price'),
+                'dd_from_high': l0_signal.get('dd_from_high'),
+                'rsi': l0_signal.get('rsi'),
+                'recovery': l0_signal.get('recovery'),
+                'alert_only': l0_signal.get('alert_only', True),
+            }
+            l0_candidates.append(candidate)
+
+        return l0_candidates
 
     def _update_portfolio_l0_suggerito(self, results: list):
         """
