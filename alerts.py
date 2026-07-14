@@ -554,6 +554,11 @@ class AlertSystem:
                     f'</table>'
                 )
 
+            # ── SEZIONE CANDIDATI L0 (alert-only) ──────────────────────────────
+            # Nota: I candidati L0 verrebbero calcolati dal monitor durante l'analisi.
+            # Per ora mostriamo solo le posizioni L0 attive.
+            # Se vuoi aggiungere candidati L0, si leggerebbero da un table separato o cache JSON.
+
             if not l1_rows and not l0_rows:
                 return True  # No valid positions
 
