@@ -1008,6 +1008,14 @@ def get_parameters():
                 'trailing_base_pct': params.get('trailing_base_pct'),
                 'trailing_sensitivity': params.get('trailing_sensitivity'),
                 'trailing_min_pct': params.get('trailing_min_pct'),
+                # STEP 2 — L1 Hybrid SL + Dynamic SG
+                'sl_buffer_wide': params.get('sl_buffer_wide'),
+                'sg_target_pct': params.get('sg_target_pct'),
+                'sg_floor_pct': params.get('sg_floor_pct'),
+                'sg_decay_day': params.get('sg_decay_day'),
+                'sg_rsi_exit': params.get('sg_rsi_exit'),
+                # L0 Deep Recovery
+                'l0_entry': params.get('l0_entry', {}),
             }
 
         return jsonify({
