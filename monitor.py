@@ -377,6 +377,53 @@ class ETFMonitor:
             'etfs_no_price': sum(1 for r in results if r['analysis'].get('current_price') is None),
         }
 
+        # Includi portafoglio L1 dal DB nel dashboard
+        try:
+            conn = self.db.get_connection()
+            if conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT isin, fund_name FROM etf_portfolio_entries
+                        WHERE status = 'active' AND portafoglio = 'L1'
+                    """)
+                    portfolio_l1 = cur.fetchall()
+                conn.close()
+
+                for isin, fund_name in portfolio_l1:
+                    etf_data = None
+                    for r in results:
+                        if r.get('isin') == isin or r['ticker'] == isin:
+                            a = r['analysis']
+                            etf_data = {
+                                'ticker': r['ticker'],
+                                'isin': r.get('isin', ''),
+                                'nome': fund_name or r['nome'],
+                                'categoria': r['categoria'],
+                                'price': a.get('current_price'),
+                                'ema20': a.get('ema20'),
+                                'sma50': a.get('sma50'),
+                                'rsi': a.get('rsi'),
+                                'adx': a.get('adx'),
+                                'macd': a.get('macd_histogram'),
+                            }
+                            break
+
+                    if not etf_data:
+                        etf_data = {
+                            'ticker': isin,
+                            'isin': isin,
+                            'nome': fund_name,
+                            'categoria': '',
+                            'price': None,
+                        }
+
+                    if etf_data not in dashboard['levels'][1]:
+                        dashboard['levels'][1].append(etf_data)
+
+                dashboard['summary']['l1_count'] = len(dashboard['levels'][1])
+        except Exception as e:
+            add_log(f"⚠️  Errore portafoglio L1: {e}")
+
         os.makedirs('data', exist_ok=True)
         with open('data/dashboard_data.json', 'w') as f:
             json.dump(dashboard, f, indent=2, cls=SafeEncoder)
