@@ -173,11 +173,12 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"    ⚠️  L1 tiered check error: {e}")
 
-        # STEP 12 — Valuta ingresso L1 con logica accelerated (Gate 2/2 + Velocity 1+)
+        # STEP 12+ — Valuta ingresso L1 con logica accelerated (Gerarchia 2+2)
         try:
             market_data_accelerated = {
                 'close': analysis.get('current_price'),
                 'ema20': analysis.get('ema20'),
+                'sma50': analysis.get('sma50'),  # Nuovo: usato in parametro X della gerarchia
                 'macd_h': analysis.get('macd_histogram'),
                 'rsi_14': analysis.get('rsi'),
                 'rsi_14_prev': analysis.get('rsi_prev'),
@@ -188,7 +189,7 @@ class ETFMonitor:
             }
             l1_accelerated = analyzer.check_l1_entry_accelerated(market_data_accelerated)
             if l1_accelerated.get('should_enter'):
-                add_log(f"    🚀 L1 ACCELERATED ENTRY: gate 2/2 ✓ | velocity {l1_accelerated['velocity_count']}/4")
+                add_log(f"    ⚡ L1 GERARCHIA 2+2: gate A∧M ✓ | velocity {l1_accelerated['velocity_count']}/4 ✓ | {l1_accelerated['reason']}")
         except Exception as e:
             add_log(f"    ⚠️  L1 accelerated check error: {e}")
 
@@ -344,8 +345,16 @@ class ETFMonitor:
                 dashboard['summary'][level_key] += 1
 
             price = a.get('current_price')
-            # Valutazione tiered L1 (Gate + Quality + Size)
+            # Valutazione tiered e accelerated L1
             l1_tiered = r.get('l1_tiered', {})
+            l1_accelerated = r.get('l1_accelerated', {})
+
+            # Determina entry_mode (TIERED, ACCELERATED, NONE)
+            entry_mode = 'NONE'
+            if l1_accelerated.get('should_enter'):
+                entry_mode = 'ACCELERATED'
+            elif l1_tiered.get('should_enter'):
+                entry_mode = 'TIERED'
 
             etf_data = {
                 'ticker':            r['ticker'],
@@ -379,6 +388,13 @@ class ETFMonitor:
                 'l1_quality_score':  l1_tiered.get('quality_score', 0),
                 'l1_quality_detail': l1_tiered.get('quality_detail', {}),
                 'l1_tiered_reason':  l1_tiered.get('reason', ''),
+                # STEP 12+: Valutazione accelerated L1 (gerarchia 2+2)
+                'entry_mode':        entry_mode,
+                'l1_accelerated_entry': l1_accelerated.get('should_enter', False),
+                'l1_accelerated_confidence': l1_accelerated.get('confidence', 0.0),
+                'l1_velocity_count': l1_accelerated.get('velocity_count', 0),
+                'l1_velocity_detail': l1_accelerated.get('velocity_detail', {}),
+                'l1_accelerated_reason': l1_accelerated.get('reason', ''),
             }
 
             # entry_date e entry_price per ETF in L1 (serve per linea verticale grafico)
