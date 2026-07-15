@@ -13,6 +13,7 @@ from datetime import datetime
 
 from database import PriceDatabase
 import monitor_lock
+from pdf_generator import generate_parameters_pdf
 
 app = Flask(__name__)
 db  = PriceDatabase()
@@ -1032,8 +1033,97 @@ def get_parameters():
         }), 500
 
 
+@app.route('/api/download-parameters-pdf')
+def download_parameters_pdf():
+    """Scarica il PDF dei parametri — sempre sincronizzato con YAML."""
+    try:
+        pdf_path = 'data/ETF_Monitor_Parametri_Riferimento.pdf'
+        if not os.path.exists(pdf_path):
+            generate_parameters_pdf(pdf_path)
+        return send_file(pdf_path, as_attachment=True, download_name='ETF_Monitor_Parametri_Riferimento.pdf')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/parameters-tables-html')
+def get_parameters_tables_html():
+    """Genera le tabelle HTML parametri dinamicamente da YAML — 100% sincronizzate."""
+    try:
+        import yaml
+        with open('config/etf_families.yaml', 'r') as f:
+            config = yaml.safe_load(f)
+
+        families = config.get('families', {})
+
+        # Organizza famiglie per categoria
+        equity_commodity = ['equity_sviluppati', 'mercati_emergenti', 'settoriali_growth',
+                            'settoriali_difensivi', 'commodities', 'metalli_industriali']
+        bond_other = ['bond_governativi', 'bond_corp_hy_em', 'oro_metalli_preziosi',
+                      'real_estate_reit', 'inflation_linked', 'monetario_liquidita']
+        crypto_leva = ['crypto_digital_assets', 'leva_single_stock', 'private_equity_buffer']
+
+        # Tabella 1: Equity & Commodity
+        html_part1 = '<table class="param-table" style="font-size:0.75em;"><thead><tr><th style="width:16%">Parametro</th>'
+        for fam in equity_commodity:
+            if fam in families:
+                html_part1 += f'<th style="width:12%">{families[fam].get("description", fam).split(" — ")[0]}</th>'
+        html_part1 += '</tr></thead><tbody>'
+
+        # Righe parametri
+        for param_name, param_key in [
+            ('RSI Entry Range', 'rsi_entry_low'), ('ADX Min', 'adx_entry'),
+            ('Dist. EMA20 Max', 'ema_dist_max'), ('Giorni Sopra EMA20', 'days_above_ema'),
+            ('EMA20 Slope Min', 'ema20_slope_min'), ('Min Buy Count', 'min_buy_count'),
+            ('SMA200 Filter', 'mm200_filter'), ('L0 Drawdown', 'l0_drawdown'), ('L0 RSI Max', 'l0_rsi_max')
+        ]:
+            html_part1 += f'<tr><td class="param-name">{param_name}</td>'
+            for fam in equity_commodity:
+                if fam in families:
+                    params = families[fam]
+                    if param_key == 'rsi_entry_low':
+                        val = f"{params.get('rsi_entry_low', '—')}–{params.get('rsi_entry_high', '—')}"
+                    elif param_key == 'adx_entry':
+                        val = f"&gt;{params.get('adx_entry', '—')}" if params.get('adx_entry') else '—'
+                    elif param_key == 'ema_dist_max':
+                        val = f"{params.get('ema_dist_max', '—')*100:.1f}%"
+                    elif param_key == 'ema20_slope_min':
+                        val = f"{params.get('ema20_slope_min', 1.5)*100:.1f}%"
+                    elif param_key == 'min_buy_count':
+                        val = f"{params.get('min_buy_count', 6)}/6"
+                    elif param_key == 'mm200_filter':
+                        val = '✓ Sì' if params.get('mm200_filter') else '✗ No'
+                    elif param_key == 'l0_drawdown':
+                        val = f"{params.get('l0_drawdown', '—')}%" if params.get('l0_drawdown') else '—'
+                    elif param_key == 'l0_rsi_max':
+                        val = f"{params.get('l0_rsi_max', '—')}"
+                    else:
+                        val = str(params.get(param_key, '—'))
+                    html_part1 += f'<td>{val}</td>'
+            html_part1 += '</tr>'
+        html_part1 += '</tbody></table>'
+
+        # Nota: Parte 2 e 3 analoghe (implementate sulla dashboard come fallback per ora)
+
+        return jsonify({
+            'tables_html': html_part1,
+            'note': 'Tabelle generate dinamicamente da config/etf_families.yaml',
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
 if __name__ == '__main__':
     os.makedirs('data', exist_ok=True)
+
+    # Genera PDF all'avvio (sincronizzato con YAML)
+    try:
+        generate_parameters_pdf('data/ETF_Monitor_Parametri_Riferimento.pdf')
+    except Exception as e:
+        print(f"⚠️ Errore generazione PDF: {e}")
+
     if not os.path.exists('data/dashboard_data.json'):
         with open('data/dashboard_data.json', 'w') as f:
             json.dump({

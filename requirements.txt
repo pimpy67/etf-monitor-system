@@ -35,3 +35,6 @@ pyyaml>=6.0
 
 # Web scraping (Investing.com per ETF Directa locali)
 selenium>=4.0.0
+
+# PDF generation (parametri di riferimento)
+reportlab>=4.0.0

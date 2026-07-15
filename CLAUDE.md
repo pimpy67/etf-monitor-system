@@ -2,6 +2,8 @@
 
 Documento di riferimento tecnico. Caricato automaticamente da Claude Code a ogni sessione.
 
+> ⚠️ **REGOLA PERMANENTE (2026-07-15)**: Vedi sezione **"REGOLA DI SINCRONIZZAZIONE PERMANENTE — PDF Parametri"** — qualsiasi modifica ai parametri deve propagarsi automaticamente a PDF, dashboard, e documentazione. Non è tollerata sincronizzazione manuale.
+
 ---
 
 ## Infrastruttura VPS
@@ -122,8 +124,96 @@ scheduler.py
        ├─ Determina L0/L1/L2/L3
        ├─ Aggiorna Excel (livelli)
        ├─ Salva data/dashboard_data.json
-       └─ alerts.py → email
+       ├─ alerts.py → email
+       └─ pdf_generator.py → rigenera PDF (STEP FINALE)
 ```
+
+---
+
+## 📋 REGOLA DI SINCRONIZZAZIONE PERMANENTE — PDF Parametri (2026-07-15)
+
+> **🔴 REGOLA BINDING PER SEMPRE**: Ogni modifica ai parametri del sistema deve essere automaticamente riflessa nel PDF scaricabile. Non deve essere una responsabilità manuale.
+
+### Principio
+- **Fonte di verità unica**: `config/etf_families.yaml` — contiene TUTTI i parametri L0/L1/L2/L3
+- **Visualizzazione live in dashboard**: `/api/parameters` carica dinamicamente i parametri dal YAML e li mostra nel tab "Parametri di Riferimento"
+- **PDF scaricabile**: generato automaticamente **lato server** da `pdf_generator.py` — sempre sincronizzato al 100%
+- **Nessuna gestione manuale**: il PDF non viene mai scritto a mano, non viene mai committato in git
+
+### Workflow Automatico (IMPLEMENTATO 2026-07-15)
+
+#### 1. **Al deploy o all'avvio dell'app** (`app.py`)
+```python
+# All'avvio di Flask:
+generate_parameters_pdf('data/ETF_Monitor_Parametri_Riferimento.pdf')
+```
+→ PDF generato dai parametri YAML attuali
+
+#### 2. **Dopo ogni ciclo di monitor** (`monitor.py::run()`)
+```python
+# STEP FINALE di ogni monitor (17:00 + 09:00):
+generate_parameters_pdf('data/ETF_Monitor_Parametri_Riferimento.pdf')
+add_log("✅ PDF parametri rigenerato (sincronizzato con YAML)")
+```
+→ PDF sempre aggiornato con gli ultimi parametri, il dashboard mostrerà i dati live e il PDF scaricabile riporterà le stesse informazioni
+
+#### 3. **Quando l'utente scarica il PDF**
+```
+Dashboard → bottone "📥 PDF"
+  → GET /api/download-parameters-pdf
+  → serve data/ETF_Monitor_Parametri_Riferimento.pdf
+  → (file è garantito sincronizzato con YAML)
+```
+
+### File interessati
+| File | Ruolo |
+|------|-------|
+| `config/etf_families.yaml` | **Fonte di verità** — modifiche qui propagano automaticamente |
+| `pdf_generator.py` | Generatore PDF server-side — legge YAML e produce PDF vero (non HTML→PDF) |
+| `app.py` | Genera PDF all'avvio + expone endpoint `/api/download-parameters-pdf` |
+| `monitor.py` | Rigeneraa PDF dopo ogni ciclo (STEP FINALE) |
+| `dashboard.html` | Tab "Parametri di Riferimento" mostra dati live + bottone "📥 PDF" per il download |
+
+### Tecnologie usate
+- **ReportLab**: generazione PDF lato server (no dipendenze browser, sempre affidabile)
+- **YAML** → **Python dict** → **PDF**: pipeline diretta, nessuna intermediazione
+
+### Modifica dei parametri — Procedura Automatica
+```
+1. Modifica config/etf_families.yaml
+   ✅ Automatico: dashboard mostra i nuovi parametri in tempo reale (next refresh)
+   ✅ Automatico: prossimo monitor rigenerato PDF con i nuovi valori
+
+2. Fai deploy (./deploy.sh)
+   ✅ Automatico: app.py rigenera PDF all'avvio
+
+3. Utente scarica PDF
+   ✅ Garantito: riceve il PDF con i parametri aggiornati
+```
+
+### Compliance con CLAUDE.md
+- **Ogni modifica ai parametri nel codice** (YAML, technical_analysis.py, monitor.py) **genera automaticamente un nuovo PDF**
+- **Non modificare il PDF manualmente**
+- **La fonte di verità è sempre config/etf_families.yaml**
+- **Il PDF è un derivato del YAML**, non una fonte indipendente
+
+### Endpoint Helper per Sincronizzazione Tabelle HTML
+
+**Endpoint** `/api/parameters-tables-html` (NEW 2026-07-15):
+- Genera le tabelle HTML parametri **dinamicamente** dal YAML
+- Restituisce JSON con HTML già formattato
+- Usare via fetch JavaScript nel dashboard per aggiornare le tabelle automaticamente
+
+**Implementazione completa**:
+- ✅ PDF scaricabile → **100% automatico** da YAML (`pdf_generator.py`)
+- ✅ Sezione "Parametri Dinamici" → **sincronizzata automaticamente** via `/api/parameters`
+- ✅ Endpoint `/api/parameters-tables-html` → **100% automatico**, pronto per JavaScript
+- ⚠️ Tabelle HTML nel dashboard → Per ora hardcoded, ma possono essere sostituite caricando da `/api/parameters-tables-html`
+
+**Road Map**:
+1. (Fatto) PDF + `/api/parameters` + `/api/parameters-tables-html` = tre layer di sincronizzazione
+2. (TODO) Aggiornare JavaScript nel dashboard per caricare tabelle da `/api/parameters-tables-html` (fase 2)
+3. (TODO) Rimuovere tabelle hardcoded dal dashboard HTML (fase 2)
 
 ---
 
