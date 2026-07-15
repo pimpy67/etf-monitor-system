@@ -136,11 +136,11 @@ def generate_parameters_pdf(output_path='data/ETF_Monitor_Parametri_Riferimento.
 
         ema_slope = params.get('ema20_slope_min')
         if ema_slope is not None:
-            table_data.append(['EMA20 Slope Min', f'{ema_slope*100:.2f}%'])
+            table_data.append(['EMA20 Slope Min', f'{ema_slope:.2f}%'])  # Già percentuale nel YAML
 
         ema_dist = params.get('ema_dist_max')
         if ema_dist is not None:
-            table_data.append(['Dist EMA20 Max', f'{ema_dist*100:.1f}%'])
+            table_data.append(['Dist EMA20 Max', f'{ema_dist:.1f}%'])  # Già percentuale nel YAML
 
         # Parametri L0
         l0_dd = params.get('l0_drawdown')
