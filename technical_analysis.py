@@ -1096,6 +1096,57 @@ class ETFTechnicalAnalyzer:
             'trigger': trigger
         }
 
+    def calculate_stop_gain_dynamic(self, entry_price: float, current_price: float,
+                                    ema20_series: Optional[pd.Series],
+                                    family_params: Dict) -> Dict:
+        """
+        STEP 3 v3.0 — Stop Gain Dinamico basato sulla Pendenza (Slope) della EMA20
+
+        Anziché decadimento temporale, il target si contrae se la pendenza della EMA20 diminuisce,
+        catturando il momento esatto in cui il rally perde forza.
+
+        Formula:
+        current_target_pct = target_max_pct + (slope × slope_sensitivity)
+        final_target_pct = max(current_target_pct, target_floor_pct)
+        """
+        if 'l1_stop_gain_dynamic' not in family_params:
+            return {'trigger': False, 'target_pct': 0.0}
+
+        params = family_params['l1_stop_gain_dynamic']
+        target_max = params['target_max_pct']
+        target_floor = params['target_floor_pct']
+        slope_window = params['slope_window']
+        slope_sensitivity = params['slope_sensitivity']
+
+        # Calcolo guadagno attuale
+        current_gain_pct = (current_price - entry_price) / entry_price
+
+        # Calcolo slope della EMA20
+        slope_pct = 0.0
+        if ema20_series is not None and len(ema20_series) >= slope_window + 1:
+            ema20_today = float(ema20_series.iloc[-1])
+            ema20_past = float(ema20_series.iloc[-1 - slope_window])
+            slope_pct = (ema20_today - ema20_past) / ema20_past
+
+        # Formula dinamica: il target si abbassa se lo slope diminuisce
+        dynamic_target = target_max + (slope_pct * slope_sensitivity)
+        final_target_pct = max(dynamic_target, target_floor)
+
+        # Trigger di uscita
+        trigger = False
+        reason = None
+        if current_gain_pct >= final_target_pct:
+            trigger = True
+            reason = f"STOP_GAIN_DYNAMIC: Gain {current_gain_pct:.2%} >= Target {final_target_pct:.2%} (Slope: {slope_pct:.4f})"
+
+        return {
+            'trigger': trigger,
+            'target_pct': final_target_pct,
+            'current_gain_pct': current_gain_pct,
+            'slope_pct': slope_pct,
+            'reason': reason
+        }
+
     def check_position_add(self, position_data: Dict, current_quality: int) -> Dict:
         """
         Valuta se aggiungere capitale a una posizione L1 parziale.

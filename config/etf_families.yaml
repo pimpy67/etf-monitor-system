@@ -13,8 +13,6 @@ families:
     aum_min: 50
     days_above_ema: 5
     mm200_filter: true
-    l0_drawdown: 15.0
-    l0_rsi_max: 35
     min_buy_count: 5
     ema20_slope_min: 1.5
     sl_initial_pct: 0.05
@@ -38,6 +36,12 @@ families:
       rsi_max: 45
       lookback_high_days: 3
       recovery_min_pct: 0.015
+      ema_fast_period: 10
+    l1_stop_gain_dynamic:
+      target_max_pct: 0.05
+      target_floor_pct: 0.025
+      slope_window: 3
+      slope_sensitivity: 0.15
   mercati_emergenti:
     description: "Mercati emergenti \u2014 EM globale, Asia, LatAm, EMEA"
     rsi_entry_low: 40
@@ -51,8 +55,6 @@ families:
     aum_min: 50
     days_above_ema: 3
     mm200_filter: true
-    l0_drawdown: 20.0
-    l0_rsi_max: 38
     min_buy_count: 6
     ema20_slope_min: 1.0
     sl_initial_pct: 0.06
@@ -76,7 +78,13 @@ families:
       rsi_max: 42
       lookback_high_days: 3
       recovery_min_pct: 0.02
+      ema_fast_period: 10
     entry_mode: BOTH
+    l1_stop_gain_dynamic:
+      target_max_pct: 0.065
+      target_floor_pct: 0.03
+      slope_window: 3
+      slope_sensitivity: 0.12
   settoriali_growth:
     description: "Settoriali crescita \u2014 Tech, AI, Semi, Nasdaq, Digitale"
     rsi_entry_low: 48
@@ -90,8 +98,6 @@ families:
     aum_min: 50
     days_above_ema: 5
     mm200_filter: true
-    l0_drawdown: 18.0
-    l0_rsi_max: 38
     min_buy_count: 5
     ema20_slope_min: 1.0
     sl_initial_pct: 0.06
@@ -115,7 +121,13 @@ families:
       rsi_max: 42
       lookback_high_days: 2
       recovery_min_pct: 0.025
+      ema_fast_period: 8
     entry_mode: ACCELERATED
+    l1_stop_gain_dynamic:
+      target_max_pct: 0.07
+      target_floor_pct: 0.03
+      slope_window: 3
+      slope_sensitivity: 0.12
   settoriali_difensivi:
     description: "Settoriali difensivi \u2014 Salute, Utilities, Insurance, Food"
     rsi_entry_low: 42
@@ -129,8 +141,6 @@ families:
     aum_min: 50
     days_above_ema: 5
     mm200_filter: true
-    l0_drawdown: 15.0
-    l0_rsi_max: 35
     min_buy_count: 5
     ema20_slope_min: 0.4
     sl_initial_pct: 0.04
@@ -154,7 +164,13 @@ families:
       rsi_max: 48
       lookback_high_days: 3
       recovery_min_pct: 0.01
+      ema_fast_period: 10
     entry_mode: STANDARD
+    l1_stop_gain_dynamic:
+      target_max_pct: 0.03
+      target_floor_pct: 0.015
+      slope_window: 4
+      slope_sensitivity: 0.18
   bond_governativi:
     description: "Bond governativi EUR/USD \u2014 BTP, Bund, UST, Gov Euro, IL"
     rsi_entry_low: 38
@@ -168,8 +184,6 @@ families:
     aum_min: 100
     days_above_ema: 3
     mm200_filter: false
-    l0_drawdown: 8.0
-    l0_rsi_max: 38
     min_buy_count: 5
     ema20_slope_min: 0.15
     sl_initial_pct: 0.025
@@ -193,7 +207,13 @@ families:
       rsi_max: 42
       lookback_high_days: 5
       recovery_min_pct: 0.008
+      ema_fast_period: 15
     entry_mode: STANDARD
+    l1_stop_gain_dynamic:
+      target_max_pct: 0.025
+      target_floor_pct: 0.01
+      slope_window: 5
+      slope_sensitivity: 0.2
   bond_corp_hy_em:
     description: "Bond corporate / HY / EM \u2014 Corp EUR/USD, HY, EM bond"
     rsi_entry_low: 42
@@ -207,8 +227,6 @@ families:
     aum_min: 50
     days_above_ema: 3
     mm200_filter: false
-    l0_drawdown: 10.0
-    l0_rsi_max: 38
     min_buy_count: 5
     ema20_slope_min: 0.2
     sl_initial_pct: 0.03
@@ -232,7 +250,13 @@ families:
       rsi_max: 44
       lookback_high_days: 3
       recovery_min_pct: 0.012
+      ema_fast_period: 10
     entry_mode: STANDARD
+    l1_stop_gain_dynamic:
+      target_max_pct: 0.04
+      target_floor_pct: 0.015
+      slope_window: 4
+      slope_sensitivity: 0.18
   commodities:
     description: "Commodities broad \u2014 Bloomberg Comm, GSCI, Agri, Energia"
     rsi_entry_low: 40
@@ -246,8 +270,6 @@ families:
     aum_min: 50
     days_above_ema: 3
     mm200_filter: true
-    l0_drawdown: 20.0
-    l0_rsi_max: 40
     min_buy_count: 6
     ema20_slope_min: 0.5
     sl_initial_pct: 0.07
@@ -271,7 +293,13 @@ families:
       rsi_max: 40
       lookback_high_days: 3
       recovery_min_pct: 0.025
+      ema_fast_period: 10
     entry_mode: ACCELERATED
+    l1_stop_gain_dynamic:
+      target_max_pct: 0.06
+      target_floor_pct: 0.025
+      slope_window: 4
+      slope_sensitivity: 0.15
   oro_metalli_preziosi:
     description: "Oro e metalli preziosi \u2014 Oro, Argento, Platino, Basket PM"
     rsi_entry_low: 38
@@ -285,8 +313,6 @@ families:
     aum_min: 50
     days_above_ema: 3
     mm200_filter: true
-    l0_drawdown: 15.0
-    l0_rsi_max: 35
     min_buy_count: 5
     ema20_slope_min: 0.3
     sl_initial_pct: 0.05
@@ -310,7 +336,13 @@ families:
       rsi_max: 42
       lookback_high_days: 3
       recovery_min_pct: 0.02
+      ema_fast_period: 10
     entry_mode: BOTH
+    l1_stop_gain_dynamic:
+      target_max_pct: 0.055
+      target_floor_pct: 0.025
+      slope_window: 4
+      slope_sensitivity: 0.14
   metalli_industriali:
     description: "Metalli industriali \u2014 Rame, Alluminio, Zinco, Nichel, Battery"
     rsi_entry_low: 38
@@ -324,8 +356,6 @@ families:
     aum_min: 30
     days_above_ema: 3
     mm200_filter: true
-    l0_drawdown: 18.0
-    l0_rsi_max: 38
     min_buy_count: 5
     ema20_slope_min: 0.4
     sl_initial_pct: 0.06
@@ -349,7 +379,13 @@ families:
       rsi_max: 42
       lookback_high_days: 3
       recovery_min_pct: 0.02
+      ema_fast_period: 10
     entry_mode: ACCELERATED
+    l1_stop_gain_dynamic:
+      target_max_pct: 0.06
+      target_floor_pct: 0.025
+      slope_window: 3
+      slope_sensitivity: 0.13
   real_estate_reit:
     description: "Real Estate / REIT \u2014 EPRA Europe, NAREIT Global, REIT"
     rsi_entry_low: 42
@@ -363,8 +399,6 @@ families:
     aum_min: 50
     days_above_ema: 3
     mm200_filter: false
-    l0_drawdown: 12.0
-    l0_rsi_max: 38
     min_buy_count: 5
     ema20_slope_min: 0.25
     sl_initial_pct: 0.035
@@ -388,7 +422,13 @@ families:
       rsi_max: 44
       lookback_high_days: 3
       recovery_min_pct: 0.015
+      ema_fast_period: 12
     entry_mode: STANDARD
+    l1_stop_gain_dynamic:
+      target_max_pct: 0.04
+      target_floor_pct: 0.015
+      slope_window: 4
+      slope_sensitivity: 0.16
   crypto_digital_assets:
     description: "Crypto / asset digitali \u2014 Bitcoin, Ethereum, Solana, Basket"
     rsi_entry_low: 35
@@ -402,8 +442,6 @@ families:
     aum_min: 100
     days_above_ema: 3
     mm200_filter: true
-    l0_drawdown: 25.0
-    l0_rsi_max: 40
     min_buy_count: 5
     ema20_slope_min: 1.2
     sl_initial_pct: 0.12
@@ -427,7 +465,13 @@ families:
       rsi_max: 38
       lookback_high_days: 2
       recovery_min_pct: 0.05
+      ema_fast_period: 8
     entry_mode: ACCELERATED
+    l1_stop_gain_dynamic:
+      target_max_pct: 0.15
+      target_floor_pct: 0.05
+      slope_window: 3
+      slope_sensitivity: 0.08
   leva_single_stock:
     description: "Leva / single stock / struct \u2014 ETP 3x long/short su singoli\
       \ titoli"
@@ -442,8 +486,6 @@ families:
     aum_min: 50
     days_above_ema: 3
     mm200_filter: true
-    l0_drawdown: 20.0
-    l0_rsi_max: 40
     hold_days_max: 30
     min_buy_count: 5
     ema20_slope_min: 0.5
@@ -465,6 +507,11 @@ families:
     l0_entry:
       enabled: false
     entry_mode: ACCELERATED
+    l1_stop_gain_dynamic:
+      target_max_pct: 0.2
+      target_floor_pct: 0.08
+      slope_window: 2
+      slope_sensitivity: 0.1
   private_equity_buffer:
     description: "Private Equity / Buffer ETF \u2014 Listed PE, Buffer strategy"
     rsi_entry_low: 40
@@ -478,8 +525,6 @@ families:
     aum_min: 50
     days_above_ema: 3
     mm200_filter: false
-    l0_drawdown: 15.0
-    l0_rsi_max: 38
     min_buy_count: 5
     ema20_slope_min: 0.2
     sl_initial_pct: 0.035
@@ -503,7 +548,13 @@ families:
       rsi_max: 42
       lookback_high_days: 3
       recovery_min_pct: 0.015
+      ema_fast_period: 12
     entry_mode: STANDARD
+    l1_stop_gain_dynamic:
+      target_max_pct: 0.035
+      target_floor_pct: 0.015
+      slope_window: 4
+      slope_sensitivity: 0.17
   monetario_liquidita:
     description: "Monetario / liquidit\xE0 \u2014 ETF overnight, short-term"
     rsi_entry_low: null
@@ -517,8 +568,6 @@ families:
     aum_min: 100
     days_above_ema: 3
     mm200_filter: false
-    l0_drawdown: null
-    l0_rsi_max: null
     min_buy_count: 6
     ema20_slope_min: 0.0
     sl_initial_pct: 0.01
@@ -539,6 +588,11 @@ families:
     l0_entry:
       enabled: false
     entry_mode: STANDARD
+    l1_stop_gain_dynamic:
+      target_max_pct: 0.005
+      target_floor_pct: 0.002
+      slope_window: 5
+      slope_sensitivity: 0.25
 family_detection:
 - pattern:
   - monetario
