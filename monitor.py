@@ -497,6 +497,24 @@ class ETFMonitor:
                         'distance_from_peak': a.get('l0_data', {}).get('distance_from_peak'),
                     })
 
+                # Calcola e salva livello_display per tracking L0
+                if price:
+                    famiglia = ETFTechnicalAnalyzer.detect_family(r.get('categoria', ''))
+                    analyzer = ETFTechnicalAnalyzer(famiglia=famiglia)
+                    ema20 = a.get('ema20')
+                    close_series = a.get('close_series')
+
+                    livello_display = 'L0'
+                    if ema20 is not None and float(price) > ema20:
+                        livello_display = 'L2'
+                        if close_series is not None:
+                            sma50 = analyzer._sma(close_series.astype(float), 50)
+                            sma50_v = analyzer._fval(sma50)
+                            if sma50_v is not None and float(price) > sma50_v:
+                                livello_display = 'L1'
+
+                    self.db.update_l0_livello_display(isin, livello_display)
+
             # ── L1 tracking ──────────────────────────────────────────────────
             if suggested == 1:
                 current_l1_isins.add(isin)

@@ -706,13 +706,14 @@ class PriceDatabase:
             return {}
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("SELECT isin, entry_date, entry_price, panic_low FROM etf_l0_tracking")
+                cur.execute("SELECT isin, entry_date, entry_price, panic_low, livello_display FROM etf_l0_tracking")
                 rows = cur.fetchall()
                 return {
                     r['isin']: {
                         'entry_date':  r['entry_date'],
                         'entry_price': float(r['entry_price']),
                         'panic_low':   float(r['panic_low']) if r['panic_low'] else None,
+                        'livello_display': r.get('livello_display', 'L0'),
                     }
                     for r in rows
                 }
@@ -740,6 +741,26 @@ class PriceDatabase:
                 return True
         except Exception as e:
             logging.error(f"Errore set_l0_entry {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def update_l0_livello_display(self, isin: str, livello_display: str) -> bool:
+        """Aggiorna il livello tecnico display per una posizione L0."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE etf_l0_tracking
+                    SET livello_display = %s
+                    WHERE isin = %s
+                """, (livello_display, isin))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore update_l0_livello_display {isin}: {e}")
             return False
         finally:
             conn.close()

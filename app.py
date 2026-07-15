@@ -607,14 +607,15 @@ def l0_tracking_api():
             pct_gain = round((current_price - float(entry_price)) / float(entry_price) * 100, 2)
 
         result.append({
-            'isin':          isin,
-            'fund_name':     fund_names.get(isin, isin),
-            'entry_date':    ed.isoformat(),
-            'entry_price':   float(entry_price),
-            'panic_low':     float(panic_low) if panic_low else None,
-            'current_price': current_price,
-            'pct_gain':      pct_gain,
-            'days_in_l0':    days_in_l0,
+            'isin':             isin,
+            'fund_name':        fund_names.get(isin, isin),
+            'entry_date':       ed.isoformat(),
+            'entry_price':      float(entry_price),
+            'panic_low':        float(panic_low) if panic_low else None,
+            'current_price':    current_price,
+            'pct_gain':         pct_gain,
+            'days_in_l0':       days_in_l0,
+            'livello_display':  entry.get('livello_display', 'L0'),
         })
 
     return jsonify({'tracking': result})
