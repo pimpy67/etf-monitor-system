@@ -708,10 +708,6 @@ class ETFTechnicalAnalyzer:
                 # E — ADX debole + prezzo sotto EMA20 (solo equity/commodity)
                 exit_rule = f'Regola E — ADX debole: {adx_val:.0f} < 18 e prezzo < EMA20'
 
-            elif rsi_val is not None and rsi_val > p['rsi_overbought']:
-                # D — Eccesso RSI: uscita parziale 90% (piede dentro)
-                partial_exit = True
-
         # ── 6 condizioni L1 ───────────────────────────────────────────────────
         # Determina regime a 3 stati
         lateral_band = p.get('lateral_band', 0.01)

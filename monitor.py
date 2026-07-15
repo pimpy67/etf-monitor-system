@@ -514,10 +514,7 @@ class ETFMonitor:
 
                     signal_type   = None
                     signal_detail = None
-                    if rsi >= 78:
-                        signal_type   = 'piede_dentro'
-                        signal_detail = f'RSI attuale: {rsi:.1f} (soglia Piede Dentro: 78). Valuta XEON.'
-                    elif rsi >= 72:
+                    if rsi >= 72:
                         signal_type   = 'stanchezza'
                         signal_detail = f'RSI attuale: {rsi:.1f} — zona di stanchezza in arrivo'
                     elif bc <= 4 and days_in_l1 > 5:
