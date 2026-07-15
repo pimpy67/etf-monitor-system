@@ -337,7 +337,7 @@ class ETFMonitor:
 
         for r in results:
             a         = r['analysis']
-            suggested = a.get('suggested_level', r['livello'])
+            suggested = int(a.get('suggested_level', r['livello']))  # Forza intero
             category  = r['categoria']
 
             level_key = f'l{suggested}_count'
