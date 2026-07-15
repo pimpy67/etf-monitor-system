@@ -219,15 +219,40 @@ Dashboard → bottone "📥 PDF"
 
 ## Schema Livelli ETF
 
-### L1 — Core Portfolio — 6 condizioni TUTTE obbligatorie
-| # | Condizione | Logica |
-|---|-----------|--------|
-| 1 | Allineamento | price > EMA20 > SMA50 (+ price > SMA200 se mm200_filter=True) |
-| 2 | Persistenza | days_above_EMA20 ≥ 3 AND slope(EMA20) > 0 |
-| 3 | RSI ottimale | rsi_entry_low ≤ RSI ≤ rsi_entry_high (per tipo ETF) |
-| 4 | Distanza EMA20 | 0% ≤ dist_EMA20 ≤ ema_dist_max |
-| 5 | ADX | ADX ≥ adx_entry |
-| 6 | MACD momentum | macd_h > 0 AND (macd_h > macd_h_prev OR dist_EMA20 < 2.0%) |
+### L1 — Core Portfolio — GERARCHIA 2+2 INTELLIGENTE (2026-07-15)
+
+> **NOTA**: La vecchia logica "6 condizioni tutte obbligatorie" è stata **SOSTITUITA** dalla **gerarchia 2+2** che consente entry più veloci.
+
+#### **GATE STRUTTURALE** — 2/2 OBBLIGATORI (non negoziabili)
+| Parametro | Condizione | Significato |
+|-----------|-----------|-------------|
+| **A** | `price > EMA20` | Il prezzo è sopra la media veloce — il rally è attivo |
+| **M** | `MACD_histogram > 0` | Il volume sta spingendo al rialzo — momentum positivo |
+
+**Regola**: Se **A ∧ M** sono entrambi FALSE → **BLOCCO TOTALE**, nessun ingresso possibile.
+
+#### **VELOCITÀ FLESSIBILE** — Almeno 2 su 4 RICHIESTI
+| Parametro | Condizione | Significato |
+|-----------|-----------|-------------|
+| **P** | `price > SMA50` | Allineamento confermato con media media |
+| **R** | `rsi_entry_low ≤ RSI ≤ rsi_entry_high` | RSI in range ottimale per famiglia |
+| **D** | `ADX ≥ adx_min_threshold` | Forza direzionale confermata |
+| **X** | `EMA20 > SMA50` | Allineamento bifase in accelerazione |
+
+**Regola**: Conteggia quanti tra {P, R, D, X} sono TRUE. Se **count ≥ 2** → INGRESSO AUTORIZZATO.
+
+#### **CONFIDENCE MAPPING**
+```
+Gate 2/2 ✓  +  Velocity 2/4  →  60% confidence (size 60% allocation)
+Gate 2/2 ✓  +  Velocity 3/4  →  80% confidence (size 80% allocation)
+Gate 2/2 ✓  +  Velocity 4/4  →  100% confidence (size 100% allocation)
+```
+
+#### **VANTAGGI vs VECCHIO 6/6**
+| Aspetto | Vecchio 6/6 | Nuovo 2+2 |
+|---------|:---:|:---:|
+| Entry timing | Day 5-7 | Day 1 |
+| Profit captured | +2-3% (coda) | +4-6% (intero move) |
 
 ### Uscita L1 — 6 Regole
 | Pri | Regola | Trigger |
@@ -239,67 +264,46 @@ Dashboard → bottone "📥 PDF"
 | 5 | E ADX debole | ADX < 18 AND prezzo < EMA20 |
 | 6 | D Uscita Parziale | RSI > 78 → vendi 90%, mantieni 10% + acquista XEON |
 
-### Profili parametri FAMIGLIE ETF — 14 Classi (aggiornato 2026-07-14)
+### Profili parametri FAMIGLIE ETF — 15 Classi (aggiornato 2026-07-16)
 
-> **FONTE AUTOREVOLE**: `config/etf_families.yaml` — questa tabella è sincronizzata al YAML. Qualsiasi modifica ai parametri DEVE essere applicata contemporaneamente qui.
+> **FONTE AUTOREVOLE**: `config/etf_families.yaml` — **NON modificare manualmente, leggere solo dal YAML**
 
-| Famiglia | RSI entry | ADX | days_ema | min_buy | ema_dist_max | l0_dd % | sl_buffer | sg_target | sg_floor | sg_decay | sg_rsi |
-|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **equity_sviluppati** | 45–55 | 22 | 5 | 5 | 4.0% | 15% | 2.0% | 4.0% | 2.0% | 0.002 | 65 |
-| **mercati_emergenti** | 40–52 | 22 | 3 | 6 | 5.0% | 20% | 2.5% | 5.0% | 2.5% | 0.002 | 65 |
-| **settoriali_growth** | 48–58 | 25 | 5 | 5 | 5.0% | 18% | 3.0% | 7.0% | 3.5% | 0.002 | 65 |
-| **settoriali_difensivi** | 42–50 | 18 | 5 | 5 | 2.5% | 15% | 1.5% | 3.0% | 1.5% | 0.002 | 65 |
-| **bond_governativi** | 38–48 | 12 | 3 | 5 | 1.5% | 8% | 1.0% | 2.0% | 1.0% | 0.001 | 65 |
-| **bond_corp_hy_em** | 42–52 | 15 | 3 | 5 | 2.0% | 10% | 1.5% | 3.0% | 1.5% | 0.001 | 65 |
-| **commodities** | 40–55 | 22 | 3 | 6 | 3.0% | 20% | 3.0% | 6.0% | 3.0% | 0.002 | 65 |
-| **oro_metalli_preziosi** | 38–52 | 18 | 3 | 5 | 2.5% | 15% | 2.5% | 5.0% | 2.5% | 0.002 | 65 |
-| **metalli_industriali** | 38–50 | 20 | 3 | 5 | 3.0% | 18% | 2.5% | 5.0% | 2.5% | 0.002 | 65 |
-| **real_estate_reit** | 42–52 | 15 | 3 | 5 | 2.0% | 12% | 2.0% | 4.0% | 2.0% | 0.001 | 65 |
-| **crypto_digital_assets** | 35–52 | 28 | 3 | 5 | 6.0% | 25% | 5.0% | 12.0% | 6.0% | 0.003 | 65 |
-| **leva_single_stock** | 45–58 | 28 | 3 | 5 | 4.0% | 20% | 4.0% | 15.0% | 7.5% | 0.003 | 65 |
-| **private_equity_buffer** | 40–55 | 15 | 3 | 5 | 2.5% | 15% | 1.5% | 3.0% | 1.5% | 0.001 | 65 |
-| **monetario_liquidita** | n/a | n/a | 3 | 6 | 0.5% | n/a | 0.5% | 0.5% | 0.2% | 0.0 | 97 |
+#### TABELLA PARAMETRI VELOCITÀ GERARCHIA 2+2
+Questi parametri sono usati per valutare le 4 condizioni di Velocity (P, R, D, X):
 
-**Legenda colonne**:
-- **RSI entry**: range RSI per triggering L1
-- **ADX**: soglia ADX minima per L1 (null = non applicabile)
-- **days_ema**: giorni consecutivi sopra EMA20 richiesti
-- **min_buy**: numero minimo condizioni 6/6 da soddisfare (non usato, sempre 6)
-- **ema_dist_max**: distanza massima da EMA20 in percentuale
-- **l0_dd %**: drawdown minimo per attivare L0 (null = no L0)
-- **sl_buffer**: distanza buffer stop-loss iniziale (STEP 2 — ibrido)
-- **sg_target**: stop-gain target (STEP 2)
-- **sg_floor**: stop-gain floor minimo (STEP 2)
-- **sg_decay**: decadimento giornaliero SG (STEP 2)
-- **sg_rsi**: RSI exit per stop-gain (STEP 2)
+| Famiglia | RSI Range | ADX Min | ema_dist_max | l0_enabled |
+|----------|:---:|:---:|:---:|:---:|
+| **equity_sviluppati** | 45–55 | 22 | 4.0% | ✓ |
+| **mercati_emergenti** | 40–52 | 22 | 5.0% | ✓ |
+| **settoriali_growth** | 48–58 | 25 | 5.0% | ✓ |
+| **settoriali_difensivi** | 42–50 | 18 | 2.5% | ✓ |
+| **bond_governativi** | 38–48 | 12 | 1.5% | ✓ |
+| **bond_corp_hy_em** | 42–52 | 15 | 2.0% | ✓ |
+| **commodities** | 40–55 | 22 | 3.0% | ✓ |
+| **oro_metalli_preziosi** | 38–52 | 18 | 2.5% | ✓ |
+| **metalli_industriali** | 38–50 | 20 | 3.0% | ✓ |
+| **real_estate_reit** | 42–52 | 15 | 2.0% | ✓ |
+| **crypto_digital_assets** | 35–52 | 28 | 6.0% | ✓ |
+| **leva_single_stock** | 45–58 | 28 | 4.0% | ✗ |
+| **private_equity_buffer** | 40–55 | 15 | 2.5% | ✓ |
+| **monetario_liquidita** | n/a | n/a | 0.5% | ✗ |
 
-### Struttura L0 Entry — Parametri per famiglia (Nuovi 2026-07-14)
+**Legenda**:
+- **RSI Range**: Range per condizione R (Velocity) — per rilevare ipercomprato/ipervenduto
+- **ADX Min**: Soglia per condizione D (Velocity) — forza direzionale minima
+- **ema_dist_max**: Distanza massima da EMA20 in % (filtro velocità P)
+- **l0_enabled**: Se ✗, L0 è disabilitato per questa famiglia (leva, monetario)
 
-Ogni famiglia ETF ha parametri specifici per triggerare l'entrata in L0 (deep recovery):
+**Nota**: I parametri completi (stop loss, trailing, stop gain, L0 drawdown) sono in `config/etf_families.yaml` e auto-sincronizzati nel PDF via `pdf_generator.py`
 
-| Famiglia | enabled | dd_threshold | rsi_max | lookback_days | recovery_min % | Note |
-|----------|:---:|:---:|:---:|:---:|:---:|------|
-| **equity_sviluppati** | ✓ | 6.5% | 45 | 3 | 1.5% | Deep value — trigger conservativo |
-| **mercati_emergenti** | ✓ | 8.5% | 42 | 3 | 2.0% | Volatilità moderata |
-| **settoriali_growth** | ✓ | 10.0% | 42 | 2 | 2.5% | Tech/AI — drawdown ampio |
-| **settoriali_difensivi** | ✓ | 5.0% | 48 | 3 | 1.0% | Defensive — trigger stretto |
-| **bond_governativi** | ✓ | 4.0% | 42 | 5 | 0.8% | Gov bonds — protezione massima |
-| **bond_corp_hy_em** | ✓ | 5.5% | 44 | 3 | 1.2% | Corp bonds — moderato |
-| **commodities** | ✓ | 10.0% | 40 | 3 | 2.5% | Commodity — drawdown ampio |
-| **oro_metalli_preziosi** | ✓ | 8.0% | 42 | 3 | 2.0% | PM — volatilità commodity |
-| **metalli_industriali** | ✓ | 8.0% | 42 | 3 | 2.0% | Battery metals — moderato |
-| **real_estate_reit** | ✓ | 7.0% | 44 | 3 | 1.5% | REIT — dividend safe |
-| **crypto_digital_assets** | ✓ | 25.0% | 38 | 2 | 5.0% | Crypto — drawdown estremo |
-| **leva_single_stock** | ✗ | n/a | n/a | n/a | n/a | Disabilitato — troppo rischioso per deep recovery |
-| **private_equity_buffer** | ✓ | 7.0% | 42 | 3 | 1.5% | Listed PE — conservative |
-| **monetario_liquidita** | ✗ | n/a | n/a | n/a | n/a | Disabilitato — no logica recovery |
+### L0 — Deep Recovery (indipendente da gerarchia 2+2)
 
-**Legenda L0 entry**:
-- **enabled**: se true, l'ETF è candidato per L0; false disabilita completamente
-- **dd_threshold**: drawdown minimo (% sotto picco storico) per attivare L0
-- **rsi_max**: soglia RSI massima per ipervenduto (triggering L0)
-- **lookback_days**: giorni di lookback per verificare il divergenza rialzista
-- **recovery_min %**: minimo recupero richiesto per confermare ingresso L0
+**Parametri L0** (per famiglia in `config/etf_families.yaml`):
+- `l0_entry.enabled`: se true, la famiglia è candidata per L0
+- `l0_entry.dd_threshold`: drawdown minimo (% sotto picco storico)
+- `l0_entry.rsi_max`: RSI max per ipervenduto
+- `l0_entry.lookback_high_days`: giorni per divergenza rialzista
+- `l0_entry.recovery_min_pct`: minimo recupero richiesto
 
 **Entrata L0** — tutte 4 condizioni obbligatorie:
 1. Prezzo almeno `dd_threshold`% sotto il picco (vedi tabella)
@@ -411,6 +415,30 @@ Alla entry di una posizione L1, il stop loss iniziale segue una **logica ibrida*
 
 ---
 
+## EMAIL GIORNALIERA (19:30 CEST)
+
+**Struttura** (separazione Portafoglio vs Nuovi Segnali):
+
+```
+📊 ETF Monitor | Portafoglio Giornaliero | DD/MM/AAAA
+
+── PORTAFOGLIO L1 (In Posizione) ──────────────────
+[Tabella: ETF in portafoglio, entry_price, current_price, perf%, entry_mode]
+
+── NUOVI SEGNALI L1 (Valuta Acquisto) ─────────────
+[Tabella: ETF con gerarchia 2+2, gate A∧M, velocity, size confidence]
+
+── L0 DEEP RECOVERY (In Posizione) ────────────────
+[Elenco ETF con drawdown, RSI, giorni dalla entry]
+```
+
+**entry_mode** (per ogni posizione):
+- `ACCELERATED`: gerarchia 2+2 (gate 2/2 + velocity 2-4/4)
+- `TIERED`: logica precedente (solo riferimento, deprecated)
+- `NONE`: non eligibile
+
+---
+
 ## Note operative
 
 - `docker compose` (senza trattino) su Ubuntu 24.04
@@ -418,4 +446,4 @@ Alla entry di una posizione L1, il stop loss iniziale segue una **logica ibrida*
 - Il monitor modifica `etf_monitoraggio.xlsx` in-place → `git reset --hard` lo sovrascrive → il `deploy.sh` gestisce il backup automatico
 - Ticker Yahoo Finance: formato `SWDA.L`, `ENRJ.PA`, `XEON.DE` ecc.
 - Per trovare ticker dato ISIN: `https://query1.finance.yahoo.com/v1/finance/search?q={ISIN}`
-- **214 ETF monitorati** (aggiornato 22/05/2026)
+- **240 ETF monitorati** (aggiornato 2026-07-15)
