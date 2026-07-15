@@ -49,13 +49,13 @@ def generate_parameters_pdf(output_path='data/ETF_Monitor_Parametri_Riferimento.
         rightMargin=12*mm
     )
 
-    # Stili
+    # Stili — Tema LIGHT (stampa senza sprecare inchiostro)
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
         fontSize=18,
-        textColor=colors.HexColor('#58a6ff'),
+        textColor=colors.HexColor('#000000'),
         spaceAfter=10,
         fontName='Helvetica-Bold'
     )
@@ -64,18 +64,18 @@ def generate_parameters_pdf(output_path='data/ETF_Monitor_Parametri_Riferimento.
         'FamilyHeading',
         parent=styles['Heading2'],
         fontSize=11,
-        textColor=colors.HexColor('#58a6ff'),
+        textColor=colors.HexColor('#1a5490'),
         spaceAfter=8,
         fontName='Helvetica-Bold',
         borderPadding=6,
-        backColor=colors.HexColor('#0d1117')
+        backColor=colors.HexColor('#f0f4f8')
     )
 
     body_style = ParagraphStyle(
         'CustomBody',
         parent=styles['BodyText'],
         fontSize=9,
-        textColor=colors.HexColor('#c9d1d9'),
+        textColor=colors.HexColor('#000000'),
         leading=12
     )
 
@@ -83,7 +83,7 @@ def generate_parameters_pdf(output_path='data/ETF_Monitor_Parametri_Riferimento.
         'Small',
         parent=styles['BodyText'],
         fontSize=8,
-        textColor=colors.HexColor('#8b949e'),
+        textColor=colors.HexColor('#444444'),
         leading=10
     )
 
@@ -174,19 +174,19 @@ def generate_parameters_pdf(output_path='data/ETF_Monitor_Parametri_Riferimento.
         if sg_target is not None:
             table_data.append(['Stop-Gain Target', f'{sg_target*100:.1f}%'])
 
-        # Crea tabella
+        # Crea tabella — Tema LIGHT (stampa)
         table = Table(table_data, colWidths=[80*mm, 50*mm])
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#161b22')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#58a6ff')),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8eef7')),  # Grigio-blu chiarissimo
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1a5490')),    # Blu scuro
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#30363d')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#0d1117'), colors.HexColor('#161b22')]),
-            ('TEXTCOLOR', (0, 1), (-1, -1), colors.HexColor('#c9d1d9')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d0d8e8')),   # Grigio-blu leggero
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#ffffff'), colors.HexColor('#f5f8fc')]),  # Bianco e grigio chiarissimo
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.HexColor('#000000')),   # Nero
         ]))
 
         story.append(table)
