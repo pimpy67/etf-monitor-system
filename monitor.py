@@ -154,6 +154,22 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"    ⚠️  L0 check error: {e}")
 
+        # STEP 10 — Valuta ingresso L1 con logica tiered (Gate + Quality + Size)
+        l1_tiered = {}
+        try:
+            market_data_tiered = {
+                'price': analysis.get('current_price'),
+                'ema20': analysis.get('ema20'),
+                'sma50': analysis.get('sma50'),
+                'rsi': analysis.get('rsi'),
+                'adx': analysis.get('adx'),
+                'macd_h': analysis.get('macd_histogram'),
+                'dist_ema20': analysis.get('dist_ema20', 0.0),  # già in percentuale
+            }
+            l1_tiered = analyzer.check_l1_entry_tiered(market_data_tiered)
+        except Exception as e:
+            add_log(f"    ⚠️  L1 tiered check error: {e}")
+
         result = {
             'ticker':    ticker,
             'isin':      isin,
@@ -163,7 +179,8 @@ class ETFMonitor:
             'livello':   level,
             'etf_type':  etf_type,
             'analysis':  analysis,
-            'l0_signal': l0_entry_signal,  # NUOVO
+            'l0_signal': l0_entry_signal,  # NOVO
+            'l1_tiered': l1_tiered,  # NUOVO: valutazione tiered Gate + Quality + Size
         }
 
         return result
@@ -304,6 +321,9 @@ class ETFMonitor:
                 dashboard['summary'][level_key] += 1
 
             price = a.get('current_price')
+            # Valutazione tiered L1 (Gate + Quality + Size)
+            l1_tiered = r.get('l1_tiered', {})
+
             etf_data = {
                 'ticker':            r['ticker'],
                 'isin':              r.get('isin', ''),
@@ -330,6 +350,12 @@ class ETFMonitor:
                 'drawdown_from_peak': a.get('drawdown_from_peak', 0.0),
                 'l0_entry':          a.get('l0_entry', False),
                 'data_status':       a.get('data_status', 'ok'),
+                # STEP 10: Valutazione tiered L1
+                'l1_tiered_entry':   l1_tiered.get('should_enter', False),
+                'l1_confidence':     l1_tiered.get('confidence', 0.0),
+                'l1_quality_score':  l1_tiered.get('quality_score', 0),
+                'l1_quality_detail': l1_tiered.get('quality_detail', {}),
+                'l1_tiered_reason':  l1_tiered.get('reason', ''),
             }
 
             # entry_date e entry_price per ETF in L1 (serve per linea verticale grafico)

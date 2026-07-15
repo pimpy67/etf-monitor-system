@@ -1096,6 +1096,95 @@ class ETFTechnicalAnalyzer:
             'trigger': trigger
         }
 
+    def check_l1_entry_tiered(self, market_data: Dict) -> Dict:
+        """
+        SCELTA CONFERMATA (v5): Opzione 3 — Gate obbligatorio + Quality flessibile + Size dinamica.
+
+        Gate strutturale (obbligatorio 2/2):
+          1. price > EMA20
+          2. EMA20 > SMA50 (regime BULL)
+
+        Quality score (flessibile min 2/4):
+          Q_R: RSI nel range famiglia
+          Q_D: ADX >= 80% della soglia (con tolleranza)
+          Q_M: MACD > 0 (momentum positivo)
+          Q_P: Distanza EMA20 in range 0-2% (vicino alla media, non ai picchi)
+
+        Size (confidenza dinamica):
+          2/4 → 50% → posizione piccola
+          3/4 → 75% → posizione media
+          4/4 → 100% → posizione piena
+
+        Args:
+            market_data: Dict con 'price', 'ema20', 'sma50', 'rsi', 'adx', 'macd_h', 'dist_ema20'
+
+        Returns:
+            Dict con 'should_enter', 'confidence', 'gate_ok', 'quality_score', 'quality_detail', 'reason'
+        """
+        price = market_data.get('price', 0)
+        ema20 = market_data.get('ema20')
+        sma50 = market_data.get('sma50')
+        rsi = market_data.get('rsi')
+        adx = market_data.get('adx')
+        macd_h = market_data.get('macd_h')
+        dist_ema20 = market_data.get('dist_ema20', 0.0)  # in percentuale
+
+        # ── GATE STRUTTURALE (obbligatorio 2/2) ────────────────────────────────
+        gate_a = ema20 is not None and price > ema20
+        gate_b = ema20 is not None and sma50 is not None and ema20 > sma50
+        gate_ok = gate_a and gate_b
+
+        if not gate_ok:
+            return {
+                'should_enter': False,
+                'confidence': 0.0,
+                'gate_ok': False,
+                'quality_score': 0,
+                'quality_detail': {},
+                'reason': 'Gate KO — prezzo <= EMA20 oppure EMA20 <= SMA50',
+            }
+
+        # ── QUALITY SCORE (flessibile min 2/4) ─────────────────────────────────
+        rsi_low = self.p.get('rsi_entry_low', 45)
+        rsi_high = self.p.get('rsi_entry_high', 70)
+        adx_min = self.p.get('adx_entry', 18)
+
+        q_r = rsi is not None and rsi_low <= rsi <= rsi_high
+        q_d = adx is not None and adx >= (adx_min * 0.80)  # tolleranza -20%
+        q_m = macd_h is not None and macd_h > 0
+        q_p = 0.0 <= dist_ema20 <= 2.0  # vicino alla media (max 2%)
+
+        quality_score = int(q_r) + int(q_d) + int(q_m) + int(q_p)
+        quality_detail = {
+            'Q_R_rsi': q_r,
+            'Q_D_adx': q_d,
+            'Q_M_macd': q_m,
+            'Q_P_dist': q_p,
+        }
+
+        if quality_score < 2:
+            return {
+                'should_enter': False,
+                'confidence': 0.0,
+                'gate_ok': True,
+                'quality_score': quality_score,
+                'quality_detail': quality_detail,
+                'reason': f'Quality {quality_score}/4 — minimo 2 richiesto',
+            }
+
+        # ── SIZE DA CONFIDENZA ──────────────────────────────────────────────────
+        confidence_map = {2: 0.50, 3: 0.75, 4: 1.00}
+        confidence = confidence_map.get(quality_score, 1.00)
+
+        return {
+            'should_enter': True,
+            'confidence': confidence,
+            'gate_ok': True,
+            'quality_score': quality_score,
+            'quality_detail': quality_detail,
+            'reason': f'Ingresso L1 tiered — quality {quality_score}/4 — size {int(confidence*100)}%',
+        }
+
     def check_l1_exit(self, market_data: Dict, position_data: Dict) -> Dict:
         """
         Controlla regole di uscita per posizioni L1.
