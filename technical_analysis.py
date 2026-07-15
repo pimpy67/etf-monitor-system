@@ -1300,49 +1300,48 @@ class ETFTechnicalAnalyzer:
 
     def check_l1_entry_accelerated(self, market_data: Dict) -> Dict:
         """
-        STEP 12 — Trigger di Accelerazione (v6)
+        STEP 12+ — Trigger Gerarchico 2+2 (v7 — GERARCHIA INTELLIGENTE)
 
-        Anticipa ingresso L1 per catturare il primo movimento del rally.
+        Anticipa ingresso L1 con struttura logica gerarchica per qualità superiore.
 
-        GATE STRUTTURALE (2/2 obbligatori — non negoziabili):
-          1. price > EMA20 (rally di breve è attivo)
-          2. MACD > 0 (spinta volumetrica appena ripartita)
+        GATE STRUTTURALE — 2/2 OBBLIGATORI (non negoziabili):
+          A (Allineamento): price > EMA20 (rally di breve è attivo)
+          M (MACD Momentum): MACD > 0 (spinta volumetrica appena ripartita)
 
-        VELOCITÀ (basta 1/4 — condizioni di conferma):
-          1. Persistenza ≥ 1gg sopra EMA20 (non 3-5)
-          2. RSI in salita (non perfetto range)
-          3. Distanza EMA20 < 1.5% (compri vicino alla media)
-          4. ADX in salita (anche se ancora basso, es. 12-15)
+        VELOCITÀ — 2+/4 FLESSIBILI (almeno 2 su 4 richiesti):
+          P (Prezzo > SMA50): prezzo sopra media a 50gg
+          R (RSI in Range): RSI entro range family-specific
+          D (ADX Direzionale): ADX > soglia minima (es. 15-18)
+          X (allineamento eXteso): EMA20 > SMA50
+
+        Formula: TRIGGER = (A ∧ M) ∧ (almeno 2 di {P, R, D, X})
         """
         close = market_data.get('close')
         ema20 = market_data.get('ema20')
+        sma50 = market_data.get('sma50')
         macd_h = market_data.get('macd_h')
         rsi = market_data.get('rsi_14')
-        rsi_prev = market_data.get('rsi_14_prev')
         adx = market_data.get('adx_14')
-        adx_prev = market_data.get('adx_14_prev')
-        days_above_ema = market_data.get('days_above_ema20', 0)
-        dist_ema20 = market_data.get('dist_ema20', 0)
 
-        if not close or not ema20 or macd_h is None:
+        if not close or not ema20 or not sma50 or macd_h is None:
             return {
                 'should_enter': False,
                 'entry_mode': 'ACCELERATED',
                 'quality_score': 0,
                 'velocity_count': 0,
-                'reason': 'Dati insufficienti',
+                'reason': 'Dati insufficienti (manca EMA20, SMA50 o MACD)',
             }
 
         # ── GATE STRUTTURALE (2/2 obbligatori) ──────────────────────────────────
-        gate_1_price_over_ema20 = close > ema20
-        gate_2_macd_positive = macd_h > 0
+        gate_a_price_over_ema20 = close > ema20
+        gate_m_macd_positive = macd_h > 0
 
-        if not (gate_1_price_over_ema20 and gate_2_macd_positive):
+        if not (gate_a_price_over_ema20 and gate_m_macd_positive):
             reason_missing = []
-            if not gate_1_price_over_ema20:
-                reason_missing.append('Price < EMA20')
-            if not gate_2_macd_positive:
-                reason_missing.append('MACD ≤ 0')
+            if not gate_a_price_over_ema20:
+                reason_missing.append('A(Price≤EMA20)')
+            if not gate_m_macd_positive:
+                reason_missing.append('M(MACD≤0)')
 
             return {
                 'should_enter': False,
@@ -1350,67 +1349,67 @@ class ETFTechnicalAnalyzer:
                 'quality_score': 0,
                 'velocity_count': 0,
                 'gate_ok': False,
-                'reason': f"Gate failed: {', '.join(reason_missing)}",
+                'reason': f"Gate KO: {', '.join(reason_missing)}",
             }
 
-        # ── VELOCITÀ (basta 1/4) ────────────────────────────────────────────────
-        velocity_conditions = 0
+        # ── VELOCITÀ GERARCHICA (2+/4 flessibili) ───────────────────────────────
+        velocity_count = 0
         velocity_detail = {}
 
-        # V1: Persistenza soft (basta 1+ giorni)
-        v1_persistence = days_above_ema >= 1
-        if v1_persistence:
-            velocity_conditions += 1
-        velocity_detail['V1_persistence_1d'] = v1_persistence
+        # P: Prezzo > SMA50
+        vel_p = close > sma50
+        if vel_p:
+            velocity_count += 1
+        velocity_detail['P_price>SMA50'] = vel_p
 
-        # V2: RSI in salita (non perfetto range, basta sia positivo)
-        v2_rsi_rising = False
-        if rsi_prev is not None and rsi is not None:
-            v2_rsi_rising = rsi_prev < rsi and rsi > 35  # Rising + non oversold
-        else:
-            v2_rsi_rising = rsi is not None and rsi > 35
-        if v2_rsi_rising:
-            velocity_conditions += 1
-        velocity_detail['V2_rsi_rising'] = v2_rsi_rising
+        # R: RSI in range family-specific
+        rsi_low = self.p.get('rsi_entry_low', 45)
+        rsi_high = self.p.get('rsi_entry_high', 70)
+        vel_r = rsi is not None and rsi_low <= rsi <= rsi_high
+        if vel_r:
+            velocity_count += 1
+        velocity_detail['R_rsi_in_range'] = vel_r
 
-        # V3: Distanza bassa (< 1.5%)
-        v3_dist_low = dist_ema20 <= 0.015
-        if v3_dist_low:
-            velocity_conditions += 1
-        velocity_detail['V3_dist_low_1.5%'] = v3_dist_low
+        # D: ADX > soglia minima (family-specific con tolleranza)
+        adx_threshold = self.p.get('adx_entry', 18)
+        adx_min_threshold = max(15, adx_threshold * 0.70)  # almeno 15, o 70% della soglia
+        vel_d = adx is not None and adx >= adx_min_threshold
+        if vel_d:
+            velocity_count += 1
+        velocity_detail[f'D_adx>={adx_min_threshold:.0f}'] = vel_d
 
-        # V4: ADX in salita (anche se basso, es. 12+)
-        v4_adx_rising = False
-        if adx_prev is not None and adx is not None:
-            v4_adx_rising = adx_prev < adx and adx >= 12
-        else:
-            v4_adx_rising = adx is not None and adx >= 12
-        if v4_adx_rising:
-            velocity_conditions += 1
-        velocity_detail['V4_adx_rising_12+'] = v4_adx_rising
+        # X: EMA20 > SMA50 (allineamento esteso)
+        vel_x = ema20 > sma50
+        if vel_x:
+            velocity_count += 1
+        velocity_detail['X_ema20>sma50'] = vel_x
 
-        if velocity_conditions < 1:
+        # Richiedi almeno 2/4 parametri di velocità
+        if velocity_count < 2:
             return {
                 'should_enter': False,
                 'entry_mode': 'ACCELERATED',
-                'quality_score': 0,
-                'velocity_count': velocity_conditions,
+                'quality_score': velocity_count,
+                'velocity_count': velocity_count,
                 'velocity_detail': velocity_detail,
                 'gate_ok': True,
-                'reason': f'Velocity {velocity_conditions}/4 — minimo 1 richiesto',
+                'reason': f'Velocity {velocity_count}/4 — minimo 2 richiesto',
             }
 
-        # ── INGRESSO ACCELERATED OK ──────────────────────────────────────────────
-        # Quality score è sempre 4/4 se gates + velocità passano (meno rigido di tiered)
+        # ── INGRESSO ACCELERATED OK (gerarchia 2+2 soddisfatta) ─────────────────
+        # Confidence mappata a velocity_count
+        confidence_map = {2: 0.60, 3: 0.80, 4: 1.00}
+        confidence = confidence_map.get(velocity_count, 1.00)
+
         return {
             'should_enter': True,
             'entry_mode': 'ACCELERATED',
-            'confidence': 0.75,  # Leggermente minore di STANDARD (100%)
-            'quality_score': 4,  # Always 4/4 (less conservative than tiered)
-            'velocity_count': velocity_conditions,
+            'confidence': confidence,
+            'quality_score': velocity_count,  # 2-4 su parametri flessibili
+            'velocity_count': velocity_count,
             'velocity_detail': velocity_detail,
             'gate_ok': True,
-            'reason': f'Accelerated trigger — gate 2/2 ✓ + velocity {velocity_conditions}/4 ✓',
+            'reason': f'⚡ Gerarchia 2+2 OK — gate A∧M ✓ + velocity {velocity_count}/4 ✓ — size {int(confidence*100)}%',
         }
 
     def check_l1_exit(self, market_data: Dict, position_data: Dict) -> Dict:
