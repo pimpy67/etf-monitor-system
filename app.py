@@ -717,6 +717,7 @@ def get_portfolio():
             'sl_suggerito':        float(sl_suggerito) if sl_suggerito else None,
             'sg_suggerito':        float(sg_suggerito) if sg_suggerito else None,
             'entry_confidence':    float(entry_confidence) if entry_confidence else None,
+            'entry_mode':          entry.get('entry_mode', 'STANDARD'),
             'accumulated_pcts':    accumulated_pcts,
             'accumulated_dates':   accumulated_dates,
         })

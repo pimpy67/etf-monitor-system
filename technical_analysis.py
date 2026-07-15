@@ -1226,6 +1226,121 @@ class ETFTechnicalAnalyzer:
             'reason': f'Ingresso L1 tiered — quality {quality_score}/4 — size {int(confidence*100)}%',
         }
 
+    def check_l1_entry_accelerated(self, market_data: Dict) -> Dict:
+        """
+        STEP 12 — Trigger di Accelerazione (v6)
+
+        Anticipa ingresso L1 per catturare il primo movimento del rally.
+
+        GATE STRUTTURALE (2/2 obbligatori — non negoziabili):
+          1. price > EMA20 (rally di breve è attivo)
+          2. MACD > 0 (spinta volumetrica appena ripartita)
+
+        VELOCITÀ (basta 1/4 — condizioni di conferma):
+          1. Persistenza ≥ 1gg sopra EMA20 (non 3-5)
+          2. RSI in salita (non perfetto range)
+          3. Distanza EMA20 < 1.5% (compri vicino alla media)
+          4. ADX in salita (anche se ancora basso, es. 12-15)
+        """
+        close = market_data.get('close')
+        ema20 = market_data.get('ema20')
+        macd_h = market_data.get('macd_h')
+        rsi = market_data.get('rsi_14')
+        rsi_prev = market_data.get('rsi_14_prev')
+        adx = market_data.get('adx_14')
+        adx_prev = market_data.get('adx_14_prev')
+        days_above_ema = market_data.get('days_above_ema20', 0)
+        dist_ema20 = market_data.get('dist_ema20', 0)
+
+        if not close or not ema20 or macd_h is None:
+            return {
+                'should_enter': False,
+                'entry_mode': 'ACCELERATED',
+                'quality_score': 0,
+                'velocity_count': 0,
+                'reason': 'Dati insufficienti',
+            }
+
+        # ── GATE STRUTTURALE (2/2 obbligatori) ──────────────────────────────────
+        gate_1_price_over_ema20 = close > ema20
+        gate_2_macd_positive = macd_h > 0
+
+        if not (gate_1_price_over_ema20 and gate_2_macd_positive):
+            reason_missing = []
+            if not gate_1_price_over_ema20:
+                reason_missing.append('Price < EMA20')
+            if not gate_2_macd_positive:
+                reason_missing.append('MACD ≤ 0')
+
+            return {
+                'should_enter': False,
+                'entry_mode': 'ACCELERATED',
+                'quality_score': 0,
+                'velocity_count': 0,
+                'gate_ok': False,
+                'reason': f"Gate failed: {', '.join(reason_missing)}",
+            }
+
+        # ── VELOCITÀ (basta 1/4) ────────────────────────────────────────────────
+        velocity_conditions = 0
+        velocity_detail = {}
+
+        # V1: Persistenza soft (basta 1+ giorni)
+        v1_persistence = days_above_ema >= 1
+        if v1_persistence:
+            velocity_conditions += 1
+        velocity_detail['V1_persistence_1d'] = v1_persistence
+
+        # V2: RSI in salita (non perfetto range, basta sia positivo)
+        v2_rsi_rising = False
+        if rsi_prev is not None and rsi is not None:
+            v2_rsi_rising = rsi_prev < rsi and rsi > 35  # Rising + non oversold
+        else:
+            v2_rsi_rising = rsi is not None and rsi > 35
+        if v2_rsi_rising:
+            velocity_conditions += 1
+        velocity_detail['V2_rsi_rising'] = v2_rsi_rising
+
+        # V3: Distanza bassa (< 1.5%)
+        v3_dist_low = dist_ema20 <= 0.015
+        if v3_dist_low:
+            velocity_conditions += 1
+        velocity_detail['V3_dist_low_1.5%'] = v3_dist_low
+
+        # V4: ADX in salita (anche se basso, es. 12+)
+        v4_adx_rising = False
+        if adx_prev is not None and adx is not None:
+            v4_adx_rising = adx_prev < adx and adx >= 12
+        else:
+            v4_adx_rising = adx is not None and adx >= 12
+        if v4_adx_rising:
+            velocity_conditions += 1
+        velocity_detail['V4_adx_rising_12+'] = v4_adx_rising
+
+        if velocity_conditions < 1:
+            return {
+                'should_enter': False,
+                'entry_mode': 'ACCELERATED',
+                'quality_score': 0,
+                'velocity_count': velocity_conditions,
+                'velocity_detail': velocity_detail,
+                'gate_ok': True,
+                'reason': f'Velocity {velocity_conditions}/4 — minimo 1 richiesto',
+            }
+
+        # ── INGRESSO ACCELERATED OK ──────────────────────────────────────────────
+        # Quality score è sempre 4/4 se gates + velocità passano (meno rigido di tiered)
+        return {
+            'should_enter': True,
+            'entry_mode': 'ACCELERATED',
+            'confidence': 0.75,  # Leggermente minore di STANDARD (100%)
+            'quality_score': 4,  # Always 4/4 (less conservative than tiered)
+            'velocity_count': velocity_conditions,
+            'velocity_detail': velocity_detail,
+            'gate_ok': True,
+            'reason': f'Accelerated trigger — gate 2/2 ✓ + velocity {velocity_conditions}/4 ✓',
+        }
+
     def check_l1_exit(self, market_data: Dict, position_data: Dict) -> Dict:
         """
         Controlla regole di uscita per posizioni L1.

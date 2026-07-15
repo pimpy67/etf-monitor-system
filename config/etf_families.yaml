@@ -1,6 +1,7 @@
 families:
   equity_sviluppati:
-    description: Equity sviluppati — Large cap, ACWI, All-World
+    description: "Equity sviluppati \u2014 Large cap, ACWI, All-World"
+    entry_mode: ACCELERATED
     rsi_entry_low: 45
     rsi_entry_high: 55
     rsi_exit_min: 40
@@ -26,22 +27,19 @@ families:
     trailing_base_pct: 0.08
     trailing_sensitivity: 0.005
     trailing_min_pct: 0.94
-    # STEP 2 — Nuovi parametri L1
-    sl_buffer_wide: 0.020  # 2.0% buffer SL quando profitto < 2%
-    sg_target_pct: 0.04    # +4% target stop gain
-    sg_floor_pct: 0.020    # +2.0% floor minimo
-    sg_decay_day: 0.002    # decadimento giornaliero
-    sg_rsi_exit: 65        # RSI per uscita momentum
-    # Nuovi parametri L0
+    sl_buffer_wide: 0.02
+    sg_target_pct: 0.04
+    sg_floor_pct: 0.02
+    sg_decay_day: 0.002
+    sg_rsi_exit: 65
     l0_entry:
       enabled: true
-      dd_threshold: 0.065   # 6.5% drawdown min
+      dd_threshold: 0.065
       rsi_max: 45
       lookback_high_days: 3
-      recovery_min_pct: 0.015  # 1.5% recupero min
-
+      recovery_min_pct: 0.015
   mercati_emergenti:
-    description: Mercati emergenti — EM globale, Asia, LatAm, EMEA
+    description: "Mercati emergenti \u2014 EM globale, Asia, LatAm, EMEA"
     rsi_entry_low: 40
     rsi_entry_high: 52
     rsi_exit_min: 38
@@ -67,22 +65,20 @@ families:
     trailing_base_pct: 0.09
     trailing_sensitivity: 0.004
     trailing_min_pct: 0.92
-    # STEP 2 — Nuovi parametri L1
-    sl_buffer_wide: 0.025  # 2.5%
-    sg_target_pct: 0.05    # +5%
-    sg_floor_pct: 0.025    # +2.5%
+    sl_buffer_wide: 0.025
+    sg_target_pct: 0.05
+    sg_floor_pct: 0.025
     sg_decay_day: 0.002
     sg_rsi_exit: 65
-    # Nuovi parametri L0
     l0_entry:
       enabled: true
       dd_threshold: 0.085
       rsi_max: 42
       lookback_high_days: 3
-      recovery_min_pct: 0.020
-
+      recovery_min_pct: 0.02
+    entry_mode: BOTH
   settoriali_growth:
-    description: Settoriali crescita — Tech, AI, Semi, Nasdaq, Digitale
+    description: "Settoriali crescita \u2014 Tech, AI, Semi, Nasdaq, Digitale"
     rsi_entry_low: 48
     rsi_entry_high: 58
     rsi_exit_min: 38
@@ -108,22 +104,20 @@ families:
     trailing_base_pct: 0.09
     trailing_sensitivity: 0.0045
     trailing_min_pct: 0.92
-    # STEP 2 — Nuovi parametri L1
-    sl_buffer_wide: 0.030  # 3.0%
-    sg_target_pct: 0.07    # +7%
-    sg_floor_pct: 0.035    # +3.5%
+    sl_buffer_wide: 0.03
+    sg_target_pct: 0.07
+    sg_floor_pct: 0.035
     sg_decay_day: 0.002
     sg_rsi_exit: 65
-    # Nuovi parametri L0
     l0_entry:
       enabled: true
-      dd_threshold: 0.100
+      dd_threshold: 0.1
       rsi_max: 42
       lookback_high_days: 2
       recovery_min_pct: 0.025
-
+    entry_mode: ACCELERATED
   settoriali_difensivi:
-    description: Settoriali difensivi — Salute, Utilities, Insurance, Food
+    description: "Settoriali difensivi \u2014 Salute, Utilities, Insurance, Food"
     rsi_entry_low: 42
     rsi_entry_high: 50
     rsi_exit_min: 38
@@ -149,22 +143,20 @@ families:
     trailing_base_pct: 0.06
     trailing_sensitivity: 0.005
     trailing_min_pct: 0.95
-    # STEP 2 — Nuovi parametri L1
-    sl_buffer_wide: 0.015  # 1.5%
-    sg_target_pct: 0.03    # +3%
-    sg_floor_pct: 0.015    # +1.5%
+    sl_buffer_wide: 0.015
+    sg_target_pct: 0.03
+    sg_floor_pct: 0.015
     sg_decay_day: 0.002
     sg_rsi_exit: 65
-    # Nuovi parametri L0
     l0_entry:
       enabled: true
-      dd_threshold: 0.050
+      dd_threshold: 0.05
       rsi_max: 48
       lookback_high_days: 3
-      recovery_min_pct: 0.010
-
+      recovery_min_pct: 0.01
+    entry_mode: STANDARD
   bond_governativi:
-    description: Bond governativi EUR/USD — BTP, Bund, UST, Gov Euro, IL
+    description: "Bond governativi EUR/USD \u2014 BTP, Bund, UST, Gov Euro, IL"
     rsi_entry_low: 38
     rsi_entry_high: 48
     rsi_exit_min: 42
@@ -190,22 +182,20 @@ families:
     trailing_base_pct: 0.035
     trailing_sensitivity: 0.008
     trailing_min_pct: 0.97
-    # STEP 2 — Nuovi parametri L1
-    sl_buffer_wide: 0.010  # 1.0%
-    sg_target_pct: 0.02    # +2%
-    sg_floor_pct: 0.010    # +1.0%
+    sl_buffer_wide: 0.01
+    sg_target_pct: 0.02
+    sg_floor_pct: 0.01
     sg_decay_day: 0.001
     sg_rsi_exit: 65
-    # Nuovi parametri L0
     l0_entry:
       enabled: true
-      dd_threshold: 0.040
+      dd_threshold: 0.04
       rsi_max: 42
       lookback_high_days: 5
       recovery_min_pct: 0.008
-
+    entry_mode: STANDARD
   bond_corp_hy_em:
-    description: Bond corporate / HY / EM — Corp EUR/USD, HY, EM bond
+    description: "Bond corporate / HY / EM \u2014 Corp EUR/USD, HY, EM bond"
     rsi_entry_low: 42
     rsi_entry_high: 52
     rsi_exit_min: 38
@@ -231,22 +221,20 @@ families:
     trailing_base_pct: 0.05
     trailing_sensitivity: 0.007
     trailing_min_pct: 0.96
-    # STEP 2 — Nuovi parametri L1
-    sl_buffer_wide: 0.015  # 1.5%
-    sg_target_pct: 0.03    # +3%
-    sg_floor_pct: 0.015    # +1.5%
+    sl_buffer_wide: 0.015
+    sg_target_pct: 0.03
+    sg_floor_pct: 0.015
     sg_decay_day: 0.001
     sg_rsi_exit: 65
-    # Nuovi parametri L0
     l0_entry:
       enabled: true
       dd_threshold: 0.055
       rsi_max: 44
       lookback_high_days: 3
       recovery_min_pct: 0.012
-
+    entry_mode: STANDARD
   commodities:
-    description: Commodities broad — Bloomberg Comm, GSCI, Agri, Energia
+    description: "Commodities broad \u2014 Bloomberg Comm, GSCI, Agri, Energia"
     rsi_entry_low: 40
     rsi_entry_high: 55
     rsi_exit_min: 38
@@ -272,22 +260,20 @@ families:
     trailing_base_pct: 0.11
     trailing_sensitivity: 0.003
     trailing_min_pct: 0.9
-    # STEP 2 — Nuovi parametri L1
-    sl_buffer_wide: 0.030  # 3.0%
-    sg_target_pct: 0.06    # +6%
-    sg_floor_pct: 0.030    # +3.0%
+    sl_buffer_wide: 0.03
+    sg_target_pct: 0.06
+    sg_floor_pct: 0.03
     sg_decay_day: 0.002
     sg_rsi_exit: 65
-    # Nuovi parametri L0
     l0_entry:
       enabled: true
-      dd_threshold: 0.100
+      dd_threshold: 0.1
       rsi_max: 40
       lookback_high_days: 3
       recovery_min_pct: 0.025
-
+    entry_mode: ACCELERATED
   oro_metalli_preziosi:
-    description: Oro e metalli preziosi — Oro, Argento, Platino, Basket PM
+    description: "Oro e metalli preziosi \u2014 Oro, Argento, Platino, Basket PM"
     rsi_entry_low: 38
     rsi_entry_high: 52
     rsi_exit_min: 38
@@ -313,22 +299,20 @@ families:
     trailing_base_pct: 0.08
     trailing_sensitivity: 0.005
     trailing_min_pct: 0.93
-    # STEP 2 — Nuovi parametri L1
-    sl_buffer_wide: 0.025  # 2.5%
-    sg_target_pct: 0.05    # +5%
-    sg_floor_pct: 0.025    # +2.5%
+    sl_buffer_wide: 0.025
+    sg_target_pct: 0.05
+    sg_floor_pct: 0.025
     sg_decay_day: 0.002
     sg_rsi_exit: 65
-    # Nuovi parametri L0
     l0_entry:
       enabled: true
-      dd_threshold: 0.080
+      dd_threshold: 0.08
       rsi_max: 42
       lookback_high_days: 3
-      recovery_min_pct: 0.020
-
+      recovery_min_pct: 0.02
+    entry_mode: BOTH
   metalli_industriali:
-    description: Metalli industriali — Rame, Alluminio, Zinco, Nichel, Battery
+    description: "Metalli industriali \u2014 Rame, Alluminio, Zinco, Nichel, Battery"
     rsi_entry_low: 38
     rsi_entry_high: 50
     rsi_exit_min: 38
@@ -354,22 +338,20 @@ families:
     trailing_base_pct: 0.09
     trailing_sensitivity: 0.004
     trailing_min_pct: 0.92
-    # STEP 2 — Nuovi parametri L1
-    sl_buffer_wide: 0.025  # 2.5%
-    sg_target_pct: 0.05    # +5%
-    sg_floor_pct: 0.025    # +2.5%
+    sl_buffer_wide: 0.025
+    sg_target_pct: 0.05
+    sg_floor_pct: 0.025
     sg_decay_day: 0.002
     sg_rsi_exit: 65
-    # Nuovi parametri L0
     l0_entry:
       enabled: true
-      dd_threshold: 0.080
+      dd_threshold: 0.08
       rsi_max: 42
       lookback_high_days: 3
-      recovery_min_pct: 0.020
-
+      recovery_min_pct: 0.02
+    entry_mode: ACCELERATED
   real_estate_reit:
-    description: Real Estate / REIT — EPRA Europe, NAREIT Global, REIT
+    description: "Real Estate / REIT \u2014 EPRA Europe, NAREIT Global, REIT"
     rsi_entry_low: 42
     rsi_entry_high: 52
     rsi_exit_min: 38
@@ -395,22 +377,20 @@ families:
     trailing_base_pct: 0.055
     trailing_sensitivity: 0.006
     trailing_min_pct: 0.95
-    # STEP 2 — Nuovi parametri L1
-    sl_buffer_wide: 0.020  # 2.0%
-    sg_target_pct: 0.04    # +4%
-    sg_floor_pct: 0.020    # +2.0%
+    sl_buffer_wide: 0.02
+    sg_target_pct: 0.04
+    sg_floor_pct: 0.02
     sg_decay_day: 0.001
     sg_rsi_exit: 65
-    # Nuovi parametri L0
     l0_entry:
       enabled: true
-      dd_threshold: 0.070
+      dd_threshold: 0.07
       rsi_max: 44
       lookback_high_days: 3
       recovery_min_pct: 0.015
-
+    entry_mode: STANDARD
   crypto_digital_assets:
-    description: Crypto / asset digitali — Bitcoin, Ethereum, Solana, Basket
+    description: "Crypto / asset digitali \u2014 Bitcoin, Ethereum, Solana, Basket"
     rsi_entry_low: 35
     rsi_entry_high: 52
     rsi_exit_min: 38
@@ -436,22 +416,21 @@ families:
     trailing_base_pct: 0.18
     trailing_sensitivity: 0.002
     trailing_min_pct: 0.84
-    # STEP 2 — Nuovi parametri L1
-    sl_buffer_wide: 0.050  # 5.0%
-    sg_target_pct: 0.12    # +12%
-    sg_floor_pct: 0.060    # +6.0%
+    sl_buffer_wide: 0.05
+    sg_target_pct: 0.12
+    sg_floor_pct: 0.06
     sg_decay_day: 0.003
     sg_rsi_exit: 65
-    # Nuovi parametri L0
     l0_entry:
       enabled: true
-      dd_threshold: 0.250
+      dd_threshold: 0.25
       rsi_max: 38
       lookback_high_days: 2
-      recovery_min_pct: 0.050
-
+      recovery_min_pct: 0.05
+    entry_mode: ACCELERATED
   leva_single_stock:
-    description: Leva / single stock / struct — ETP 3x long/short su singoli titoli
+    description: "Leva / single stock / struct \u2014 ETP 3x long/short su singoli\
+      \ titoli"
     rsi_entry_low: 45
     rsi_entry_high: 58
     rsi_exit_min: 38
@@ -478,18 +457,16 @@ families:
     trailing_base_pct: 0.11
     trailing_sensitivity: 0.005
     trailing_min_pct: 0.91
-    # STEP 2 — Nuovi parametri L1
-    sl_buffer_wide: 0.040  # 4.0%
-    sg_target_pct: 0.15    # +15%
-    sg_floor_pct: 0.075    # +7.5%
+    sl_buffer_wide: 0.04
+    sg_target_pct: 0.15
+    sg_floor_pct: 0.075
     sg_decay_day: 0.003
     sg_rsi_exit: 65
-    # Nuovi parametri L0
     l0_entry:
-      enabled: false  # Disabilitato per L0 — troppo rischioso
-
+      enabled: false
+    entry_mode: ACCELERATED
   private_equity_buffer:
-    description: Private Equity / Buffer ETF — Listed PE, Buffer strategy
+    description: "Private Equity / Buffer ETF \u2014 Listed PE, Buffer strategy"
     rsi_entry_low: 40
     rsi_entry_high: 55
     rsi_exit_min: 38
@@ -515,22 +492,20 @@ families:
     trailing_base_pct: 0.055
     trailing_sensitivity: 0.006
     trailing_min_pct: 0.95
-    # STEP 2 — Nuovi parametri L1
-    sl_buffer_wide: 0.015  # 1.5%
-    sg_target_pct: 0.03    # +3%
-    sg_floor_pct: 0.015    # +1.5%
+    sl_buffer_wide: 0.015
+    sg_target_pct: 0.03
+    sg_floor_pct: 0.015
     sg_decay_day: 0.001
     sg_rsi_exit: 65
-    # Nuovi parametri L0
     l0_entry:
       enabled: true
-      dd_threshold: 0.070
+      dd_threshold: 0.07
       rsi_max: 42
       lookback_high_days: 3
       recovery_min_pct: 0.015
-
+    entry_mode: STANDARD
   monetario_liquidita:
-    description: Monetario / liquidità — ETF overnight, short-term
+    description: "Monetario / liquidit\xE0 \u2014 ETF overnight, short-term"
     rsi_entry_low: null
     rsi_entry_high: null
     rsi_exit_min: 42
@@ -556,16 +531,14 @@ families:
     trailing_base_pct: 0.02
     trailing_sensitivity: 0.02
     trailing_min_pct: 0.985
-    # STEP 2 — Nuovi parametri L1
-    sl_buffer_wide: 0.005  # 0.5%
-    sg_target_pct: 0.005   # +0.5% (praticamente no gain su L1)
-    sg_floor_pct: 0.002    # +0.2% floor
+    sl_buffer_wide: 0.005
+    sg_target_pct: 0.005
+    sg_floor_pct: 0.002
     sg_decay_day: 0.0
-    sg_rsi_exit: 97  # Non usato per monetario
-    # Nuovi parametri L0
+    sg_rsi_exit: 97
     l0_entry:
-      enabled: false  # Disabilitato per L0 — no logica di deep recovery
-
+      enabled: false
+    entry_mode: STANDARD
 family_detection:
 - pattern:
   - monetario

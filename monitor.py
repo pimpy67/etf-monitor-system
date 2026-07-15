@@ -156,6 +156,7 @@ class ETFMonitor:
 
         # STEP 10 — Valuta ingresso L1 con logica tiered (Gate + Quality + Size)
         l1_tiered = {}
+        l1_accelerated = {}
         try:
             market_data_tiered = {
                 'price': analysis.get('current_price'),
@@ -172,6 +173,25 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"    ⚠️  L1 tiered check error: {e}")
 
+        # STEP 12 — Valuta ingresso L1 con logica accelerated (Gate 2/2 + Velocity 1+)
+        try:
+            market_data_accelerated = {
+                'close': analysis.get('current_price'),
+                'ema20': analysis.get('ema20'),
+                'macd_h': analysis.get('macd_histogram'),
+                'rsi_14': analysis.get('rsi'),
+                'rsi_14_prev': analysis.get('rsi_prev'),
+                'adx_14': analysis.get('adx'),
+                'adx_14_prev': analysis.get('adx_prev'),
+                'days_above_ema20': analysis.get('days_above_ema20', 0),
+                'dist_ema20': analysis.get('dist_ema20', 0.0),
+            }
+            l1_accelerated = analyzer.check_l1_entry_accelerated(market_data_accelerated)
+            if l1_accelerated.get('should_enter'):
+                add_log(f"    🚀 L1 ACCELERATED ENTRY: gate 2/2 ✓ | velocity {l1_accelerated['velocity_count']}/4")
+        except Exception as e:
+            add_log(f"    ⚠️  L1 accelerated check error: {e}")
+
         result = {
             'ticker':    ticker,
             'isin':      isin,
@@ -181,8 +201,9 @@ class ETFMonitor:
             'livello':   level,
             'etf_type':  etf_type,
             'analysis':  analysis,
-            'l0_signal': l0_entry_signal,  # NOVO
-            'l1_tiered': l1_tiered,  # NUOVO: valutazione tiered Gate + Quality + Size
+            'l0_signal': l0_entry_signal,
+            'l1_tiered': l1_tiered,
+            'l1_accelerated': l1_accelerated,  # STEP 12: Accelerated trigger
         }
 
         return result
