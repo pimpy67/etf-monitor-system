@@ -280,7 +280,8 @@ def portfolio_sl():
             if isin_filter:
                 cur.execute("""
                     SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
-                           pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at, pe.shares
+                           pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at, pe.shares,
+                           pe.sl_suggerito, pe.sg_suggerito
                     FROM etf_portfolio_entries pe
                     WHERE pe.status = 'active' AND pe.isin = %s
                     ORDER BY pe.entry_date DESC
@@ -288,7 +289,8 @@ def portfolio_sl():
             else:
                 cur.execute("""
                     SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
-                           pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at, pe.shares
+                           pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at, pe.shares,
+                           pe.sl_suggerito, pe.sg_suggerito
                     FROM etf_portfolio_entries pe
                     WHERE pe.status = 'active'
                     ORDER BY pe.entry_date DESC
@@ -312,12 +314,17 @@ def portfolio_sl():
                     pct_change = ((current_price - float(pos['entry_price'])) /
                                  float(pos['entry_price']) * 100) if pos['entry_price'] > 0 else 0
 
-                    # Calcola SL consigliato (logica a 2 fasi)
+                    # Usa SL suggerito da STEP 4 (formula ibrida) se disponibile, altrimenti fallback a vecchio
                     entry_price = float(pos['entry_price'])
-                    if pct_change <= 0:
-                        suggested_sl = entry_price * 0.98
-                    else:
-                        suggested_sl = max(entry_price * 0.98, current_price * 0.95)
+                    sl_suggerito = float(pos['sl_suggerito']) if pos.get('sl_suggerito') else None
+                    sg_suggerito = float(pos['sg_suggerito']) if pos.get('sg_suggerito') else None
+
+                    # Fallback: calcola SL consigliato (logica a 2 fasi) solo se non ho SL suggerito
+                    if not sl_suggerito:
+                        if pct_change <= 0:
+                            sl_suggerito = entry_price * 0.98
+                        else:
+                            sl_suggerito = max(entry_price * 0.98, current_price * 0.95)
 
                     result.append({
                         'isin': isin,
@@ -329,7 +336,8 @@ def portfolio_sl():
                         'price_date': str(price_date),
                         'pct_change': round(pct_change, 2),
                         'sl_inserted': float(pos['stop_loss_inserted']) if pos['stop_loss_inserted'] else None,
-                        'sl_suggested': float(pos['stop_loss_suggested']) if pos['stop_loss_suggested'] else round(suggested_sl, 4),
+                        'sl_suggested': round(sl_suggerito, 4) if sl_suggerito else None,
+                        'sg_suggested': round(sg_suggerito, 4) if sg_suggerito else None,
                         'sl_updated': str(pos['stop_loss_updated_at']) if pos['stop_loss_updated_at'] else None,
                         'shares': float(pos['shares']) if pos['shares'] else None,
                     })
@@ -672,6 +680,9 @@ def get_portfolio():
         if ref_price and entry['entry_price'] and float(entry['entry_price']) > 0:
             perf_pct = round((float(ref_price) - float(entry['entry_price'])) / float(entry['entry_price']) * 100, 2)
 
+        sl_suggerito = entry.get('sl_suggerito')
+        sg_suggerito = entry.get('sg_suggerito')
+
         result.append({
             'isin':                isin,
             'fund_name':           entry['fund_name'],
@@ -691,6 +702,8 @@ def get_portfolio():
             'ema20':               analysis.get('ema20'),
             'dist_ema20':          analysis.get('dist_ema20'),
             'etf_type':            analysis.get('etf_type', ''),
+            'sl_suggerito':        float(sl_suggerito) if sl_suggerito else None,
+            'sg_suggerito':        float(sg_suggerito) if sg_suggerito else None,
         })
 
     return jsonify({'portfolio': result, 'count': len(result)})
