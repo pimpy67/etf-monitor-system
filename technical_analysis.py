@@ -1096,6 +1096,47 @@ class ETFTechnicalAnalyzer:
             'trigger': trigger
         }
 
+    def check_position_add(self, position_data: Dict, current_quality: int) -> Dict:
+        """
+        Valuta se aggiungere capitale a una posizione L1 parziale.
+
+        Se la quality score migliora dopo l'entrata parziale → accumula progressivamente.
+
+        Esempio:
+          Entrato a 50% (quality 2/4) → quality sale a 3/4 → aggiungi 25% → totale 75%
+          Posizione a 75% (quality 3/4) → quality sale a 4/4 → aggiungi 25% → totale 100%
+
+        Args:
+            position_data: Dict con 'entry_confidence' (% investito al momento entry)
+            current_quality: Quality score attuale (2, 3, o 4)
+
+        Returns:
+            Dict con 'add', 'add_pct', 'new_total_pct', 'reason'
+        """
+        entry_confidence = position_data.get('entry_confidence', 1.0)
+
+        # Map quality score → confidence
+        confidence_map = {2: 0.50, 3: 0.75, 4: 1.00}
+        current_confidence = confidence_map.get(current_quality, 1.0)
+
+        # Se non c'è miglioramento, non aggiungere
+        if current_confidence <= entry_confidence:
+            return {
+                'add': False,
+                'reason': f'Segnale non migliorato (rimane {entry_confidence:.0%})',
+            }
+
+        # Calcola quanto aggiungere
+        add_pct = current_confidence - entry_confidence
+        new_total = entry_confidence + add_pct
+
+        return {
+            'add': True,
+            'add_pct': round(add_pct, 2),
+            'new_total_pct': round(new_total, 2),
+            'reason': f'Quality migliora — Aggiungi {add_pct:.0%} (totale {new_total:.0%})',
+        }
+
     def check_l1_entry_tiered(self, market_data: Dict) -> Dict:
         """
         SCELTA CONFERMATA (v5): Opzione 3 — Gate obbligatorio + Quality flessibile + Size dinamica.

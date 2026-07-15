@@ -682,6 +682,17 @@ def get_portfolio():
 
         sl_suggerito = entry.get('sl_suggerito')
         sg_suggerito = entry.get('sg_suggerito')
+        entry_confidence = entry.get('entry_confidence', 1.0)
+        accumulated_pcts_str = entry.get('accumulated_pcts', '[]')
+        accumulated_dates_str = entry.get('accumulated_dates', '[]')
+
+        # Parse JSON
+        try:
+            accumulated_pcts = json.loads(accumulated_pcts_str) if accumulated_pcts_str else []
+            accumulated_dates = json.loads(accumulated_dates_str) if accumulated_dates_str else []
+        except:
+            accumulated_pcts = []
+            accumulated_dates = []
 
         result.append({
             'isin':                isin,
@@ -704,6 +715,9 @@ def get_portfolio():
             'etf_type':            analysis.get('etf_type', ''),
             'sl_suggerito':        float(sl_suggerito) if sl_suggerito else None,
             'sg_suggerito':        float(sg_suggerito) if sg_suggerito else None,
+            'entry_confidence':    float(entry_confidence) if entry_confidence else None,
+            'accumulated_pcts':    accumulated_pcts,
+            'accumulated_dates':   accumulated_dates,
         })
 
     return jsonify({'portfolio': result, 'count': len(result)})
