@@ -925,7 +925,7 @@ class ETFMonitor:
                     sl_suggerito = sl_data.get('sl_suggerito')
                     stage = sl_data.get('stage')
 
-                    # Aggiorna contatori
+                    # Dati mercato per check exit L0
                     rsi = a.get('rsi')
                     profit_pct = (current_price - entry_price) / entry_price if entry_price > 0 else 0
 
@@ -941,23 +941,47 @@ class ETFMonitor:
                     else:
                         days_no_rec = 0
 
-                    # SALVA NEL DB
-                    with conn.cursor() as cur:
-                        cur.execute("""
-                            UPDATE etf_portfolio_entries
-                            SET sl_suggerito = %s, days_no_recovery = %s,
-                                stallo_counter = %s, stop_loss_updated_at = now()
-                            WHERE id = %s
-                        """, (sl_suggerito, days_no_rec, stallo_cnt, entry_id))
-                        conn.commit()
+                    # CONTROLLA REGOLE DI USCITA L0 — STEP 7
+                    close_series = a.get('close_series')
+                    market_data_l0 = {
+                        'close': current_price,
+                        'ema20': ema20,
+                        'rsi_14': rsi,
+                        'daily_change_pct': a.get('pct_change_1d'),
+                    }
+                    position_data_l0 = {'entry_price': entry_price, 'famiglia': famiglia, 'days_held': days_no_rec}
 
-                    alert_msg = ''
-                    if stallo_cnt and stallo_cnt >= 20:
-                        alert_msg = f' ⚠️ STALLO {stallo_cnt}gg'
-                    elif days_no_rec and days_no_rec >= 40:
-                        alert_msg = f' ⏱️ TIMEOUT {days_no_rec}gg'
+                    exit_check_l0 = analyzer.check_l0_exit(market_data_l0, position_data_l0)
 
-                    add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ ({stage}){alert_msg}")
+                    if exit_check_l0.get('exit'):
+                        # Uscita richiesta per L0
+                        with conn.cursor() as cur:
+                            cur.execute("""
+                                UPDATE etf_portfolio_entries
+                                SET status = 'exited', exit_date = now(), exit_price = %s,
+                                    exit_rule = %s
+                                WHERE id = %s
+                            """, (current_price, exit_check_l0.get('reason'), entry_id))
+                            conn.commit()
+                        add_log(f"    🔴 EXIT L0 {fund_name[:40]:40s} | {exit_check_l0.get('reason')}")
+                    else:
+                        # Nessuna uscita — salva SL e contatori
+                        with conn.cursor() as cur:
+                            cur.execute("""
+                                UPDATE etf_portfolio_entries
+                                SET sl_suggerito = %s, days_no_recovery = %s,
+                                    stallo_counter = %s, stop_loss_updated_at = now()
+                                WHERE id = %s
+                            """, (sl_suggerito, days_no_rec, stallo_cnt, entry_id))
+                            conn.commit()
+
+                        alert_msg = ''
+                        if stallo_cnt and stallo_cnt >= 20:
+                            alert_msg = f' ⚠️ STALLO {stallo_cnt}gg'
+                        elif days_no_rec and days_no_rec >= 40:
+                            alert_msg = f' ⏱️ TIMEOUT {days_no_rec}gg'
+
+                        add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ ({stage}){alert_msg}")
 
                 except Exception as e:
                     add_log(f"    ⚠️  Errore L0 {isin}: {type(e).__name__}: {e}")
@@ -1060,16 +1084,44 @@ class ETFMonitor:
                     sg_data = analyzer.calculate_sg_suggerito_l1(entry_price, current_price, ema20_series, rsi_5)
                     sg_suggerito = sg_data.get('sg_suggerito')
 
-                    # SALVA NEL DB
-                    with conn.cursor() as cur:
-                        cur.execute("""
-                            UPDATE etf_portfolio_entries
-                            SET sl_suggerito = %s, sg_suggerito = %s, stop_loss_updated_at = now()
-                            WHERE id = %s
-                        """, (sl_suggerito, sg_suggerito, entry_id))
-                        conn.commit()
+                    # CONTROLLA REGOLE DI USCITA L1 — STEP 6
+                    market_data = {
+                        'close': current_price,
+                        'ema10': ema10,
+                        'ema20': ema20,
+                        'rsi_14': a.get('rsi'),
+                        'rsi_5': rsi_5,
+                        'rsi_14_prev': a.get('rsi_prev'),
+                        'adx': a.get('adx'),
+                        'daily_change_pct': a.get('pct_change_1d'),
+                        'ema20_series': ema20_series,
+                    }
+                    position_data = {'entry_price': entry_price, 'famiglia': famiglia}
 
-                    add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ | SG: {sg_suggerito:.2f}€")
+                    exit_check = analyzer.check_l1_exit(market_data, position_data)
+
+                    if exit_check.get('exit'):
+                        # Uscita richiesta — mark come exited nel DB
+                        with conn.cursor() as cur:
+                            cur.execute("""
+                                UPDATE etf_portfolio_entries
+                                SET status = 'exited', exit_date = now(), exit_price = %s,
+                                    exit_rule = %s
+                                WHERE id = %s
+                            """, (current_price, exit_check.get('reason'), entry_id))
+                            conn.commit()
+                        add_log(f"    🔴 EXIT L1 {fund_name[:40]:40s} | {exit_check.get('reason')}")
+                    else:
+                        # Nessuna uscita — salva SL/SG suggerito
+                        with conn.cursor() as cur:
+                            cur.execute("""
+                                UPDATE etf_portfolio_entries
+                                SET sl_suggerito = %s, sg_suggerito = %s, stop_loss_updated_at = now()
+                                WHERE id = %s
+                            """, (sl_suggerito, sg_suggerito, entry_id))
+                            conn.commit()
+
+                        add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ | SG: {sg_suggerito:.2f}€")
 
                 except Exception as e:
                     add_log(f"    ⚠️  Errore L1 {isin}: {type(e).__name__}: {e}")
