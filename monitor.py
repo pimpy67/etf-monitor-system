@@ -167,6 +167,8 @@ class ETFMonitor:
                 'dist_ema20': analysis.get('dist_ema20', 0.0),  # già in percentuale
             }
             l1_tiered = analyzer.check_l1_entry_tiered(market_data_tiered)
+            if l1_tiered.get('should_enter'):
+                add_log(f"    🟢 L1 TIERED ENTRY: confidence {l1_tiered['confidence']:.0%} | quality {l1_tiered['quality_score']}/4")
         except Exception as e:
             add_log(f"    ⚠️  L1 tiered check error: {e}")
 
