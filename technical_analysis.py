@@ -516,7 +516,13 @@ class ETFTechnicalAnalyzer:
         panic_val = prices.iloc[-n_panic:].min()
         result['panic_low'] = float(panic_val) if pd.notna(panic_val) else current
 
-        l0_rsi_thr = self.p['l0_rsi_max']
+        # Leggi nuovi parametri L0 pragmatici da l0_entry
+        l0_entry_params = self.p.get('l0_entry', {})
+        l0_enabled = l0_entry_params.get('enabled', False)
+        l0_dd_threshold = l0_entry_params.get('dd_threshold', 0.15)  # Default 15% per backward compat
+        l0_rsi_max = l0_entry_params.get('rsi_max', 35)  # Default 35 per backward compat
+        l0_recovery_min = l0_entry_params.get('recovery_min_pct', 0.015)  # Default 1.5%
+        ema_fast_period = l0_entry_params.get('ema_fast_period', 10)
 
         # ── Uscita (se gia' in L0) ────────────────────────────────────────────
         if current_level == 0:
@@ -537,23 +543,38 @@ class ETFTechnicalAnalyzer:
             return result
 
         # ── Entrata ───────────────────────────────────────────────────────────
+        if not l0_enabled:
+            result['l0_entry'] = False
+            result['reason_codes'] = ['L0_DISABLED']
+            return result
+
         peak_price         = float(prices.max())
         result['peak_price']  = round(peak_price, 4)
         result['peak_days']   = len(prices)
-        dist_peak              = (current - peak_price) / peak_price * 100
-        result['distance_from_peak'] = round(dist_peak, 2)
+        dist_peak_pct      = (current - peak_price) / peak_price * 100
+        result['distance_from_peak'] = round(dist_peak_pct, 2)
 
-        # Cond 1: drawdown check (skip if not applicable for this family)
-        cond1 = self.p['l0_drawdown'] is not None and dist_peak <= -self.p['l0_drawdown']
-        cond2 = rsi_val < l0_rsi_thr
+        # Cond 1: drawdown check (pragmatico: 6.5% per equity, non 15%)
+        cond1 = dist_peak_pct <= -(l0_dd_threshold * 100)
+        cond2 = rsi_val < l0_rsi_max
         result['rsi_oversold'] = cond2
         cond3 = self._detect_positive_divergence(prices, rsi)
         result['divergence'] = cond3
-        rsi_rec    = self._detect_rsi_recovery(rsi, oversold=l0_rsi_thr, recovery=32.0)
-        micro_brk  = self._detect_micro_breakout(prices)
+        rsi_rec    = self._detect_rsi_recovery(rsi, oversold=l0_rsi_max, recovery=32.0)
+
+        # Micro-breakout: controlla se il recovery è abbastanza forte
+        n_lookback = 10
+        if len(prices) >= n_lookback:
+            low_10d = prices.iloc[-n_lookback:].min()
+            recovery_pct = (current - low_10d) / low_10d
+            micro_brk = recovery_pct >= l0_recovery_min
+        else:
+            micro_brk = False
+
         cond4      = rsi_rec or micro_brk
         result['rsi_recovery']   = rsi_rec
         result['micro_breakout'] = micro_brk
+        result['recovery_pct'] = recovery_pct if 'recovery_pct' in locals() else 0.0
 
         entry_ok = cond1 and cond2 and cond3 and cond4
         if entry_ok and kill_switch:
