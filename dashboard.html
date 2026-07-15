@@ -708,13 +708,13 @@ function renderDashboard() {
   // Build etf map
   for (const list of Object.values(allData.levels || {}))
     for (const e of list) if (e.isin) allEtfMap[e.isin] = {nome: e.nome || e.ticker, price: e.price || 0, ticker: e.ticker || ''};
-  for (const e of allData.l0_funds || []) if (e.isin) allEtfMap[e.isin] = {nome: e.nome || e.ticker, price: e.price || 0, ticker: e.ticker || ''};
-
   const levels = allData.levels || {};
+  for (const e of (levels[0] || [])) if (e.isin) allEtfMap[e.isin] = {nome: e.nome || e.ticker, price: e.price || 0, ticker: e.ticker || ''};
+
   const sections = [];
 
   // L0
-  const l0list = (allData.l0_funds || []).filter(applyFilters);
+  const l0list = (levels['0'] || levels[0] || []).filter(applyFilters);
   sections.push(renderLevelSection(0, 'L0 — Deep Recovery', 'level-0', l0list));
 
   // L1
