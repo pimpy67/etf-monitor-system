@@ -1501,10 +1501,12 @@ async function submitPortfolioEntry() {
   try {
     const url    = pfEditMode ? '/api/portfolio/' + isin : '/api/portfolio';
     const method = pfEditMode ? 'PUT' : 'POST';
+    const etfData = allEtfMap[isin] || {};
+    const categoria = etfData.categoria || '';
     const res = await fetch(url, {
       method,
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({isin, entry_date:entryDate, entry_price:entryPrice, fund_name:fundName})
+      body: JSON.stringify({isin, entry_date:entryDate, entry_price:entryPrice, fund_name:fundName, categoria})
     });
     const data = await res.json();
     if (res.ok) {
