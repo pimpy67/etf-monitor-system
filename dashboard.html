@@ -907,14 +907,34 @@ function renderPortfolioSection() {
       </div>
     </div>
     <div class="portfolio-body" id="portfolioBody" style="display:none;">
-      <div id="portfolioContent">
-        <div class="portfolio-empty">Nessun ETF nel portafoglio.<br>
-          <span style="color:#374151;">Usa il pulsante <strong style="color:#58a6ff;">+ Port.</strong> accanto a un ETF per aggiungerlo.</span>
-        </div>
+      <div style="display:flex;gap:0;border-bottom:1px solid #444;margin-bottom:12px;">
+        <button id="tab-l1" class="portfolio-tab active" onclick="switchPortfolioTab('L1')" style="flex:1;padding:8px;background:#1c2128;border:1px solid #444;border-bottom:none;cursor:pointer;color:#58a6ff;font-weight:600;">📊 L1 Portfolio (0)</button>
+        <button id="tab-l0" class="portfolio-tab" onclick="switchPortfolioTab('L0')" style="flex:1;padding:8px;background:#0d1117;border:1px solid #444;border-bottom:none;cursor:pointer;color:#8b949e;font-weight:600;">🔍 L0 Portfolio (0)</button>
       </div>
+      <div id="portfolioContentL1" style="display:block;"></div>
+      <div id="portfolioContentL0" style="display:none;"></div>
       <div id="slPanel" style="margin-top:20px;"></div>
     </div>
   </div>`;
+}
+
+function switchPortfolioTab(tabType) {
+  const l1Tab = document.getElementById('tab-l1');
+  const l0Tab = document.getElementById('tab-l0');
+  const l1Content = document.getElementById('portfolioContentL1');
+  const l0Content = document.getElementById('portfolioContentL0');
+
+  if (tabType === 'L1') {
+    if (l1Tab) { l1Tab.style.background = '#1c2128'; l1Tab.style.color = '#58a6ff'; }
+    if (l0Tab) { l0Tab.style.background = '#0d1117'; l0Tab.style.color = '#8b949e'; }
+    if (l1Content) l1Content.style.display = 'block';
+    if (l0Content) l0Content.style.display = 'none';
+  } else {
+    if (l1Tab) { l1Tab.style.background = '#0d1117'; l1Tab.style.color = '#8b949e'; }
+    if (l0Tab) { l0Tab.style.background = '#1c2128'; l0Tab.style.color = '#58a6ff'; }
+    if (l1Content) l1Content.style.display = 'none';
+    if (l0Content) l0Content.style.display = 'block';
+  }
 }
 
 // ── Param ref HTML ─────────────────────────────────────────────────────────
