@@ -458,8 +458,8 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
       <div class="detail-chart-wrap">
         <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px;z-index:1000;">
           <button class="detail-days-btn active" id="dbtn30" onclick="event.stopPropagation();changeDetailDays(30)" style="font-size:0.7em;padding:4px 8px;">30gg</button>
-          <button class="detail-days-btn" id="dbtn60" onclick="event.stopPropagation();changeDetailDays(60)" style="font-size:0.7em;padding:4px 8px;">60gg</button>
           <button class="detail-days-btn" id="dbtn120" onclick="event.stopPropagation();changeDetailDays(120)" style="font-size:0.7em;padding:4px 8px;">120gg</button>
+          <button class="detail-days-btn" id="dbtn240" onclick="event.stopPropagation();changeDetailDays(240)" style="font-size:0.7em;padding:4px 8px;">240gg</button>
         </div>
         <canvas id="detailChart"></canvas>
       </div>
@@ -1739,7 +1739,7 @@ function closeDetail() {
 
 async function changeDetailDays(days) {
   currentDetailDays = days;
-  [30,60,120].forEach(d => {
+  [30,120,240].forEach(d => {
     const btn = document.getElementById('dbtn'+d);
     if (btn) btn.classList.toggle('active', d===days);
   });
