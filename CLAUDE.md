@@ -306,10 +306,10 @@ Questi parametri sono usati per valutare le 4 condizioni di Velocity (P, R, D, X
 - `l0_entry.recovery_min_pct`: minimo recupero richiesto
 
 **Entrata L0** — tutte 4 condizioni obbligatorie:
-1. Prezzo almeno `dd_threshold`% sotto il picco (vedi tabella)
+1. Prezzo almeno `dd_threshold`% sotto il picco **degli ultimi 90 giorni** (non assoluto — evita falsi positivi su trend down lunghi)
 2. RSI < `rsi_max` (ipervenduto)
 3. Divergenza rialzista (prezzo minimo più basso, RSI minimo più alto negli ultimi `lookback_days`)
-4. Segnale recupero: RSI > 32 OPPURE micro-breakout ≥ 0.3% su 5 giorni
+4. Segnale recupero: RSI > **40** (non 32) OPPURE micro-breakout ≥ **1%** (non 0.3%) su 5 giorni
 
 **Uscita L0** — basta 1:
 - γ: Prezzo > EMA20 → promozione a L2
