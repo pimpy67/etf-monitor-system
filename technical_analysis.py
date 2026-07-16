@@ -521,7 +521,7 @@ class ETFTechnicalAnalyzer:
         l0_enabled = l0_entry_params.get('enabled', False)
         l0_dd_threshold = l0_entry_params.get('dd_threshold', 0.15)  # Default 15% per backward compat
         l0_rsi_max = l0_entry_params.get('rsi_max', 35)  # Default 35 per backward compat
-        l0_recovery_min = l0_entry_params.get('recovery_min_pct', 0.015)  # Default 1.5%
+        l0_recovery_min = l0_entry_params.get('recovery_min_pct', 0.01)  # Soglia micro-breakout: 1% (non 1.5%)  # Default 1.5%
         ema_fast_period = l0_entry_params.get('ema_fast_period', 10)
 
         # ── Uscita (se gia' in L0) ────────────────────────────────────────────
@@ -548,7 +548,9 @@ class ETFTechnicalAnalyzer:
             result['reason_codes'] = ['L0_DISABLED']
             return result
 
-        peak_price         = float(prices.max())
+        # Picco degli ultimi 90 giorni (non assoluto) per evitare falsi positivi su trend down lunghi
+        n_lookback_peak = min(90, len(prices))
+        peak_price = float(prices.iloc[-n_lookback_peak:].max())
         result['peak_price']  = round(peak_price, 4)
         result['peak_days']   = len(prices)
         dist_peak_pct      = (current - peak_price) / peak_price * 100
@@ -560,7 +562,7 @@ class ETFTechnicalAnalyzer:
         result['rsi_oversold'] = cond2
         cond3 = self._detect_positive_divergence(prices, rsi)
         result['divergence'] = cond3
-        rsi_rec    = self._detect_rsi_recovery(rsi, oversold=l0_rsi_max, recovery=32.0)
+        rsi_rec    = self._detect_rsi_recovery(rsi, oversold=l0_rsi_max, recovery=40.0)
 
         # Micro-breakout: controlla se il recovery è abbastanza forte
         n_lookback = 10
