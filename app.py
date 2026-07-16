@@ -718,6 +718,8 @@ def get_portfolio():
             'sg_suggerito':        float(sg_suggerito) if sg_suggerito else None,
             'entry_confidence':    float(entry_confidence) if entry_confidence else None,
             'entry_mode':          entry.get('entry_mode', 'STANDARD'),
+            'portfolio_type':      entry.get('portfolio_type', 'L1'),
+            'stop_loss_l0_suggested': float(entry.get('stop_loss_l0_suggested')) if entry.get('stop_loss_l0_suggested') else None,
             'accumulated_pcts':    accumulated_pcts,
             'accumulated_dates':   accumulated_dates,
         })
@@ -740,9 +742,27 @@ def add_to_portfolio():
         entry_price = float(entry_price)
     except (ValueError, TypeError):
         return jsonify({'error': 'entry_price deve essere un numero'}), 400
-    ok = db.add_portfolio_entry(isin, entry_date, entry_price, fund_name)
+    
+    # Determina se L1 o L0: controlla se esiste in etf_l1_tracking
+    is_l1 = db.is_etf_in_l1_tracking(isin)
+    portfolio_type = 'L1' if is_l1 else 'L0'
+    stop_loss_l0_suggested = None
+    
+    # Se L0, calcola stop loss dinamico dalla famiglia
+    if portfolio_type == 'L0':
+        categoria = data.get('categoria', '')
+        famiglia = ETFTechnicalAnalyzer.detect_family(categoria)
+        analyzer = ETFTechnicalAnalyzer(famiglia=famiglia)
+        profilo = analyzer.p
+        # Stop loss L0 suggerito: entry_price * (1 - sl_buffer_wide)
+        sl_buffer = profilo.get('sl_buffer_wide', 0.02)
+        stop_loss_l0_suggested = entry_price * (1 - sl_buffer)
+    
+    ok = db.add_portfolio_entry(isin, entry_date, entry_price, fund_name,
+                                portfolio_type=portfolio_type,
+                                stop_loss_l0_suggested=stop_loss_l0_suggested)
     if ok:
-        return jsonify({'status': 'ok', 'isin': isin})
+        return jsonify({'status': 'ok', 'isin': isin, 'portfolio_type': portfolio_type})
     return jsonify({'error': 'Errore salvataggio'}), 503
 
 

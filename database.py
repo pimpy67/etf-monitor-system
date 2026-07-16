@@ -216,6 +216,8 @@ class PriceDatabase:
                         exit_date DATE,
                         exit_price DECIMAL(12, 4),
                         status VARCHAR(20) DEFAULT 'active',
+                        portfolio_type VARCHAR(2) DEFAULT 'L1',
+                        stop_loss_l0_suggested DECIMAL(12, 4),
                         created_at TIMESTAMP DEFAULT NOW()
                     )
                 """)
@@ -849,7 +851,8 @@ class PriceDatabase:
                 cur.execute("""
                     SELECT isin, fund_name, entry_date, entry_price,
                            exit_date, exit_price, status,
-                           is_partial, partial_exit_date, partial_exit_price
+                           is_partial, partial_exit_date, partial_exit_price,
+                           portfolio_type, stop_loss_l0_suggested
                     FROM etf_portfolio_entries
                     ORDER BY entry_date DESC
                 """)
@@ -860,25 +863,67 @@ class PriceDatabase:
         finally:
             conn.close()
 
+    def get_portfolio_entries_by_type(self, portfolio_type: str = 'L1') -> list:
+        """Restituisce ETF del portafoglio filtrati per tipo (L1 o L0)."""
+        conn = self._get_connection()
+        if not conn:
+            return []
+        try:
+            from psycopg2.extras import RealDictCursor
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT isin, fund_name, entry_date, entry_price,
+                           exit_date, exit_price, status,
+                           is_partial, partial_exit_date, partial_exit_price,
+                           portfolio_type, stop_loss_l0_suggested
+                    FROM etf_portfolio_entries
+                    WHERE portfolio_type = %s
+                    ORDER BY entry_date DESC
+                """, (portfolio_type,))
+                return [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            logging.error(f"Errore get_portfolio_entries_by_type {portfolio_type}: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def is_etf_in_l1_tracking(self, isin: str) -> bool:
+        """Verifica se un ETF è in L1 tracking."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM etf_l1_tracking WHERE isin = %s LIMIT 1", (isin,))
+                return cur.fetchone() is not None
+        except Exception as e:
+            logging.error(f"Errore is_etf_in_l1_tracking {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
     def add_portfolio_entry(self, isin: str, entry_date: str,
-                            entry_price: float, fund_name: str = '') -> bool:
-        """Aggiunge un ETF al portafoglio (o riattiva se già presente)."""
+                            entry_price: float, fund_name: str = '',
+                            portfolio_type: str = 'L1', stop_loss_l0_suggested: float = None) -> bool:
+        """Aggiunge un ETF al portafoglio (L1 o L0) con opzionali stop loss L0."""
         conn = self._get_connection()
         if not conn:
             return False
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO etf_portfolio_entries (isin, fund_name, entry_date, entry_price, status)
-                    VALUES (%s, %s, %s, %s, 'active')
+                    INSERT INTO etf_portfolio_entries (isin, fund_name, entry_date, entry_price, status, portfolio_type, stop_loss_l0_suggested)
+                    VALUES (%s, %s, %s, %s, 'active', %s, %s)
                     ON CONFLICT (isin) DO UPDATE
                         SET entry_date = EXCLUDED.entry_date,
                             entry_price = EXCLUDED.entry_price,
                             fund_name = EXCLUDED.fund_name,
                             status = 'active',
+                            portfolio_type = EXCLUDED.portfolio_type,
+                            stop_loss_l0_suggested = EXCLUDED.stop_loss_l0_suggested,
                             exit_date = NULL,
                             exit_price = NULL
-                """, (isin, fund_name, entry_date, entry_price))
+                """, (isin, fund_name, entry_date, entry_price, portfolio_type, stop_loss_l0_suggested))
                 conn.commit()
                 return True
         except Exception as e:

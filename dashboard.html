@@ -1213,14 +1213,45 @@ async function loadAllPortfolioSLData() {
   }
 }
 
-function renderPortfolio(portfolio) {
-  const content = document.getElementById('portfolioContent');
-  if (!content) return;
-  if (!portfolio || portfolio.length === 0) {
-    content.innerHTML = '<div class="portfolio-empty">Nessun ETF nel portafoglio.<br><span style="color:#374151;">Usa il pulsante <strong style="color:#58a6ff;">+ Port.</strong> per aggiungere.</span></div>';
-    return;
+function renderPortfolio(portfolio) {function renderPortfolio(portfolio) {
+  // Separa i portfolio per tipo
+  const l1Portfolio = portfolio.filter(p => p.portfolio_type === 'L1' || !p.portfolio_type);
+  const l0Portfolio = portfolio.filter(p => p.portfolio_type === 'L0');
+  
+  const contentL1 = document.getElementById('portfolioContentL1');
+  const contentL0 = document.getElementById('portfolioContentL0');
+  
+  if (!contentL1 || !contentL0) return;
+  
+  // Aggiorna conteggi tab
+  document.getElementById('tab-l1').innerHTML = `📊 L1 Portfolio (${l1Portfolio.length})`;
+  document.getElementById('tab-l0').innerHTML = `🔍 L0 Portfolio (${l0Portfolio.length})`;
+  
+  // Renderizza L1
+  if (l1Portfolio.length === 0) {
+    contentL1.innerHTML = '<div class="portfolio-empty">Nessun ETF nel portafoglio L1.<br><span style="color:#374151;">Usa il pulsante <strong style="color:#58a6ff;">+ Port.</strong> su un ETF L1.</span></div>';
+  } else {
+    contentL1.innerHTML = renderPortfolioTable(l1Portfolio, 'L1');
   }
-  content.innerHTML = `<table class="portfolio-table">
+  
+  // Renderizza L0
+  if (l0Portfolio.length === 0) {
+    contentL0.innerHTML = '<div class="portfolio-empty">Nessun ETF nel portafoglio L0.<br><span style="color:#374151;">Usa il pulsante <strong style="color:#58a6ff;">+ Port.</strong> su un ETF L0.</span></div>';
+  } else {
+    contentL0.innerHTML = renderPortfolioTable(l0Portfolio, 'L0');
+  }
+  
+  // Aggiorna conteggio principale
+  const portfolioCount = document.getElementById('portfolioCount');
+  if (portfolioCount) {
+    portfolioCount.textContent = portfolio.length + ' ETF';
+  }
+}
+
+function renderPortfolioTable(portfolioData, portfolioType) {
+  if (!portfolioData || portfolioData.length === 0) return '';
+  
+  let tableHtml = `<table class="portfolio-table">
     <thead><tr>
       <th style="width:28%">ETF</th>
       <th style="width:10%">Acquisto</th>
@@ -1233,10 +1264,9 @@ function renderPortfolio(portfolio) {
       <th style="width:8%;text-align:center">Storico</th>
       <th style="width:14%;text-align:center">Azioni</th>
     </tr></thead>
-    <tbody id="portfolioTableBody"></tbody>
-  </table>`;
-  const tbody = document.getElementById('portfolioTableBody');
-  tbody.innerHTML = portfolio.map(p => {
+    <tbody>`;
+  
+  tableHtml += portfolioData.map(p => {
     const perf = p.perf_pct;
     const perfCls = perf > 0 ? 'pos' : perf < 0 ? 'neg' : 'zero';
     const perfStr = perf != null ? (perf > 0 ? '+' : '') + perf.toFixed(2) + '%' : '-';
@@ -1252,7 +1282,7 @@ function renderPortfolio(portfolio) {
     const partialBadgePf = p.is_partial
       ? `<span style="display:inline-block;background:rgba(255,140,0,0.18);color:#ff8c00;font-size:0.62em;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;border:1px solid rgba(255,140,0,0.4);vertical-align:middle;" title="Piede Dentro: 90% venduto il ${p.partial_exit_date||'?'} a ${p.partial_exit_price||'?'}">&#129463; 10%</span>`
       : '';
-    return `<tr id="pf-row-${isin}" style="cursor:pointer;" onclick="openETFDetail('${(allEtfMap[isin]?.ticker||'').replace(/'/g,"\\'")}','${isin}')">
+    return `<tr id="pf-row-${isin}" style="cursor:pointer;" onclick="openETFDetail('${(allEtfMap[isin]?.ticker||'').replace(/'/g,"\'")}','${isin}')">
       <td style="font-weight:600">${p.fund_name||isin}${partialBadgePf}<br><span style="font-family:monospace;font-size:0.7em;color:#555">${isin}</span></td>
       <td style="color:#8b949e;font-size:0.83em">${p.entry_date||'-'}</td>
       <td style="font-family:monospace;font-size:0.85em">${prAcq}</td>
@@ -1272,7 +1302,7 @@ function renderPortfolio(portfolio) {
       <td colspan="10" style="padding:12px;">
         <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:16px;font-size:0.85em;align-items:end;">
           <div><strong>Pr. Carico</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;">€${prAcq}</span></div>
-          <div><strong>SL Suggerito</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;" id="sl-sugg-${isin}">—</span></div>
+          <div><strong>SL Suggerito${portfolioType === 'L0' ? ' (dinamico)' : ''}</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;" id="sl-sugg-${isin}">${portfolioType === 'L0' && p.stop_loss_l0_suggested ? '€' + parseFloat(p.stop_loss_l0_suggested).toFixed(4) : '—'}</span></div>
           <div><strong>SL Personale</strong><br><input type="text" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="sl-pers-${isin}" placeholder="Inserisci SL" oninput="updatePortfolioP_L('${isin}',${prAcq})"></div>
           <div><strong>Quote</strong><br><input type="number" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="shares-${isin}" placeholder="N. quote" min="1" oninput="updatePortfolioP_L('${isin}',${prAcq})"></div>
           <div><strong>P&L se attivi SL</strong><br><span style="font-family:monospace;font-size:1.1em;" id="pnl-${isin}">—</span></div>
@@ -1284,8 +1314,10 @@ function renderPortfolio(portfolio) {
       <td colspan="10"><div id="hist-wrap-${isin}" style="padding:12px;color:#555;text-align:center;font-size:0.8em">Caricamento...</div></td>
     </tr>`;
   }).join('');
+  
+  tableHtml += '</tbody></table>';
+  return tableHtml;
 }
-
 function togglePortfolioSection() {
   portfolioSectionOpen = !portfolioSectionOpen;
   const body = document.getElementById('portfolioBody');
