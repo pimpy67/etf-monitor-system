@@ -1164,7 +1164,7 @@ class ETFMonitor:
                     sl_suggerito = sl_data.get('sl_suggerito')
 
                     # CALCOLA SG SUGGERITO — Stop Gain Dinamico basato su Slope (STEP 3 v3.0)
-                    sg_data = analyzer.calculate_stop_gain_dynamic(entry_price, current_price, ema20_series, family_params)
+                    sg_data = analyzer.calculate_stop_gain_dynamic(entry_price, current_price, ema20_series, analyzer.p)
                     if sg_data.get('trigger'):
                         sg_suggerito = current_price  # Take profit immediato
                         add_log(f"    💰 STOP_GAIN_DYNAMIC triggered: {sg_data.get('reason')}")
