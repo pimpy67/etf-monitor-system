@@ -1182,9 +1182,9 @@ async function loadPortfolio() {
     const res  = await fetch('/api/portfolio');
     const data = await res.json();
     const pf   = data.portfolio || [];
-    portfolioIsins = new Set(pf.filter(p => p.status === 'active').map(p => p.isin));
+    portfolioIsins = new Set(pf.map(p => p.isin));
     portfolioMap   = {};
-    pf.filter(p => p.status === 'active').forEach(p => {
+    pf.forEach(p => {
       portfolioMap[p.isin] = {
         entry_date: p.entry_date, entry_price: p.entry_price, fund_name: p.fund_name,
         is_partial: p.is_partial || false,
