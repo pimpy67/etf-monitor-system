@@ -2252,7 +2252,6 @@ function renderPortfolioSL(positions) {
           <th style="padding: 10px; text-align: right; color: #8b949e;">Guadagno</th>
           <th style="padding: 10px; text-align: right; color: #8b949e;">SL Inserito</th>
           <th style="padding: 10px; text-align: right; color: #8b949e;">SL Consigliato</th>
-          <th style="padding: 10px; text-align: center; color: #8b949e;">Azione</th>
         </tr>
       </thead>
       <tbody>
@@ -2277,14 +2276,6 @@ function renderPortfolioSL(positions) {
       slCol = '#d29922';
     }
 
-    // Button per accettare suggerimento (se diverso da inserito)
-    const needsAccept = !pos.sl_inserted || parseFloat(pos.sl_inserted) !== parseFloat(pos.sl_suggested);
-    const actionBtn = needsAccept ?
-      `<button onclick="acceptSLSuggestion('${pos.ticker}')" style="
-        background: #238636; color: white; border: none; padding: 4px 8px;
-        border-radius: 4px; cursor: pointer; font-size: 11px;">
-        Accetta →
-      </button>` : '✔️';
 
     const bgRow = i % 2 === 0 ? 'transparent' : '#0d1117';
 
@@ -2298,7 +2289,6 @@ function renderPortfolioSL(positions) {
         </td>
         <td style="padding: 10px; text-align: right; color: #90ee90; font-weight: bold; cursor: help;" title="Stop Loss Inserito">€${slIns}</td>
         <td style="padding: 10px; text-align: right; color: ${slCol}; font-weight: bold; cursor: help;" title="Stop Loss Suggerito">€${slSugg}</td>
-        <td style="padding: 10px; text-align: center;">${actionBtn}</td>
       </tr>
     `;
   });
@@ -2309,31 +2299,12 @@ function renderPortfolioSL(positions) {
     <div style="margin-top: 12px; font-size: 11px; color: #8b949e;">
       <strong>Legenda:</strong><br>
       <span style="color: #ffffff;">● </span>Entry Price (bianco nel grafico)<br>
-      <span style="color: #90ee90;">● </span>SL Inserito (verde nel grafico)<br>
-      • SL Consigliato: Accetta manualmente per aggiornarlo<br>
-      • Aggiornato automaticamente ogni giorno
+      <span style="color: #90ee90;">● </span>SL Inserito: Lo imposti tu manualmente<br>
+      <span style="color: #58a6ff;">● </span>SL Consigliato: Aggiornato automaticamente ogni monitor (trailing stop dinamico)
     </div>
   `;
 
   slPanel2.innerHTML = html;
-}
-
-async function acceptSLSuggestion(ticker) {
-  try {
-    const resp = await fetch('/api/accept-sl-suggestion', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ticker })
-    });
-    if (resp.ok) {
-      alert(`✅ SL accettato per ${ticker}`);
-      loadPortfolioSL();  // Ricarica la tabella
-    } else {
-      alert('❌ Errore nell\'accettare il suggerimento');
-    }
-  } catch (e) {
-    alert('❌ Errore: ' + e.message);
-  }
 }
 
 // Carica SL ogni volta che viene aggiornato il dashboard
