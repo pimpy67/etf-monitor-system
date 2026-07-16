@@ -705,11 +705,21 @@ function renderDashboard() {
       cats.map(c => `<button class="cat-btn ${activeCat===c?'active':''}" onclick="filterCat('${c.replace(/'/g,"\\'")}',this)">${c}</button>`).join('');
   }
 
-  // Build etf map
-  for (const list of Object.values(allData.levels || {}))
-    for (const e of list) if (e.isin) allEtfMap[e.isin] = {nome: e.nome || e.ticker, price: e.price || 0, ticker: e.ticker || ''};
+  // Build etf map with level + drawdown
   const levels = allData.levels || {};
-  for (const e of (levels[0] || [])) if (e.isin) allEtfMap[e.isin] = {nome: e.nome || e.ticker, price: e.price || 0, ticker: e.ticker || ''};
+  for (const [lvl, list] of Object.entries(levels)) {
+    for (const e of (list || [])) {
+      if (e.isin) {
+        allEtfMap[e.isin] = {
+          nome: e.nome || e.ticker,
+          price: e.price || 0,
+          ticker: e.ticker || '',
+          level: parseInt(lvl),
+          drawdown_from_peak: e.drawdown_from_peak || 0
+        };
+      }
+    }
+  }
 
   const sections = [];
 
@@ -1258,7 +1268,7 @@ function renderPortfolioTable(portfolioData, portfolioType) {
       <th style="width:9%">Pr. Acq.</th>
       <th style="width:9%">Pr. Att.</th>
       <th style="width:8%">Perf %</th>
-      <th style="width:5%;text-align:center">Liv.</th>
+      <th style="width:10%;text-align:center">Drawdown [Liv]</th>
       <th style="width:6%;text-align:center">RSI</th>
       <th style="width:8%;text-align:center">Dist EMA20</th>
       <th style="width:8%;text-align:center">Storico</th>
@@ -1276,9 +1286,14 @@ function renderPortfolioTable(portfolioData, portfolioType) {
     const distCls = (p.dist_ema20||0) > 0 ? 'pos' : (p.dist_ema20||0) < 0 ? 'neg' : 'zero';
     const prAtt   = p.current_price != null ? parseFloat(p.current_price).toFixed(4) : '-';
     const prAcq   = p.entry_price   != null ? parseFloat(p.entry_price).toFixed(4) : '-';
-    const lv = p.level;
-    const levBadge = lv != null ? `<span class="lv-badge lv${lv}">L${lv}</span>` : '-';
     const isin = p.isin;
+    const etfData = allEtfMap[isin] || {};
+    const lvActual = etfData.level != null ? etfData.level : p.level;
+    const ddFromPeak = etfData.drawdown_from_peak != null ? etfData.drawdown_from_peak : 0;
+    const ddStr = ddFromPeak !== 0 ? (ddFromPeak > 0 ? '+' : '') + ddFromPeak.toFixed(2) + '%' : '—';
+    const ddCls = ddFromPeak > 0 ? 'pos' : ddFromPeak < 0 ? 'neg' : 'zero';
+    const lvBadge = lvActual != null ? `<span class="lv-badge lv${lvActual}">L${lvActual}</span>` : '-';
+    const drawdownBadge = `<span class="pct ${ddCls}">${ddStr}</span>&nbsp;${lvBadge}`;
     const partialBadgePf = p.is_partial
       ? `<span style="display:inline-block;background:rgba(255,140,0,0.18);color:#ff8c00;font-size:0.62em;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;border:1px solid rgba(255,140,0,0.4);vertical-align:middle;" title="Piede Dentro: 90% venduto il ${p.partial_exit_date||'?'} a ${p.partial_exit_price||'?'}">&#129463; 10%</span>`
       : '';
@@ -1288,7 +1303,7 @@ function renderPortfolioTable(portfolioData, portfolioType) {
       <td style="font-family:monospace;font-size:0.85em">${prAcq}</td>
       <td style="font-family:monospace;font-size:0.85em">${prAtt}</td>
       <td><span class="perf-badge ${perfCls}">${perfStr}</span></td>
-      <td style="text-align:center">${levBadge}</td>
+      <td style="text-align:center;font-size:0.88em">${drawdownBadge}</td>
       <td class="rsi-val ${rsiCls}" style="text-align:center">${rsiVal}</td>
       <td class="pct ${distCls}" style="text-align:center;font-size:0.88em">${distEma}</td>
       <td style="text-align:center"><button class="btn-toggle-hist" onclick="event.stopPropagation();toggleEtfHistory('${isin}')" id="btn-hist-${isin}">&#9660; 30gg</button></td>
