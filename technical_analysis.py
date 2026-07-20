@@ -1892,6 +1892,156 @@ class ETFTechnicalAnalyzer:
             'analysis_date':       datetime.now().strftime('%Y-%m-%d %H:%M'),
         }
 
+    # ── L0 ENGINE: Filtro di Regime + Doppio Percorso ──────────────────────────
+
+    def l0_detect_regime_filter(self, prices: pd.Series, sma200: Optional[float],
+                                atr_60: Optional[float], volume_20ma: Optional[float]) -> Dict:
+        """Determina se regime è adatto a L0 (bear market o flash crash)."""
+        if prices is None or len(prices) < 50 or sma200 is None:
+            return {'regime_suitable': False, 'regime_type': 'none', 'days_below_sma200': 0, 'recent_dd_pct': 0.0}
+
+        current_price = prices.iloc[-1]
+        days_below_sma200 = 0
+        for i in range(len(prices) - 1, -1, -1):
+            if prices.iloc[i] < sma200:
+                days_below_sma200 += 1
+            else:
+                break
+
+        lookback_dd = min(60, len(prices))
+        recent_high = prices.iloc[-lookback_dd:].max()
+        recent_dd_pct = (recent_high - current_price) / recent_high if recent_high > 0 else 0.0
+
+        config = self.p.get('l0_regime', {})
+        regime_min_days = config.get('regime_min_days_below_sma200', 10)
+        slow_path_active = days_below_sma200 >= regime_min_days
+
+        fast_path_active = False
+        if atr_60 and atr_60 > 0:
+            dd_normalized = recent_dd_pct / (atr_60 / current_price) if current_price > 0 else 0
+            flash_zscore = config.get('flash_crash_zscore_threshold', 4.0)
+            fast_path_active = dd_normalized >= flash_zscore
+
+        regime_type = 'fast_crash' if fast_path_active else ('slow_bear' if slow_path_active else 'none')
+
+        return {
+            'regime_suitable': slow_path_active or fast_path_active,
+            'regime_type': regime_type,
+            'days_below_sma200': days_below_sma200,
+            'recent_dd_pct': recent_dd_pct
+        }
+
+    # ── L1 ENGINE: Entrata L1 (7 Condizioni Tutte Obbligatorie) ──────────────────
+
+    def l1_check_7_conditions(self, prices: pd.Series, ema20: Optional[float],
+                              sma50: Optional[float], rsi_14: Optional[float],
+                              adx_14: Optional[float], macd_histogram: Optional[float],
+                              macd_histogram_prev: Optional[float], volume: Optional[float],
+                              atr_14: Optional[float], high_series: pd.Series, low_series: pd.Series,
+                              volume_20ma: Optional[float], days_above_ema20: int) -> Dict:
+        """Logica L1 semplificata v4.0: 7 condizioni tutte obbligatorie."""
+        if prices is None or len(prices) < 20 or ema20 is None:
+            return {
+                'entry_l1': False, 'level': 3,
+                'conditions': {k: False for k in ['gate_a', 'gate_m', 'alignment_p', 'rsi_r', 'adx_d', 'macd_momentum', 'space_residuo']},
+                'space_detail': {}, 'confidence': 0.0
+            }
+
+        current_price = prices.iloc[-1]
+
+        gate_a = current_price > ema20
+        gate_m = (macd_histogram is not None) and (macd_histogram > 0)
+
+        if not (gate_a and gate_m):
+            return {
+                'entry_l1': False, 'level': 2,
+                'conditions': {'gate_a': gate_a, 'gate_m': gate_m, 'alignment_p': False, 'rsi_r': False, 'adx_d': False, 'macd_momentum': False, 'space_residuo': False},
+                'space_detail': {}, 'confidence': 0.0
+            }
+
+        alignment_p = (sma50 is not None) and (current_price > sma50)
+        rsi_low, rsi_high = self.p.get('rsi_entry_low'), self.p.get('rsi_entry_high')
+        rsi_r = (rsi_14 is not None) and (rsi_low <= rsi_14 <= rsi_high)
+        adx_entry = self.p.get('adx_entry')
+        adx_d = (adx_14 is not None) and (adx_entry is not None) and (adx_14 >= adx_entry)
+        dist_ema20_pct = abs(current_price - ema20) / ema20 if ema20 > 0 else 0.99
+        macd_momentum = (macd_histogram_prev is not None) and ((macd_histogram > macd_histogram_prev) or (dist_ema20_pct < 0.02))
+
+        if not (alignment_p and rsi_r and adx_d and macd_momentum):
+            return {
+                'entry_l1': False, 'level': 2,
+                'conditions': {'gate_a': gate_a, 'gate_m': gate_m, 'alignment_p': alignment_p, 'rsi_r': rsi_r, 'adx_d': adx_d, 'macd_momentum': macd_momentum, 'space_residuo': False},
+                'space_detail': {}, 'confidence': 0.0
+            }
+
+        space_check = self.l1_check_space_residuo_minimo(current_price, high_series, low_series, atr_14, volume, volume_20ma)
+        entry_l1 = space_check['valid']
+
+        return {
+            'entry_l1': entry_l1, 'level': 1 if entry_l1 else 2,
+            'conditions': {'gate_a': gate_a, 'gate_m': gate_m, 'alignment_p': alignment_p, 'rsi_r': rsi_r, 'adx_d': adx_d, 'macd_momentum': macd_momentum, 'space_residuo': space_check['valid']},
+            'space_detail': space_check, 'confidence': 1.0 if entry_l1 else 0.0
+        }
+
+    def l1_check_space_residuo_minimo(self, current_price: float, high_series: pd.Series,
+                                      low_series: pd.Series, atr_14: Optional[float],
+                                      volume: Optional[float], volume_20ma: Optional[float]) -> Dict:
+        """7a condizione: spazio residuo minimo."""
+        if current_price <= 0:
+            return {'valid': False, 'method': 'none', 'space_pct': 0.0, 'threshold': 0.0}
+
+        config = self.p.get('l1_space_residuo', {})
+        min_reward_pct = config.get('min_reward_pct', 0.03)
+        resistance_lookback = config.get('resistance_lookback_days', 30)
+        atr_mult = config.get('atr_multiplier', 1.8)
+
+        lookback_res = min(resistance_lookback, len(high_series))
+        resistance_high = high_series.iloc[-lookback_res:].max() if lookback_res > 0 else current_price
+        dist_resistance = (resistance_high - current_price) / current_price if resistance_high > 0 else 0
+
+        dist_atr = (atr_14 * atr_mult) / current_price if atr_14 and atr_14 > 0 else 0
+        best_space = max(dist_resistance, dist_atr)
+        best_method = 'resistance' if dist_resistance >= dist_atr else 'atr'
+
+        if best_space >= min_reward_pct:
+            return {'valid': True, 'method': best_method, 'space_pct': best_space, 'threshold': min_reward_pct}
+
+        return {'valid': False, 'method': 'none', 'space_pct': best_space, 'threshold': min_reward_pct}
+
+    # ── L2 ENGINE: Readiness Score ───────────────────────────────────────────────
+
+    def l2_calculate_readiness_score(self, prices: pd.Series, ema20: Optional[float],
+                                     rsi_14: Optional[float], adx_14: Optional[float],
+                                     volume: Optional[float], volume_20ma: Optional[float],
+                                     days_above_ema20: int) -> float:
+        """Calcola score 0-100 per L2 readiness (pre-screening)."""
+        if prices is None or len(prices) < 20 or ema20 is None:
+            return 0.0
+
+        current_price = prices.iloc[-1]
+        score_components = {}
+
+        ema_dist_max = self.p.get('ema_dist_max', 4.0)
+        dist_pct = (current_price - ema20) / ema20 if ema20 > 0 else 0.99
+        score_components['dist'] = (1.0 - (dist_pct / (ema_dist_max / 100))) * 20 if 0 <= dist_pct <= (ema_dist_max / 100) else 0
+
+        rsi_low = self.p.get('rsi_entry_low')
+        if rsi_14 and rsi_low and rsi_14 < rsi_low and rsi_14 > (rsi_low - 5):
+            score_components['rsi'] = ((rsi_14 - (rsi_low - 5)) / 5) * 20
+        else:
+            score_components['rsi'] = 0
+
+        adx_entry = self.p.get('adx_entry', 20)
+        score_components['adx'] = 20 if (adx_14 and adx_14 > adx_entry) else 0
+
+        score_components['volume'] = min((volume / volume_20ma - 1) / (1.2 - 1) * 10, 10) if volume and volume_20ma and volume_20ma > 0 else 0
+
+        days_target = self.p.get('days_above_ema', 3)
+        score_components['days'] = min(days_above_ema20 / days_target, 1.0) * 10
+
+        raw_score = sum(score_components.values())
+        return max(0, min(100, raw_score))
+
     # ── Utility ────────────────────────────────────────────────────────────────
 
     @staticmethod
