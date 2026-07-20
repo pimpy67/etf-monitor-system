@@ -643,6 +643,19 @@ def l1_exits_api():
     return jsonify({'exits': result, 'count': len(result)})
 
 
+@app.route('/api/l2-watchlist')
+def get_l2_watchlist():
+    """Ritorna lista ETF in L2 Readiness watchlist (in_watchlist=true)."""
+    try:
+        if not db or not db.connection:
+            return jsonify([])
+        watchlist = db.get_l2_watchlist_active()
+        return jsonify(watchlist)
+    except Exception as e:
+        print(f"L2 watchlist error: {e}")
+        return jsonify([])
+
+
 @app.route('/api/portfolio', methods=['GET'])
 def get_portfolio():
     """Portafoglio personale ETF arricchito con dati attuali."""

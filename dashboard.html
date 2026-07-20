@@ -910,9 +910,11 @@ function renderPortfolioSection() {
       <div style="display:flex;gap:0;border-bottom:1px solid #444;margin-bottom:12px;">
         <button id="tab-l1" class="portfolio-tab active" onclick="switchPortfolioTab('L1')" style="flex:1;padding:8px;background:#1c2128;border:1px solid #444;border-bottom:none;cursor:pointer;color:#58a6ff;font-weight:600;">📊 L1 Portfolio (0)</button>
         <button id="tab-l0" class="portfolio-tab" onclick="switchPortfolioTab('L0')" style="flex:1;padding:8px;background:#0d1117;border:1px solid #444;border-bottom:none;cursor:pointer;color:#8b949e;font-weight:600;">🔍 L0 Portfolio (0)</button>
+        <button id="tab-l2" class="portfolio-tab" onclick="switchPortfolioTab('L2')" style="flex:1;padding:8px;background:#0d1117;border:1px solid #444;border-bottom:none;cursor:pointer;color:#8b949e;font-weight:600;">🟨 L2 Readiness (0)</button>
       </div>
       <div id="portfolioContentL1" style="display:block;"></div>
       <div id="portfolioContentL0" style="display:none;"></div>
+      <div id="portfolioContentL2" style="display:none;"></div>
       <div id="slPanel" style="margin-top:20px;"></div>
     </div>
   </div>`;
@@ -921,19 +923,30 @@ function renderPortfolioSection() {
 function switchPortfolioTab(tabType) {
   const l1Tab = document.getElementById('tab-l1');
   const l0Tab = document.getElementById('tab-l0');
+  const l2Tab = document.getElementById('tab-l2');
   const l1Content = document.getElementById('portfolioContentL1');
   const l0Content = document.getElementById('portfolioContentL0');
+  const l2Content = document.getElementById('portfolioContentL2');
 
+  // Reset all tabs
+  [l1Tab, l0Tab, l2Tab].forEach(tab => {
+    if (tab) { tab.style.background = '#0d1117'; tab.style.color = '#8b949e'; }
+  });
+  [l1Content, l0Content, l2Content].forEach(content => {
+    if (content) content.style.display = 'none';
+  });
+
+  // Activate selected tab
   if (tabType === 'L1') {
     if (l1Tab) { l1Tab.style.background = '#1c2128'; l1Tab.style.color = '#58a6ff'; }
-    if (l0Tab) { l0Tab.style.background = '#0d1117'; l0Tab.style.color = '#8b949e'; }
     if (l1Content) l1Content.style.display = 'block';
-    if (l0Content) l0Content.style.display = 'none';
-  } else {
-    if (l1Tab) { l1Tab.style.background = '#0d1117'; l1Tab.style.color = '#8b949e'; }
+  } else if (tabType === 'L0') {
     if (l0Tab) { l0Tab.style.background = '#1c2128'; l0Tab.style.color = '#58a6ff'; }
-    if (l1Content) l1Content.style.display = 'none';
     if (l0Content) l0Content.style.display = 'block';
+  } else if (tabType === 'L2') {
+    if (l2Tab) { l2Tab.style.background = '#1c2128'; l2Tab.style.color = '#FFC000'; }
+    if (l2Content) l2Content.style.display = 'block';
+    loadL2Watchlist();  // Load L2 data on tab open
   }
 }
 
@@ -2523,6 +2536,54 @@ async function saveStopLoss() {
   } catch(e) {
     console.error('saveStopLoss error:', e);
     alert('❌ Errore: ' + e.message);
+  }
+}
+
+// L2 Readiness Watchlist
+async function loadL2Watchlist() {
+  try {
+    const resp = await fetch('/api/l2-watchlist');
+    if (!resp.ok) { console.log('L2 data unavailable'); return; }
+
+    const watchlist = await resp.json();
+    const container = document.getElementById('portfolioContentL2');
+    if (!container) return;
+
+    if (!watchlist || watchlist.length === 0) {
+      container.innerHTML = '<div class="empty-msg">Nessun ETF in L2 Readiness</div>';
+      document.getElementById('tab-l2').textContent = '🟨 L2 Readiness (0)';
+      return;
+    }
+
+    document.getElementById('tab-l2').textContent = `🟨 L2 Readiness (${watchlist.length})`;
+
+    let html = '<table style="width:100%;font-size:0.82em;border-collapse:collapse;">';
+    html += '<thead style="background:rgba(10,15,25,0.7);"><tr>';
+    html += '<th style="padding:7px;text-align:left;color:#555;font-weight:bold;border-bottom:1px solid rgba(255,255,255,0.1);">Ticker</th>';
+    html += '<th style="padding:7px;text-align:center;color:#555;font-weight:bold;border-bottom:1px solid rgba(255,255,255,0.1);">Score</th>';
+    html += '<th style="padding:7px;text-align:center;color:#555;font-weight:bold;border-bottom:1px solid rgba(255,255,255,0.1);">Status</th>';
+    html += '<th style="padding:7px;text-align:center;color:#555;font-weight:bold;border-bottom:1px solid rgba(255,255,255,0.1);">Entry Date</th>';
+    html += '</tr></thead><tbody>';
+
+    watchlist.forEach(w => {
+      const score = (w.score || 0).toFixed(0);
+      const scoreColor = score >= 70 ? '#FFC000' : (score >= 60 ? '#FF8F00' : '#8b949e');
+      const status = score >= 70 ? '🟨 WATCH' : (score >= 60 ? '🟡 NEAR' : '⚪ LOW');
+      const entryDate = w.entered_date || '—';
+
+      html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);hover:background:rgba(255,255,255,0.02);cursor:pointer;">';
+      html += `<td style="padding:8px;color:#ccc;">${w.ticker || '—'}</td>`;
+      html += `<td style="padding:8px;text-align:center;color:${scoreColor};font-weight:bold;">${score}</td>`;
+      html += `<td style="padding:8px;text-align:center;color:#8b949e;">${status}</td>`;
+      html += `<td style="padding:8px;text-align:center;color:#555;font-size:0.9em;">${entryDate}</td>`;
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  } catch(e) {
+    console.log('L2 watchlist error:', e);
+    document.getElementById('portfolioContentL2').innerHTML = '<div class="empty-msg">⚠️ Errore caricamento L2</div>';
   }
 }
 </script>
