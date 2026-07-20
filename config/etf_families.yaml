@@ -1,7 +1,26 @@
+# ============================================================================
+# L2 READINESS SCORE — Parametri globali (non famiglia-specifici)
+# ============================================================================
+l2_readiness:
+  threshold_enter: 70                    # score >= 70 → entra watchlist
+  threshold_exit: 60                     # score < 60 → esce watchlist (isteresi)
+  smoothing_period: 3                    # EMA su score grezzo (giorni)
+  jump_threshold: 25                     # override di salto (delta punti)
+  rsi_approach_margin: 5                 # punti dal bordo range L1
+  adx_trend_days: 5                      # giorni di salita ADX per L2
+  volume_ratio_threshold: 1.2            # volume > 1.2x media 20gg
+  weights:
+    dist_ema20: 0.20
+    rsi_approach: 0.20
+    adx_rising: 0.20
+    macd_histogram: 0.20
+    volume_expansion: 0.10
+    days_above_ema_partial: 0.10
+
 families:
   equity_sviluppati:
     description: "Equity sviluppati \u2014 Large cap, ACWI, All-World"
-    entry_mode: ACCELERATED
+    entry_mode: STANDARD
     rsi_entry_low: 45
     rsi_entry_high: 55
     rsi_exit_min: 40
@@ -30,6 +49,15 @@ families:
     sg_floor_pct: 0.02
     sg_decay_day: 0.002
     sg_rsi_exit: 65
+    l0_regime:
+      regime_min_days_below_sma200: 10
+      dd_min_duration_days: 4
+      dd_threshold_atr_multiple: 3.0
+      capitulation_volume_multiplier: 2.2
+      reclaim_ema_slow_period: 50
+      flash_crash_zscore_threshold: 4.0
+      flash_crash_window_days: 3
+      reclaim_ema_fast_period: 20
     l0_entry:
       enabled: true
       dd_threshold: 0.065
@@ -37,6 +65,12 @@ families:
       lookback_high_days: 3
       recovery_min_pct: 0.015
       ema_fast_period: 10
+    l1_space_residuo:
+      min_reward_pct: 0.030
+      resistance_lookback_days: 30
+      atr_multiplier: 1.8
+      squeeze_threshold_pct: 0.008
+      squeeze_percentile_threshold: 20
     l1_stop_gain_dynamic:
       target_max_pct: 0.05
       target_floor_pct: 0.025
@@ -72,6 +106,15 @@ families:
     sg_floor_pct: 0.025
     sg_decay_day: 0.002
     sg_rsi_exit: 65
+    l0_regime:
+      regime_min_days_below_sma200: 8
+      dd_min_duration_days: 3
+      dd_threshold_atr_multiple: 2.8
+      capitulation_volume_multiplier: 2.3
+      reclaim_ema_slow_period: 50
+      flash_crash_zscore_threshold: 4.2
+      flash_crash_window_days: 2
+      reclaim_ema_fast_period: 20
     l0_entry:
       enabled: true
       dd_threshold: 0.085
@@ -79,7 +122,13 @@ families:
       lookback_high_days: 3
       recovery_min_pct: 0.02
       ema_fast_period: 10
-    entry_mode: BOTH
+    l1_space_residuo:
+      min_reward_pct: 0.035
+      resistance_lookback_days: 25
+      atr_multiplier: 1.7
+      squeeze_threshold_pct: 0.010
+      squeeze_percentile_threshold: 20
+    entry_mode: STANDARD
     l1_stop_gain_dynamic:
       target_max_pct: 0.065
       target_floor_pct: 0.03
@@ -115,6 +164,15 @@ families:
     sg_floor_pct: 0.035
     sg_decay_day: 0.002
     sg_rsi_exit: 65
+    l0_regime:
+      regime_min_days_below_sma200: 8
+      dd_min_duration_days: 3
+      dd_threshold_atr_multiple: 3.0
+      capitulation_volume_multiplier: 2.3
+      reclaim_ema_slow_period: 50
+      flash_crash_zscore_threshold: 4.5
+      flash_crash_window_days: 2
+      reclaim_ema_fast_period: 20
     l0_entry:
       enabled: true
       dd_threshold: 0.1
@@ -122,7 +180,13 @@ families:
       lookback_high_days: 2
       recovery_min_pct: 0.025
       ema_fast_period: 8
-    entry_mode: ACCELERATED
+    l1_space_residuo:
+      min_reward_pct: 0.035
+      resistance_lookback_days: 25
+      atr_multiplier: 1.8
+      squeeze_threshold_pct: 0.012
+      squeeze_percentile_threshold: 20
+    entry_mode: STANDARD
     l1_stop_gain_dynamic:
       target_max_pct: 0.07
       target_floor_pct: 0.03
@@ -158,6 +222,15 @@ families:
     sg_floor_pct: 0.015
     sg_decay_day: 0.002
     sg_rsi_exit: 65
+    l0_regime:
+      regime_min_days_below_sma200: 10
+      dd_min_duration_days: 4
+      dd_threshold_atr_multiple: 3.2
+      capitulation_volume_multiplier: 2.1
+      reclaim_ema_slow_period: 50
+      flash_crash_zscore_threshold: 3.8
+      flash_crash_window_days: 3
+      reclaim_ema_fast_period: 20
     l0_entry:
       enabled: true
       dd_threshold: 0.05
@@ -165,6 +238,12 @@ families:
       lookback_high_days: 3
       recovery_min_pct: 0.01
       ema_fast_period: 10
+    l1_space_residuo:
+      min_reward_pct: 0.025
+      resistance_lookback_days: 30
+      atr_multiplier: 1.9
+      squeeze_threshold_pct: 0.006
+      squeeze_percentile_threshold: 25
     entry_mode: STANDARD
     l1_stop_gain_dynamic:
       target_max_pct: 0.03
@@ -201,6 +280,15 @@ families:
     sg_floor_pct: 0.01
     sg_decay_day: 0.001
     sg_rsi_exit: 65
+    l0_regime:
+      regime_min_days_below_sma200: 12
+      dd_min_duration_days: 5
+      dd_threshold_atr_multiple: 3.5
+      capitulation_volume_multiplier: 2.0
+      reclaim_ema_slow_period: 50
+      flash_crash_zscore_threshold: 3.5
+      flash_crash_window_days: 4
+      reclaim_ema_fast_period: 20
     l0_entry:
       enabled: true
       dd_threshold: 0.04
@@ -208,6 +296,12 @@ families:
       lookback_high_days: 5
       recovery_min_pct: 0.008
       ema_fast_period: 15
+    l1_space_residuo:
+      min_reward_pct: 0.015
+      resistance_lookback_days: 40
+      atr_multiplier: 2.0
+      squeeze_threshold_pct: 0.004
+      squeeze_percentile_threshold: 25
     entry_mode: STANDARD
     l1_stop_gain_dynamic:
       target_max_pct: 0.025
@@ -244,6 +338,15 @@ families:
     sg_floor_pct: 0.015
     sg_decay_day: 0.001
     sg_rsi_exit: 65
+    l0_regime:
+      regime_min_days_below_sma200: 11
+      dd_min_duration_days: 4
+      dd_threshold_atr_multiple: 3.2
+      capitulation_volume_multiplier: 2.1
+      reclaim_ema_slow_period: 50
+      flash_crash_zscore_threshold: 3.8
+      flash_crash_window_days: 3
+      reclaim_ema_fast_period: 20
     l0_entry:
       enabled: true
       dd_threshold: 0.055
@@ -251,6 +354,12 @@ families:
       lookback_high_days: 3
       recovery_min_pct: 0.012
       ema_fast_period: 10
+    l1_space_residuo:
+      min_reward_pct: 0.020
+      resistance_lookback_days: 35
+      atr_multiplier: 1.9
+      squeeze_threshold_pct: 0.005
+      squeeze_percentile_threshold: 25
     entry_mode: STANDARD
     l1_stop_gain_dynamic:
       target_max_pct: 0.04
@@ -287,6 +396,15 @@ families:
     sg_floor_pct: 0.03
     sg_decay_day: 0.002
     sg_rsi_exit: 65
+    l0_regime:
+      regime_min_days_below_sma200: 8
+      dd_min_duration_days: 3
+      dd_threshold_atr_multiple: 2.5
+      capitulation_volume_multiplier: 2.5
+      reclaim_ema_slow_period: 50
+      flash_crash_zscore_threshold: 4.5
+      flash_crash_window_days: 2
+      reclaim_ema_fast_period: 20
     l0_entry:
       enabled: true
       dd_threshold: 0.1
@@ -294,7 +412,13 @@ families:
       lookback_high_days: 3
       recovery_min_pct: 0.025
       ema_fast_period: 10
-    entry_mode: ACCELERATED
+    l1_space_residuo:
+      min_reward_pct: 0.035
+      resistance_lookback_days: 20
+      atr_multiplier: 1.7
+      squeeze_threshold_pct: 0.015
+      squeeze_percentile_threshold: 20
+    entry_mode: STANDARD
     l1_stop_gain_dynamic:
       target_max_pct: 0.06
       target_floor_pct: 0.025
@@ -330,6 +454,15 @@ families:
     sg_floor_pct: 0.025
     sg_decay_day: 0.002
     sg_rsi_exit: 65
+    l0_regime:
+      regime_min_days_below_sma200: 9
+      dd_min_duration_days: 3
+      dd_threshold_atr_multiple: 2.7
+      capitulation_volume_multiplier: 2.3
+      reclaim_ema_slow_period: 50
+      flash_crash_zscore_threshold: 4.2
+      flash_crash_window_days: 2
+      reclaim_ema_fast_period: 20
     l0_entry:
       enabled: true
       dd_threshold: 0.08
@@ -337,7 +470,13 @@ families:
       lookback_high_days: 3
       recovery_min_pct: 0.02
       ema_fast_period: 10
-    entry_mode: BOTH
+    l1_space_residuo:
+      min_reward_pct: 0.030
+      resistance_lookback_days: 25
+      atr_multiplier: 1.8
+      squeeze_threshold_pct: 0.010
+      squeeze_percentile_threshold: 20
+    entry_mode: STANDARD
     l1_stop_gain_dynamic:
       target_max_pct: 0.055
       target_floor_pct: 0.025
@@ -373,6 +512,15 @@ families:
     sg_floor_pct: 0.025
     sg_decay_day: 0.002
     sg_rsi_exit: 65
+    l0_regime:
+      regime_min_days_below_sma200: 8
+      dd_min_duration_days: 3
+      dd_threshold_atr_multiple: 2.8
+      capitulation_volume_multiplier: 2.3
+      reclaim_ema_slow_period: 50
+      flash_crash_zscore_threshold: 4.3
+      flash_crash_window_days: 2
+      reclaim_ema_fast_period: 20
     l0_entry:
       enabled: true
       dd_threshold: 0.08
@@ -380,7 +528,13 @@ families:
       lookback_high_days: 3
       recovery_min_pct: 0.02
       ema_fast_period: 10
-    entry_mode: ACCELERATED
+    l1_space_residuo:
+      min_reward_pct: 0.032
+      resistance_lookback_days: 22
+      atr_multiplier: 1.7
+      squeeze_threshold_pct: 0.012
+      squeeze_percentile_threshold: 20
+    entry_mode: STANDARD
     l1_stop_gain_dynamic:
       target_max_pct: 0.06
       target_floor_pct: 0.025
@@ -416,6 +570,15 @@ families:
     sg_floor_pct: 0.02
     sg_decay_day: 0.001
     sg_rsi_exit: 65
+    l0_regime:
+      regime_min_days_below_sma200: 10
+      dd_min_duration_days: 4
+      dd_threshold_atr_multiple: 3.1
+      capitulation_volume_multiplier: 2.1
+      reclaim_ema_slow_period: 50
+      flash_crash_zscore_threshold: 3.9
+      flash_crash_window_days: 3
+      reclaim_ema_fast_period: 20
     l0_entry:
       enabled: true
       dd_threshold: 0.07
@@ -423,6 +586,12 @@ families:
       lookback_high_days: 3
       recovery_min_pct: 0.015
       ema_fast_period: 12
+    l1_space_residuo:
+      min_reward_pct: 0.025
+      resistance_lookback_days: 30
+      atr_multiplier: 1.9
+      squeeze_threshold_pct: 0.008
+      squeeze_percentile_threshold: 22
     entry_mode: STANDARD
     l1_stop_gain_dynamic:
       target_max_pct: 0.04
@@ -459,6 +628,15 @@ families:
     sg_floor_pct: 0.06
     sg_decay_day: 0.003
     sg_rsi_exit: 65
+    l0_regime:
+      regime_min_days_below_sma200: 6
+      dd_min_duration_days: 2
+      dd_threshold_atr_multiple: 2.2
+      capitulation_volume_multiplier: 2.8
+      reclaim_ema_slow_period: 50
+      flash_crash_zscore_threshold: 5.0
+      flash_crash_window_days: 2
+      reclaim_ema_fast_period: 20
     l0_entry:
       enabled: true
       dd_threshold: 0.25
@@ -466,7 +644,13 @@ families:
       lookback_high_days: 2
       recovery_min_pct: 0.05
       ema_fast_period: 8
-    entry_mode: ACCELERATED
+    l1_space_residuo:
+      min_reward_pct: 0.050
+      resistance_lookback_days: 20
+      atr_multiplier: 1.5
+      squeeze_threshold_pct: 0.025
+      squeeze_percentile_threshold: 18
+    entry_mode: STANDARD
     l1_stop_gain_dynamic:
       target_max_pct: 0.15
       target_floor_pct: 0.05
@@ -504,9 +688,17 @@ families:
     sg_floor_pct: 0.075
     sg_decay_day: 0.003
     sg_rsi_exit: 65
+    l0_regime:
+      enabled: false
     l0_entry:
       enabled: false
-    entry_mode: ACCELERATED
+    l1_space_residuo:
+      min_reward_pct: 0.040
+      resistance_lookback_days: 20
+      atr_multiplier: 1.6
+      squeeze_threshold_pct: 0.020
+      squeeze_percentile_threshold: 18
+    entry_mode: STANDARD
     l1_stop_gain_dynamic:
       target_max_pct: 0.2
       target_floor_pct: 0.08
@@ -542,6 +734,15 @@ families:
     sg_floor_pct: 0.015
     sg_decay_day: 0.001
     sg_rsi_exit: 65
+    l0_regime:
+      regime_min_days_below_sma200: 10
+      dd_min_duration_days: 4
+      dd_threshold_atr_multiple: 3.2
+      capitulation_volume_multiplier: 2.0
+      reclaim_ema_slow_period: 50
+      flash_crash_zscore_threshold: 3.7
+      flash_crash_window_days: 3
+      reclaim_ema_fast_period: 20
     l0_entry:
       enabled: true
       dd_threshold: 0.07
@@ -549,6 +750,12 @@ families:
       lookback_high_days: 3
       recovery_min_pct: 0.015
       ema_fast_period: 12
+    l1_space_residuo:
+      min_reward_pct: 0.025
+      resistance_lookback_days: 35
+      atr_multiplier: 1.95
+      squeeze_threshold_pct: 0.007
+      squeeze_percentile_threshold: 25
     entry_mode: STANDARD
     l1_stop_gain_dynamic:
       target_max_pct: 0.035
@@ -585,8 +792,16 @@ families:
     sg_floor_pct: 0.002
     sg_decay_day: 0.0
     sg_rsi_exit: 97
+    l0_regime:
+      enabled: false
     l0_entry:
       enabled: false
+    l1_space_residuo:
+      min_reward_pct: 0.005
+      resistance_lookback_days: 50
+      atr_multiplier: 2.5
+      squeeze_threshold_pct: 0.001
+      squeeze_percentile_threshold: 30
     entry_mode: STANDARD
     l1_stop_gain_dynamic:
       target_max_pct: 0.005
