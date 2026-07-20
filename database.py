@@ -1116,6 +1116,146 @@ class PriceDatabase:
         finally:
             conn.close()
 
+    # ── L0 State Management ───────────────────────────────────────────────
+
+    def get_l0_state(self, isin: str) -> Optional[Dict]:
+        """Recupera lo stato L0 persistente (confirmation mode + trigger price)."""
+        conn = self._get_connection()
+        if not conn:
+            return None
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT l0_confirmation_mode, l0_trigger_low_price, l0_trigger_date
+                    FROM etf_l0_tracking
+                    WHERE isin = %s
+                    LIMIT 1
+                """, (isin,))
+                row = cur.fetchone()
+                return dict(row) if row else None
+        except Exception as e:
+            logging.error(f"Errore get_l0_state {isin}: {e}")
+            return None
+        finally:
+            conn.close()
+
+    def update_l0_state(self, isin: str, confirmation_mode: str,
+                        trigger_low_price: float, trigger_date: str = None) -> bool:
+        """Salva lo stato L0 (percorso lento/rapido bloccato)."""
+        if trigger_date is None:
+            trigger_date = datetime.now().strftime('%Y-%m-%d')
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE etf_l0_tracking
+                    SET l0_confirmation_mode=%s, l0_trigger_low_price=%s, l0_trigger_date=%s
+                    WHERE isin = %s
+                """, (confirmation_mode, trigger_low_price, trigger_date, isin))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore update_l0_state {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def invalidate_l0_state(self, isin: str) -> bool:
+        """Invalida lo stato L0 (reset completo)."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE etf_l0_tracking
+                    SET l0_confirmation_mode=NULL, l0_trigger_low_price=NULL, l0_trigger_date=NULL
+                    WHERE isin = %s
+                """, (isin,))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore invalidate_l0_state {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    # ── L2 Watchlist Management ───────────────────────────────────────────
+
+    def get_l2_watchlist_state(self, isin: str) -> Optional[Dict]:
+        """Recupera lo stato L2 (score, in_watchlist, ema_smoothed, etc.)."""
+        conn = self._get_connection()
+        if not conn:
+            return None
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT isin, ticker, score, in_watchlist, entered_date, exited_date,
+                           ema_smoothed_value, last_raw_score, updated_at
+                    FROM etf_l2_watchlist
+                    WHERE isin = %s
+                    LIMIT 1
+                """, (isin,))
+                row = cur.fetchone()
+                return dict(row) if row else None
+        except Exception as e:
+            logging.error(f"Errore get_l2_watchlist_state {isin}: {e}")
+            return None
+        finally:
+            conn.close()
+
+    def update_l2_watchlist_state(self, isin: str, ticker: str, score: float,
+                                   in_watchlist: bool, ema_smoothed_value: float,
+                                   last_raw_score: float) -> bool:
+        """Aggiorna lo stato L2 watchlist."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            entered_date = datetime.now().strftime('%Y-%m-%d') if in_watchlist else None
+            exited_date = datetime.now().strftime('%Y-%m-%d') if not in_watchlist else None
+
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO etf_l2_watchlist (isin, ticker, score, in_watchlist, entered_date, exited_date, ema_smoothed_value, last_raw_score)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (isin) DO UPDATE SET
+                        score=%s, in_watchlist=%s, entered_date=%s, exited_date=%s,
+                        ema_smoothed_value=%s, last_raw_score=%s, updated_at=CURRENT_TIMESTAMP
+                """, (isin, ticker, score, in_watchlist, entered_date, exited_date,
+                      ema_smoothed_value, last_raw_score,
+                      score, in_watchlist, entered_date, exited_date,
+                      ema_smoothed_value, last_raw_score))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore update_l2_watchlist_state {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def get_l2_watchlist_active(self) -> List[Dict]:
+        """Restituisce tutti gli ETF in L2 watchlist (in_watchlist=true)."""
+        conn = self._get_connection()
+        if not conn:
+            return []
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT isin, ticker, score, entered_date, ema_smoothed_value, updated_at
+                    FROM etf_l2_watchlist
+                    WHERE in_watchlist = TRUE
+                    ORDER BY score DESC, updated_at DESC
+                """)
+                return [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            logging.error(f"Errore get_l2_watchlist_active: {e}")
+            return []
+        finally:
+            conn.close()
+
 
 # Istanza globale per import da altri moduli
 db = PriceDatabase()
