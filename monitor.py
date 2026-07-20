@@ -193,6 +193,63 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"    ⚠️  L1 accelerated check error: {e}")
 
+        # STEP 13 — NUOVO: L0 Regime Filter + Doppio Percorso (v4.0)
+        l0_regime_filter = {}
+        try:
+            close_series = hist['Close'] if 'Close' in hist else hist.iloc[:, 0]
+            sma200 = analysis.get('sma200')
+            atr_60 = analysis.get('atr', 0) if analysis.get('atr') else None
+            volume_20ma = hist['Volume'].rolling(window=20).mean().iloc[-1] if 'Volume' in hist else None
+
+            l0_regime_filter = analyzer.l0_detect_regime_filter(close_series, sma200, atr_60, volume_20ma)
+            if l0_regime_filter.get('regime_suitable'):
+                add_log(f"    📍 L0 REGIME: {l0_regime_filter.get('regime_type')} | "
+                       f"days_below_sma200={l0_regime_filter.get('days_below_sma200')} | "
+                       f"dd={l0_regime_filter.get('recent_dd_pct')*100:.1f}%")
+        except Exception as e:
+            add_log(f"    ⚠️  L0 regime filter error: {e}")
+
+        # STEP 14 — NUOVO: L1 Semplificato (7 condizioni tutte obbligatorie, v4.0)
+        l1_seven_conditions = {}
+        try:
+            close_series = hist['Close'] if 'Close' in hist else hist.iloc[:, 0]
+            high_series = hist['High'] if 'High' in hist else close_series
+            low_series = hist['Low'] if 'Low' in hist else close_series
+            macd_prev = analysis.get('macd_histogram_prev', analysis.get('macd_histogram'))
+            volume = hist['Volume'].iloc[-1] if 'Volume' in hist else None
+            volume_20ma = hist['Volume'].rolling(window=20).mean().iloc[-1] if 'Volume' in hist else None
+            atr_14 = analysis.get('atr')
+
+            l1_seven_conditions = analyzer.l1_check_7_conditions(
+                close_series, analysis.get('ema20'), analysis.get('sma50'),
+                analysis.get('rsi'), analysis.get('adx'),
+                analysis.get('macd_histogram'), macd_prev,
+                volume, atr_14, high_series, low_series,
+                volume_20ma, analysis.get('days_above_ema20', 0)
+            )
+            if l1_seven_conditions.get('entry_l1'):
+                add_log(f"    🔷 L1 7/7 CONDITIONS: ALL TRUE | space={l1_seven_conditions['space_detail'].get('method')}")
+        except Exception as e:
+            add_log(f"    ⚠️  L1 7/7 check error: {e}")
+
+        # STEP 15 — NUOVO: L2 Readiness Score (pre-screening, v4.0)
+        l2_readiness_score = 0.0
+        try:
+            close_series = hist['Close'] if 'Close' in hist else hist.iloc[:, 0]
+            volume = hist['Volume'].iloc[-1] if 'Volume' in hist else None
+            volume_20ma = hist['Volume'].rolling(window=20).mean().iloc[-1] if 'Volume' in hist else None
+
+            l2_readiness_score = analyzer.l2_calculate_readiness_score(
+                close_series, analysis.get('ema20'),
+                analysis.get('rsi'), analysis.get('adx'),
+                volume, volume_20ma,
+                analysis.get('days_above_ema20', 0)
+            )
+            if l2_readiness_score >= 70:
+                add_log(f"    🟨 L2 READINESS: score={l2_readiness_score:.0f} (watchlist candidate)")
+        except Exception as e:
+            add_log(f"    ⚠️  L2 readiness score error: {e}")
+
         result = {
             'ticker':    ticker,
             'isin':      isin,
@@ -205,6 +262,9 @@ class ETFMonitor:
             'l0_signal': l0_entry_signal,
             'l1_tiered': l1_tiered,
             'l1_accelerated': l1_accelerated,  # STEP 12: Accelerated trigger
+            'l0_regime_filter': l0_regime_filter,  # STEP 13: L0 regime
+            'l1_seven_conditions': l1_seven_conditions,  # STEP 14: L1 7/7
+            'l2_readiness_score': l2_readiness_score,  # STEP 15: L2 screening
         }
 
         return result
