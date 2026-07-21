@@ -1408,51 +1408,16 @@ class ETFMonitor:
                             conn.commit()
                         add_log(f"    🔴 EXIT L1 {fund_name[:40]:40s} | {exit_check.get('reason')}")
                     else:
-                        # STEP 11 — Valuta accumulo progressivo (se quality migliora)
-                        entry_conf = l1_tiered.get('entry_confidence', 1.0)
-                        quality = l1_tiered.get('quality_score', 0)
+                        # Salva SL/SG suggerito — STEP 3 v4.0
+                        with conn.cursor() as cur:
+                            cur.execute("""
+                                UPDATE etf_portfolio_entries
+                                SET sl_suggerito = %s, sg_suggerito = %s, stop_loss_updated_at = now()
+                                WHERE id = %s
+                            """, (sl_suggerito, sg_suggerito, entry_id))
+                            conn.commit()
 
-                        accumulo_check = analyzer.check_position_add(
-                            {'entry_confidence': entry_conf},
-                            quality
-                        )
-
-                        # Se c'è accumulo, aggiorna il DB
-                        if accumulo_check.get('add'):
-                            with conn.cursor() as cur:
-                                # Carica cronologia precedente
-                                cur.execute("SELECT accumulated_pcts, accumulated_dates FROM etf_portfolio_entries WHERE id = %s", (entry_id,))
-                                row = cur.fetchone()
-                                prev_pcts = json.loads(row[0] or '[]') if row and row[0] else [entry_conf]
-                                prev_dates = json.loads(row[1] or '[]') if row and row[1] else []
-
-                                # Aggiungi nuovo accumulo
-                                new_pcts = prev_pcts + [accumulo_check['new_total_pct']]
-                                new_dates = prev_dates + [datetime.now().strftime('%Y-%m-%d')]
-
-                                cur.execute("""
-                                    UPDATE etf_portfolio_entries
-                                    SET sl_suggerito = %s, sg_suggerito = %s,
-                                        entry_confidence = %s,
-                                        accumulated_pcts = %s, accumulated_dates = %s,
-                                        stop_loss_updated_at = now()
-                                    WHERE id = %s
-                                """, (sl_suggerito, sg_suggerito, accumulo_check['new_total_pct'],
-                                      json.dumps(new_pcts), json.dumps(new_dates), entry_id))
-                                conn.commit()
-
-                            add_log(f"    ✨ ACCUMULO {fund_name[:40]:40s} | {accumulo_check['reason']}")
-                        else:
-                            # Nessun accumulo — salva SL/SG suggerito
-                            with conn.cursor() as cur:
-                                cur.execute("""
-                                    UPDATE etf_portfolio_entries
-                                    SET sl_suggerito = %s, sg_suggerito = %s, stop_loss_updated_at = now()
-                                    WHERE id = %s
-                                """, (sl_suggerito, sg_suggerito, entry_id))
-                                conn.commit()
-
-                            add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ | SG: {sg_suggerito:.2f}€")
+                        add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ | SG: {sg_suggerito:.2f}€")
 
                 except Exception as e:
                     add_log(f"    ⚠️  Errore L1 {isin}: {type(e).__name__}: {e}")
