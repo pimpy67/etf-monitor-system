@@ -49,6 +49,82 @@ class ETFMonitor:
         self.data_fetcher = ETFDataFetcher(rate_limit=1.0)
         self.alert_system = AlertSystem()
         self.db           = PriceDatabase()
+        # PRIORITÀ 3 — L2 Readiness anti-flickering state
+        self.l2_score_state = {}  # {isin: {'raw': score, 'smoothed': ema_score, 'raw_prev': prev_score}}
+        self._load_l2_state()
+
+    def _load_l2_state(self):
+        """Carica stato persistente L2 smoothing da file."""
+        try:
+            import json
+            if os.path.exists('data/l2_score_state.json'):
+                with open('data/l2_score_state.json', 'r') as f:
+                    self.l2_score_state = json.load(f)
+        except Exception:
+            self.l2_score_state = {}
+
+    def _save_l2_state(self):
+        """Salva stato persistente L2 smoothing su file."""
+        try:
+            import json
+            os.makedirs('data', exist_ok=True)
+            with open('data/l2_score_state.json', 'w') as f:
+                json.dump(self.l2_score_state, f)
+        except Exception:
+            pass
+
+    def _apply_l2_smoothing(self, isin: str, raw_score: float) -> dict:
+        """
+        PRIORITÀ 3 — Applica smoothing EMA + isteresi + jump override a L2 score.
+
+        Returns: {
+            'raw': raw_score,
+            'smoothed': ema_score,
+            'enters_watchlist': bool,  # Isteresi: raw >= 70 ma smoothed ancora < 70
+            'exits_watchlist': bool,   # Isteresi: raw < 60 ma smoothed ancora >= 60
+            'jump_triggered': bool,    # Override salto: delta > 25
+        }
+        """
+        state = self.l2_score_state.get(isin, {'raw': 0, 'smoothed': 0, 'raw_prev': 0})
+        raw_prev = state.get('raw_prev', 0)
+        smoothed_prev = state.get('smoothed', 0)
+
+        # ── Smoothing EMA (periodo 3gg) ────────────────────────────────
+        ema_period = 3
+        alpha = 2 / (ema_period + 1)
+        if smoothed_prev == 0:
+            smoothed = raw_score  # First value
+        else:
+            smoothed = smoothed_prev + alpha * (raw_score - smoothed_prev)
+
+        # ── Jump override (delta > 25) ────────────────────────────────
+        l2_jump_threshold = 25
+        delta = raw_score - raw_prev
+        jump_triggered = False
+        if abs(delta) > l2_jump_threshold and raw_score >= 70:
+            smoothed = raw_score  # Hard-reset smoothed al valore grezzo
+            jump_triggered = True
+
+        # ── Isteresi (70 enter, 60 exit) ───────────────────────────────
+        l2_enter = 70
+        l2_exit = 60
+        enters = raw_score >= l2_enter and smoothed_prev < l2_enter
+        exits = raw_score < l2_exit and smoothed_prev >= l2_exit
+
+        # Salva stato per prossimo ciclo
+        self.l2_score_state[isin] = {
+            'raw': raw_score,
+            'smoothed': smoothed,
+            'raw_prev': raw_score
+        }
+
+        return {
+            'raw': raw_score,
+            'smoothed': smoothed,
+            'enters_watchlist': enters,
+            'exits_watchlist': exits,
+            'jump_triggered': jump_triggered,
+        }
 
     def load_etfs(self) -> pd.DataFrame:
         """Carica lista ETF dal file Excel."""
@@ -232,21 +308,39 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"    ⚠️  L1 7/7 check error: {e}")
 
-        # STEP 15 — NUOVO: L2 Readiness Score (pre-screening, v4.0)
+        # STEP 15 — NUOVO: L2 Readiness Score (pre-screening, PRIORITÀ 3 v4.0)
         l2_readiness_score = 0.0
+        l2_smoothed_score = 0.0
         try:
             close_series = hist['Close'] if 'Close' in hist else hist.iloc[:, 0]
             volume = hist['Volume'].iloc[-1] if 'Volume' in hist else None
             volume_20ma = hist['Volume'].rolling(window=20).mean().iloc[-1] if 'Volume' in hist else None
+            ema20_series = analysis.get('ema20_series')
+            adx_series = analysis.get('adx_series')
 
+            # Calcola raw score con 6 componenti
             l2_readiness_score = analyzer.l2_calculate_readiness_score(
                 close_series, analysis.get('ema20'),
                 analysis.get('rsi'), analysis.get('adx'),
                 volume, volume_20ma,
-                analysis.get('days_above_ema20', 0)
+                analysis.get('days_above_ema20', 0),
+                ema20_series=ema20_series,
+                adx_series=adx_series,
+                macd_histogram=analysis.get('macd_histogram')
             )
-            if l2_readiness_score >= 70:
-                add_log(f"    🟨 L2 READINESS: score={l2_readiness_score:.0f} (watchlist candidate)")
+
+            # Applica smoothing + isteresi + jump override (anti-flickering)
+            l2_smooth_state = self._apply_l2_smoothing(isin or ticker, l2_readiness_score)
+            l2_smoothed_score = l2_smooth_state['smoothed']
+
+            # Log con differenziazione based on transizioni
+            if l2_smooth_state['enters_watchlist']:
+                add_log(f"    🟨 L2 READINESS ENTRA: raw={l2_readiness_score:.0f} smoothed={l2_smoothed_score:.0f}")
+            elif l2_smooth_state['exits_watchlist']:
+                add_log(f"    ⬜ L2 READINESS ESCE: raw={l2_readiness_score:.0f} smoothed={l2_smoothed_score:.0f}")
+            elif l2_smoothed_score >= 70:
+                add_log(f"    🟨 L2 READINESS: raw={l2_readiness_score:.0f} smoothed={l2_smoothed_score:.0f} (watchlist)")
+
         except Exception as e:
             add_log(f"    ⚠️  L2 readiness score error: {e}")
 
@@ -591,6 +685,27 @@ class ETFMonitor:
                         add_log(f"    ❌ L0 INVALIDAZIONE: prezzo {price:.2f} < trigger_low {trigger_low:.2f}")
                         continue  # Skip rest L0 processing
 
+                # PRIORITÀ 1 FASE 2 — Check recovery signal → promotion L0 → L2
+                try:
+                    confirmation_mode = l0_state.get('confirmation_mode') if l0_state else None
+                    close_series = a.get('close_series')
+                    if confirmation_mode and close_series is not None:
+                        # Usa il metodo existente per ottenere il recovery signal
+                        famiglia = ETFTechnicalAnalyzer.detect_family(r.get('categoria', ''))
+                        analyzer = ETFTechnicalAnalyzer(famiglia=famiglia)
+                        recovery_signal = analyzer._get_l0_confirmation_signal(
+                            close_series, confirmation_mode,
+                            l0_state.get('trigger_low_price'),
+                            reclaim_ema_period=(50 if confirmation_mode == 'SLOW' else 20)
+                        )
+                        if recovery_signal.get('recovery_signal'):
+                            # Recovery confermato → promuovi a L2
+                            self.db.remove_l0_entry(isin)
+                            suggested = 2  # Promozione a L2 (watchlist)
+                            add_log(f"    🟢 L0 RECOVERY: {r['nome'][:40]} → L2 ({recovery_signal.get('signal_type')})")
+                except Exception as e:
+                    add_log(f"    ⚠️  L0 recovery check error: {e}")
+
                 # Estrai confirmation_mode e trigger_low_price per TUTTI i L0 (new o existing)
                 confirmation_mode = a.get('l0_regime_filter', {}).get('regime_type')  # 'FAST' or 'SLOW'
                 trigger_low_price = price  # Il prezzo al momento del trigger
@@ -886,6 +1001,13 @@ class ETFMonitor:
                     pass
             with open('data/dashboard_data.json', 'w') as f:
                 json.dump(dashboard, f, indent=2)
+
+        # PRIORITÀ 3 — Salva stato L2 smoothing per anti-flickering (prossimo ciclo)
+        try:
+            self._save_l2_state()
+            add_log("✓ L2 state salvato (smoothing/isteresi)")
+        except Exception as e:
+            add_log(f"⚠️  Errore salvataggio L2 state: {e}")
 
         # 5. Aggiorna trailing stops (daily)
         try:

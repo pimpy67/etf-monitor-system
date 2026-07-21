@@ -2413,39 +2413,89 @@ class ETFTechnicalAnalyzer:
 
         return {'valid': False, 'method': 'none', 'space_pct': best_space, 'threshold': min_reward_pct}
 
-    # ── L2 ENGINE: Readiness Score ───────────────────────────────────────────────
+    # ── L2 ENGINE: Readiness Score (PRIORITÀ 3) ──────────────────────────────────
 
     def l2_calculate_readiness_score(self, prices: pd.Series, ema20: Optional[float],
                                      rsi_14: Optional[float], adx_14: Optional[float],
                                      volume: Optional[float], volume_20ma: Optional[float],
-                                     days_above_ema20: int) -> float:
-        """Calcola score 0-100 per L2 readiness (pre-screening)."""
+                                     days_above_ema20: int,
+                                     ema20_series: Optional[pd.Series] = None,
+                                     adx_series: Optional[pd.Series] = None,
+                                     macd_histogram: Optional[float] = None) -> float:
+        """
+        PRIORITÀ 3 — Calcola L2 Readiness Score (0-100) con anti-flickering.
+
+        6 componenti di score (pesi):
+        1. dist_ema20_score (20%): prezzo converge verso 0-4% da EMA20
+        2. rsi_approach_score (20%): RSI sale verso range L1 entry
+        3. adx_rising_score (20%): ADX in salita (trend strength)
+        4. macd_histogram_score (20%): MACD in aumento
+        5. volume_expansion_score (10%): volume > 1.2x media
+        6. days_above_ema20_partial (10%): contatore parziale
+
+        Anti-flickering:
+        - Isteresi: enter @ 70, exit @ 60
+        - Smoothing: EMA 3-giorni sul raw score
+        - Jump override: se delta > 25 e raw ≥ 70 → bypassa EMA
+        - Hard-reset: reset EMA al valore grezzo nei jump
+        """
         if prices is None or len(prices) < 20 or ema20 is None:
             return 0.0
 
-        current_price = prices.iloc[-1]
-        score_components = {}
+        current_price = float(prices.iloc[-1])
 
+        # ── COMPONENTE 1: Distanza EMA20 (20%) ────────────────────────
         ema_dist_max = self.p.get('ema_dist_max', 4.0)
-        dist_pct = (current_price - ema20) / ema20 if ema20 > 0 else 0.99
-        score_components['dist'] = (1.0 - (dist_pct / (ema_dist_max / 100))) * 20 if 0 <= dist_pct <= (ema_dist_max / 100) else 0
-
-        rsi_low = self.p.get('rsi_entry_low')
-        if rsi_14 and rsi_low and rsi_14 < rsi_low and rsi_14 > (rsi_low - 5):
-            score_components['rsi'] = ((rsi_14 - (rsi_low - 5)) / 5) * 20
+        dist_pct = ((current_price - ema20) / ema20 * 100) if ema20 > 0 else 0
+        if 0 <= dist_pct <= ema_dist_max:
+            dist_score = (1.0 - (dist_pct / ema_dist_max)) * 20
         else:
-            score_components['rsi'] = 0
+            dist_score = 0
 
-        adx_entry = self.p.get('adx_entry', 20)
-        score_components['adx'] = 20 if (adx_14 and adx_14 > adx_entry) else 0
+        # ── COMPONENTE 2: RSI approach (20%) ──────────────────────────
+        rsi_entry_low = self.p.get('rsi_entry_low', 45)
+        rsi_approach_margin = self.p.get('rsi_approach_margin', 5)
+        if rsi_14 and (rsi_entry_low - rsi_approach_margin) <= rsi_14 <= rsi_entry_low:
+            rsi_score = ((rsi_14 - (rsi_entry_low - rsi_approach_margin)) / rsi_approach_margin) * 20
+        else:
+            rsi_score = 0
 
-        score_components['volume'] = min((volume / volume_20ma - 1) / (1.2 - 1) * 10, 10) if volume and volume_20ma and volume_20ma > 0 else 0
+        # ── COMPONENTE 3: ADX rising (20%) ────────────────────────────
+        adx_trend_days = self.p.get('adx_trend_days', 5)
+        adx_score = 0
+        if adx_series is not None and len(adx_series) >= adx_trend_days:
+            adx_trend = adx_series.iloc[-adx_trend_days:].values
+            if adx_14 and adx_trend[-1] > adx_trend[0]:  # ADX rising
+                adx_score = 20
 
+        # ── COMPONENTE 4: MACD histogram (20%) ────────────────────────
+        macd_score = 0
+        if macd_histogram is not None and macd_histogram > 0:
+            macd_score = 20
+
+        # ── COMPONENTE 5: Volume expansion (10%) ──────────────────────
+        volume_ratio_threshold = self.p.get('volume_ratio_threshold', 1.2)
+        volume_score = 0
+        if volume and volume_20ma and volume_20ma > 0:
+            vol_ratio = volume / volume_20ma
+            if vol_ratio >= volume_ratio_threshold:
+                volume_score = 10
+
+        # ── COMPONENTE 6: Days above EMA20 partial (10%) ───────────────
         days_target = self.p.get('days_above_ema', 3)
-        score_components['days'] = min(days_above_ema20 / days_target, 1.0) * 10
+        days_score = min((days_above_ema20 / days_target), 1.0) * 10
 
-        raw_score = sum(score_components.values())
-        return max(0, min(100, raw_score))
+        # ── Raw score (somma ponderata) ────────────────────────────────
+        raw_score = dist_score + rsi_score + adx_score + macd_score + volume_score + days_score
+        raw_score = max(0, min(100, raw_score))
+
+        # ── ANTI-FLICKERING: Isteresi + Smoothing ──────────────────────
+        # Nota: in questo metodo stateless, restituiamo raw_score.
+        # Lo smoothing EMA + hard-reset dovrebbe essere gestito in monitor.py
+        # con persistenza dello stato smoothed_score per ogni ETF.
+        # Per ora, restituiamo raw_score e lasciam o al monitor la gestione dello stato.
+
+        return raw_score
 
     # ── Utility ────────────────────────────────────────────────────────────────
 
