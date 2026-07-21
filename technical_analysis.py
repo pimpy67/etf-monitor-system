@@ -1187,6 +1187,16 @@ class ETFTechnicalAnalyzer:
             famiglia_str = self.famiglia or self.etf_type
             adx_entry = p.get('adx_entry', '?')
             print(f"[L1-CHECK] {famiglia_str} | {buy_count}/{min_buy_required} | regime={regime_str} | ADX={adx_val or 'N/A'} (>={adx_entry}) | dist={dist_ema20:.1f}% (max {p['ema_dist_max']}%)")
+            # DEBUGGING: stampa quale condizione fallisce
+            if buy_count < min_buy_required:
+                failed = []
+                if not allineamento: failed.append("ALIGN")
+                if not persistenza: failed.append("PERSIST")
+                if not rsi_ok: failed.append("RSI")
+                if not dist_ok: failed.append("DIST")
+                if not adx_ok: failed.append("ADX")
+                if not macd_ok: failed.append("MACD")
+                print(f"  → Fallisce: {', '.join(failed) if failed else 'NESSUNA (OK 6/6!)'}")
 
         if current_level == 1:
             if exit_rule:
