@@ -795,7 +795,7 @@ class ETFTechnicalAnalyzer:
 
     # ── L0 Deep Recovery ──────────────────────────────────────────────────────
 
-    def suggest_level_0(self, prices: pd.Series, current_level: int) -> Dict:
+    def suggest_level_0(self, prices: pd.Series, high: pd.Series, low: pd.Series, current_level: int) -> Dict:
         """
         Valuta le condizioni L0 'Deep Recovery'.
 
@@ -2248,7 +2248,7 @@ class ETFTechnicalAnalyzer:
         low  = df['Low'].astype(float).dropna() if has_ohlc else None
 
         # L0 check
-        l0 = self.suggest_level_0(close, current_level)
+        l0 = self.suggest_level_0(close, high if high is not None else close, low if low is not None else close, current_level)
 
         # L1/L2/L3 check
         level = self.suggest_level(close, current_level, high=high, low=low)
