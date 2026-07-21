@@ -591,12 +591,14 @@ class ETFMonitor:
                         add_log(f"    ❌ L0 INVALIDAZIONE: prezzo {price:.2f} < trigger_low {trigger_low:.2f}")
                         continue  # Skip rest L0 processing
 
+                # Estrai confirmation_mode e trigger_low_price per TUTTI i L0 (new o existing)
+                confirmation_mode = a.get('l0_regime_filter', {}).get('regime_type')  # 'FAST' or 'SLOW'
+                trigger_low_price = price  # Il prezzo al momento del trigger
+
                 if isin not in existing_l0:
+                    # NUOVO L0 entry
                     if price:
                         panic_low = a.get('l0_data', {}).get('panic_low')
-                        # Estrai confirmation_mode da l0_regime_filter
-                        confirmation_mode = a.get('l0_regime_filter', {}).get('regime_type')  # 'FAST' or 'SLOW'
-                        trigger_low_price = price  # Il prezzo al momento del trigger
                         self.db.set_l0_entry(isin, today_str, price, panic_low,
                                            confirmation_mode=confirmation_mode,
                                            trigger_low_price=trigger_low_price)
@@ -611,6 +613,13 @@ class ETFMonitor:
                         'distance_from_peak': a.get('l0_data', {}).get('distance_from_peak'),
                         'confirmation_mode': confirmation_mode,
                     })
+                else:
+                    # L0 entry ESISTENTE — aggiorna confirmation_mode se NULL
+                    l0_state = self.db.get_l0_state(isin)
+                    if l0_state and not l0_state.get('confirmation_mode'):
+                        self.db.update_l0_state(isin, confirmation_mode=confirmation_mode,
+                                               trigger_low_price=trigger_low_price)
+                        add_log(f"  UPDATE L0: {r['nome'][:40]} (mode={confirmation_mode})")
 
                 # Calcola e salva livello_display per tracking L0
                 if price:
