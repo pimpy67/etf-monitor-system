@@ -179,7 +179,10 @@ class PriceDatabase:
                         isin VARCHAR(20) PRIMARY KEY,
                         entry_date DATE NOT NULL,
                         entry_price DECIMAL(12, 4) NOT NULL,
-                        panic_low DECIMAL(12, 4)
+                        panic_low DECIMAL(12, 4),
+                        confirmation_mode VARCHAR(10),
+                        trigger_low_price DECIMAL(12, 4),
+                        confirmation_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
 
@@ -255,6 +258,10 @@ class PriceDatabase:
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS days_no_recovery INTEGER DEFAULT 0",
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS stallo_counter INTEGER DEFAULT 0",
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS add_history TEXT DEFAULT '[]'",
+                    # PRIORITÀ 1 FASE 2 — L0 State Persistence (2026-07-21)
+                    "ALTER TABLE etf_l0_tracking ADD COLUMN IF NOT EXISTS confirmation_mode VARCHAR(10)",
+                    "ALTER TABLE etf_l0_tracking ADD COLUMN IF NOT EXISTS trigger_low_price DECIMAL(12, 4)",
+                    "ALTER TABLE etf_l0_tracking ADD COLUMN IF NOT EXISTS confirmation_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
                 ]:
                     cur.execute(col_sql)
 
@@ -726,23 +733,97 @@ class PriceDatabase:
             conn.close()
 
     def set_l0_entry(self, isin: str, entry_date: str, entry_price: float,
-                     panic_low: float = None) -> bool:
-        """Registra l'ingresso di un ETF in L0 (INSERT, non sovrascrive se presente)."""
+                     panic_low: float = None, confirmation_mode: str = None,
+                     trigger_low_price: float = None) -> bool:
+        """
+        Registra l'ingresso di un ETF in L0 con stato persistente.
+
+        Args:
+            isin: Codice ISIN
+            entry_date: Data ingresso (YYYY-MM-DD)
+            entry_price: Prezzo ingresso
+            panic_low: Prezzo minimo per stop assoluto
+            confirmation_mode: 'FAST' o 'SLOW' (percorso L0 attivato)
+            trigger_low_price: Prezzo minimo che ha triggerato L0 (per invalidazione)
+        """
         conn = self._get_connection()
         if not conn:
             return False
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO etf_l0_tracking (isin, entry_date, entry_price, panic_low)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO etf_l0_tracking
+                    (isin, entry_date, entry_price, panic_low, confirmation_mode, trigger_low_price)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (isin) DO NOTHING
                 """, (isin, entry_date, float(entry_price),
-                      float(panic_low) if panic_low else None))
+                      float(panic_low) if panic_low else None,
+                      confirmation_mode, float(trigger_low_price) if trigger_low_price else None))
                 conn.commit()
                 return True
         except Exception as e:
             logging.error(f"Errore set_l0_entry {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def get_l0_state(self, isin: str) -> dict:
+        """
+        Legge lo stato persistente di un ETF in L0.
+
+        Returns:
+            Dict con {confirmation_mode, trigger_low_price, entry_price, entry_date}
+            oppure {} se non trovato
+        """
+        conn = self._get_connection()
+        if not conn:
+            return {}
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT confirmation_mode, trigger_low_price, entry_price, entry_date
+                    FROM etf_l0_tracking
+                    WHERE isin = %s
+                """, (isin,))
+                row = cur.fetchone()
+                if row:
+                    return {
+                        'confirmation_mode': row[0],
+                        'trigger_low_price': float(row[1]) if row[1] else None,
+                        'entry_price': float(row[2]),
+                        'entry_date': str(row[3])
+                    }
+                return {}
+        except Exception as e:
+            logging.error(f"Errore get_l0_state {isin}: {e}")
+            return {}
+        finally:
+            conn.close()
+
+    def update_l0_state(self, isin: str, confirmation_mode: str = None,
+                        trigger_low_price: float = None) -> bool:
+        """Aggiorna lo stato persistente di un ETF in L0."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                if confirmation_mode is not None:
+                    cur.execute("""
+                        UPDATE etf_l0_tracking
+                        SET confirmation_mode = %s
+                        WHERE isin = %s
+                    """, (confirmation_mode, isin))
+                if trigger_low_price is not None:
+                    cur.execute("""
+                        UPDATE etf_l0_tracking
+                        SET trigger_low_price = %s
+                        WHERE isin = %s
+                    """, (float(trigger_low_price), isin))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore update_l0_state {isin}: {e}")
             return False
         finally:
             conn.close()
