@@ -1302,43 +1302,26 @@ class ETFTechnicalAnalyzer:
                     else:
                         seventh_condition_reason = f"Spazio insufficiente: resistenza {space_metrics['distance_resistance']:.1%}, ATR {space_metrics['space_atr']:.1%} < {min_reward_pct:.1%}"
 
-                # STRATO 2 — Filtro EMA20 slope per L1 completi (6/6): esclude trend piatti/artificiali
-                # EMA20 deve crescere almeno X% negli ultimi 10 giorni (parametrizzato per famiglia)
-                ema20_slope_threshold = self.p.get('ema20_slope_min', 0.2)  # Default 0.2%
-                ema20_10d_ago = float(ema20.iloc[-11]) if pd.notna(ema20.iloc[-11]) else None
-                if ema20_10d_ago and ema20_10d_ago > 0:
-                    ema20_pct_change = ((ema20_v - ema20_10d_ago) / ema20_10d_ago * 100)
-                    if ema20_pct_change < ema20_slope_threshold:
-                        suggested = 2
-                        reason    = f'EMA20 trend debole (+{ema20_pct_change:.2f}% < {ema20_slope_threshold:.2f}%): Watchlist'
-                        reason_codes.append('L2_WEAK_EMA_SLOPE')
-                    elif not seventh_condition_ok:
-                        # 7ª condizione fallisce
-                        suggested = 2
-                        reason    = f'7ª condizione fallisce: {seventh_condition_reason} → Watchlist'
-                        reason_codes.append('L2_INSUFFICIENT_REWARD_SPACE')
-                    else:
-                        suggested = 1
-                        regime_note = '' if regime_ok else ' (no SMA200)'
-                        macd_note   = '↑' if (macd_hp is not None and macd_h is not None and macd_h > macd_hp) else '~'
-                        rsi_str = f'{rsi_val:.0f}' if rsi_val is not None else '?'
-                        dist_str = f'{dist_ema20:.1f}' if dist_ema20 is not None else '?'
-                        adx_str = f'{adx_val:.0f}' if adx_val is not None else '?'
-                        reason = (
-                            f'L1 Trend Sicuro (6/6+7ª, EMA20 slope +{ema20_pct_change:.2f}%, regime {regime_str}): '
-                            f'RSI {rsi_str} ✓, dist {dist_str}% ✓, ADX {adx_str} ✓, MACD {macd_note} ✓, spazio OK ✓{regime_note}'
-                        )
-                        reason_codes.append('L1_ENTRY')
+                # PRIORITÀ 2 STEP 3 v4.0 — Solo 7ª condizione (spazio residuo)
+                # Filtro EMA20 slope RIMOSSO — non è nella specifica
+                if not seventh_condition_ok:
+                    # 7ª condizione fallisce → L2
+                    suggested = 2
+                    reason    = f'7ª condizione fallisce: {seventh_condition_reason} → Watchlist'
+                    reason_codes.append('L2_INSUFFICIENT_REWARD_SPACE')
                 else:
-                    # Storico EMA20 breve: salta la verifica slope, va a L1 se 7ª OK
-                    if not seventh_condition_ok:
-                        suggested = 2
-                        reason    = f'7ª condizione fallisce: {seventh_condition_reason} → Watchlist'
-                        reason_codes.append('L2_INSUFFICIENT_REWARD_SPACE')
-                    else:
-                        suggested = 1
-                        reason    = f'L1 Trend Sicuro (6/6+7ª, storico EMA20 breve, {len(ema20)}gg)'
-                        reason_codes.append('L1_ENTRY')
+                    # 7ª condizione OK → L1 INGRESSO
+                    suggested = 1
+                    regime_note = '' if regime_ok else ' (no SMA200)'
+                    macd_note   = '↑' if (macd_hp is not None and macd_h is not None and macd_h > macd_hp) else '~'
+                    rsi_str = f'{rsi_val:.0f}' if rsi_val is not None else '?'
+                    dist_str = f'{dist_ema20:.1f}' if dist_ema20 is not None else '?'
+                    adx_str = f'{adx_val:.0f}' if adx_val is not None else '?'
+                    reason = (
+                        f'L1 Trend Sicuro (6/6+7ª, {seventh_condition_reason}, regime {regime_str}): '
+                        f'RSI {rsi_str} ✓, dist {dist_str}% ✓, ADX {adx_str} ✓, MACD {macd_note} ✓{regime_note}'
+                    )
+                    reason_codes.append('L1_ENTRY')
             else:
                 suggested = 1
                 regime_note = '' if regime_ok else ' (no SMA200)'
