@@ -1,4 +1,11 @@
 # ============================================================================
+# PARAMETRI GLOBALI — L0, L1, L2 (non famiglia-specifici)
+# ============================================================================
+global_params:
+  squeeze_percentile_threshold: 20       # Percentile di consolidazione per squeeze override L1
+  volume_ratio_threshold: 1.2            # Volume ratio minimo per confermare breakout
+
+# ============================================================================
 # L2 READINESS SCORE — Parametri globali (non famiglia-specifici)
 # ============================================================================
 l2_readiness:
