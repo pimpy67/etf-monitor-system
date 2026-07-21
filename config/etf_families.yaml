@@ -696,9 +696,21 @@ families:
     sg_decay_day: 0.003
     sg_rsi_exit: 65
     l0_regime:
-      enabled: false
+      regime_min_days_below_sma200: 5
+      dd_min_duration_days: 2
+      dd_threshold_atr_multiple: 2.8
+      capitulation_volume_multiplier: 3.0
+      reclaim_ema_slow_period: 50
+      flash_crash_zscore_threshold: 4.5
+      flash_crash_window_days: 2
+      reclaim_ema_fast_period: 20
     l0_entry:
-      enabled: false
+      enabled: true
+      dd_threshold: 0.20
+      rsi_max: 35
+      lookback_high_days: 2
+      recovery_min_pct: 0.025
+      ema_fast_period: 10
     l1_space_residuo:
       min_reward_pct: 0.040
       resistance_lookback_days: 20

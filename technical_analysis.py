@@ -644,6 +644,155 @@ class ETFTechnicalAnalyzer:
             'volume_ratio': round(volume_ratio, 2) if volume_ratio is not None else None,
         }
 
+    # ── L0 PRIORITÀ 1: Doppio Percorso (Lento + Rapido) ──────────────────────
+
+    def _analyze_l0_slow_path(self, prices: pd.Series, high: pd.Series, low: pd.Series,
+                               regime_params: Dict) -> Dict:
+        """
+        Percorso LENTO (bear sostenuto): asset sotto SMA200 da N giorni + drawdown sostenuto.
+
+        Ritorna:
+        {
+            'slow_path_valid': bool,
+            'days_below_sma200': int,
+            'drawdown_normalized': float,
+            'min_reached': float,
+        }
+        """
+        if len(prices) < 200:
+            return {
+                'slow_path_valid': False,
+                'days_below_sma200': 0,
+                'drawdown_normalized': 0.0,
+                'min_reached': None,
+            }
+
+        close = prices.astype(float)
+        sma200 = self._sma(close, 200)
+        sma200_v = self._fval(sma200)
+
+        # Conta giorni sotto SMA200
+        days_below = 0
+        if sma200_v is not None:
+            below_series = close < sma200_v
+            if len(below_series) > 0:
+                days_below = int(below_series[-30:].sum()) if len(below_series) >= 30 else int(below_series.sum())
+
+        min_days_required = regime_params.get('regime_min_days_below_sma200', 10)
+
+        # Calcola drawdown normalizzato su ATR
+        atr_normalized = self._calculate_atr_normalized(high, low, close) if high is not None and low is not None else None
+        current_price = float(close.iloc[-1])
+        peak_price = float(close.tail(252).max()) if len(close) >= 252 else float(close.max())
+
+        drawdown_pct = (peak_price - current_price) / peak_price if peak_price > 0 else 0.0
+        dd_atr_multiple = regime_params.get('dd_threshold_atr_multiple', 3.0)
+        drawdown_normalized = drawdown_pct / (atr_normalized * dd_atr_multiple) if atr_normalized and atr_normalized > 0 else 0.0
+
+        # Slow path valido se: (giorni sotto SMA200 >= min) AND (drawdown sostenuto)
+        min_dd_pct = regime_params.get('dd_min_duration_days', 4) / 100.0  # Conversion for simplicity
+        slow_path_valid = (days_below >= min_days_required) and (drawdown_pct >= min_dd_pct)
+
+        return {
+            'slow_path_valid': slow_path_valid,
+            'days_below_sma200': days_below,
+            'drawdown_normalized': round(drawdown_normalized, 4),
+            'min_reached': round(current_price, 4),
+        }
+
+    def _analyze_l0_fast_path(self, prices: pd.Series, high: pd.Series, low: pd.Series,
+                               regime_params: Dict) -> Dict:
+        """
+        Percorso RAPIDO (flash crash): drawdown estremo normalizzato su ATR in 2-3 giorni.
+
+        Ritorna:
+        {
+            'fast_path_triggered': bool,
+            'zscore': float,
+            'drawdown_pct': float,
+            'trigger_price': float,
+        }
+        """
+        if len(prices) < 14:
+            return {
+                'fast_path_triggered': False,
+                'zscore': 0.0,
+                'drawdown_pct': 0.0,
+                'trigger_price': None,
+            }
+
+        close = prices.astype(float)
+        current_price = float(close.iloc[-1])
+
+        # Drawdown su finestra 2-3 giorni
+        window = regime_params.get('flash_crash_window_days', 3)
+        peak_recent = float(close.iloc[-window:].max())
+        drawdown_pct = (peak_recent - current_price) / peak_recent if peak_recent > 0 else 0.0
+
+        # Normalizzazione su ATR
+        atr_normalized = self._calculate_atr_normalized(high, low, close) if high is not None and low is not None else None
+        zscore = drawdown_pct / (atr_normalized * 100) if atr_normalized and atr_normalized > 0 else 0.0
+
+        # Flash path valido se zscore > soglia (default 4.0 deviazioni)
+        zscore_threshold = regime_params.get('flash_crash_zscore_threshold', 4.0)
+        fast_path_triggered = zscore >= zscore_threshold
+
+        return {
+            'fast_path_triggered': fast_path_triggered,
+            'zscore': round(zscore, 2),
+            'drawdown_pct': round(drawdown_pct, 4),
+            'trigger_price': round(current_price, 4),
+        }
+
+    def _get_l0_confirmation_signal(self, prices: pd.Series, mode: str,
+                                     trigger_price: float, reclaim_ema_period: int = 20) -> Dict:
+        """
+        Verifica segnale di recovery per L0: RSI recovery O EMA reclaim.
+
+        Ritorna:
+        {
+            'recovery_signal': bool,
+            'signal_type': 'rsi_recovery' | 'ema_reclaim' | None,
+            'rsi_current': float,
+            'ema_current': float,
+        }
+        """
+        if len(prices) < max(14, reclaim_ema_period):
+            return {
+                'recovery_signal': False,
+                'signal_type': None,
+                'rsi_current': None,
+                'ema_current': None,
+            }
+
+        close = prices.astype(float)
+        current_price = float(close.iloc[-1])
+
+        # RSI recovery: RSI > 40 (fast) o > 32 (slow)
+        rsi = self._rsi(close)
+        rsi_val = self._fval(rsi)
+        rsi_threshold = 40 if mode == 'fast' else 32
+        rsi_recovery = rsi_val is not None and rsi_val > rsi_threshold
+
+        # EMA reclaim: prezzo > EMA (fast: 20, slow: 50)
+        ema = self._ema(close, reclaim_ema_period)
+        ema_val = self._fval(ema)
+        ema_reclaim = ema_val is not None and current_price > ema_val
+
+        recovery_signal = rsi_recovery or ema_reclaim
+        signal_type = None
+        if rsi_recovery:
+            signal_type = 'rsi_recovery'
+        elif ema_reclaim:
+            signal_type = 'ema_reclaim'
+
+        return {
+            'recovery_signal': recovery_signal,
+            'signal_type': signal_type,
+            'rsi_current': round(rsi_val, 1) if rsi_val is not None else None,
+            'ema_current': round(ema_val, 4) if ema_val is not None else None,
+        }
+
     # ── L0 Deep Recovery ──────────────────────────────────────────────────────
 
     def suggest_level_0(self, prices: pd.Series, current_level: int) -> Dict:
@@ -739,6 +888,31 @@ class ETFTechnicalAnalyzer:
             result['reason_codes'] = ['L0_DISABLED']
             return result
 
+        # PRIORITÀ 1 — Percorsi LENTO e RAPIDO (se l0_regime params disponibili)
+        l0_regime_params = self.p.get('l0_regime', {})
+        regime_check_enabled = bool(l0_regime_params)
+
+        if regime_check_enabled and high is not None and low is not None:
+            # Verifica Percorso RAPIDO (flash crash) — ha priorità
+            fast_result = self._analyze_l0_fast_path(prices, high, low, l0_regime_params)
+            if fast_result['fast_path_triggered'] and not kill_switch:
+                result['l0_entry']      = True
+                result['l0_regime_mode'] = 'FAST'
+                result['reason_codes']  = ['L0_ENTRY_FAST_PATH']
+                result['flash_crash_zscore'] = fast_result['zscore']
+                result['fast_path_trigger_price'] = fast_result['trigger_price']
+                return result
+
+            # Verifica Percorso LENTO (bear sostenuto) — alternativa al rapido
+            slow_result = self._analyze_l0_slow_path(prices, high, low, l0_regime_params)
+            if slow_result['slow_path_valid'] and not kill_switch:
+                result['l0_entry']      = True
+                result['l0_regime_mode'] = 'SLOW'
+                result['reason_codes']  = ['L0_ENTRY_SLOW_PATH']
+                result['days_below_sma200'] = slow_result['days_below_sma200']
+                result['drawdown_normalized'] = slow_result['drawdown_normalized']
+                return result
+
         # Picco degli ultimi 90 giorni (non assoluto) per evitare falsi positivi su trend down lunghi
         n_lookback_peak = min(90, len(prices))
         peak_price = float(prices.iloc[-n_lookback_peak:].max())
@@ -775,6 +949,7 @@ class ETFTechnicalAnalyzer:
             result['reason_codes']  = ['KILL_SWITCH', 'L0_ENTRY_BLOCKED']
         elif entry_ok:
             result['l0_entry']      = True
+            result['l0_regime_mode'] = 'PRAGMATIC_4CONDITIONS'
             result['reason_codes']  = ['L0_ENTRY']
         else:
             missing = []
