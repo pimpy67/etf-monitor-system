@@ -211,23 +211,49 @@ class ETFMonitor:
             return self._empty_result(ticker, isin, nome, categoria, borsa, level,
                                       f'{type(e).__name__}: {e}')
 
-        # STEP 9 — Detecta segnali L0 durante l'analisi
+        # STEP 9 — Detecta segnali L0 durante l'analisi (con REGIME FILTER first!)
         l0_entry_signal = {}
+        l0_regime_filter = {}
         try:
             if level != 0:  # Se non già in L0
                 close_series = hist['Close'] if 'Close' in hist else hist.iloc[:, 0]
                 rsi_14 = analysis.get('rsi')
                 ema_fast_period = 10  # default; potrebbe venire dalla famiglia
+                sma200 = analysis.get('sma200')
+                atr_60 = analysis.get('atr', 0) if analysis.get('atr') else None
+                volume_20ma = hist['Volume'].rolling(window=20).mean().iloc[-1] if 'Volume' in hist else None
 
-                l0_check = analyzer.check_l0_entry(close_series, rsi_14, ema_fast_period)
-                if l0_check.get('l0_signal'):
+                # 🔴 STEP 9a — REGIME FILTER PRIMA (blocca L0 in regime BULL)
+                l0_regime_filter = analyzer.l0_detect_regime_filter(close_series, sma200, atr_60, volume_20ma)
+                
+                if not l0_regime_filter.get('regime_suitable'):
+                    # ❌ Regime NON suitable (BULL market, no bear conditions)
+                    add_log(f"    ⛔ L0 BLOCCATO: regime NON suitable ({l0_regime_filter.get('regime_type')}) | days_below_sma200={l0_regime_filter.get('days_below_sma200')}")
                     l0_entry_signal = {
-                        'l0_signal': True,
-                        'dd_from_high': l0_check.get('dd_from_high'),
-                        'rsi': l0_check.get('rsi_current'),
-                        'recovery': l0_check.get('recovery_pct'),
-                        'alert_only': l0_check.get('alert_only', True),
+                        'l0_signal': False,
+                        'reason': f"REGIME_NOT_SUITABLE: {l0_regime_filter.get('regime_type')}",
+                        'regime_days_below_sma200': l0_regime_filter.get('days_below_sma200'),
                     }
+                else:
+                    # ✅ Regime suitable — ora check le 4 condizioni L0
+                    l0_check = analyzer.check_l0_entry(close_series, rsi_14, ema_fast_period)
+                    if l0_check.get('l0_signal'):
+                        l0_entry_signal = {
+                            'l0_signal': True,
+                            'dd_from_high': l0_check.get('dd_from_high'),
+                            'rsi': l0_check.get('rsi_current'),
+                            'recovery': l0_check.get('recovery_pct'),
+                            'alert_only': l0_check.get('alert_only', True),
+                            'regime_mode': l0_regime_filter.get('regime_type'),  # 'fast_crash' or 'slow_bear'
+                            'regime_days_below_sma200': l0_regime_filter.get('days_below_sma200'),
+                        }
+                    else:
+                        l0_entry_signal = {
+                            'l0_signal': False,
+                            'reason': 'REGIME_OK_BUT_CONDITIONS_NOT_MET',
+                            'regime_mode': l0_regime_filter.get('regime_type'),
+                            'regime_days_below_sma200': l0_regime_filter.get('days_below_sma200'),
+                        }
         except Exception as e:
             add_log(f"    ⚠️  L0 check error: {e}")
 
