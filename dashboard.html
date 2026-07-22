@@ -964,9 +964,9 @@ function renderParamRef() {
     <div class="param-ref-body" id="paramRefBody" style="max-height:85vh;overflow-y:auto;">
 
       <!-- SCHEMA GENERALE L1 -->
-      <div class="param-section-title">📋 Schema Generale: L1 "Trend Sicuro" — 6 Condizioni di Entrata</div>
+      <div class="param-section-title">📋 Schema Generale: L1 "Trend Sicuro" — 7 Condizioni TUTTE Obbligatorie</div>
       <div style="font-size:0.78em;color:#58a6ff;margin-bottom:10px;padding:8px;background:rgba(88,166,255,0.08);border-radius:4px;border-left:3px solid #58a6ff;">
-        <strong style="color:#58a6ff;">✓ TUTTE le 6 condizioni sono obbligatorie</strong> per l'ingresso L1<br>
+        <strong style="color:#58a6ff;">✓ TUTTE le 7 condizioni sono OBBLIGATORIE</strong> per l'ingresso L1 — Se una è FALSE → INGRESSO BLOCCATO<br>
         <span style="color:#aaa;font-size:0.9em;">Refactor v2.0: 15 famiglie parametriche (inclusa inflation_linked e monetario)</span>
       </div>
 
@@ -977,6 +977,7 @@ function renderParamRef() {
         <strong style="color:#58a6ff;">✓ Condizione 4:</strong> Distanza EMA20 (0% ≤ dist_EMA20 ≤ ema_dist_max)<br>
         <strong style="color:#58a6ff;">✓ Condizione 5:</strong> ADX (ADX ≥ adx_entry)<br>
         <strong style="color:#58a6ff;">✓ Condizione 6:</strong> MACD Momentum (histogram &gt; 0 AND [rising OR dist&lt;2%])<br>
+        <strong style="color:#58a6ff;">✓ Condizione 7:</strong> Spazio Residuo (resistenza &gt; min_reward_pct OR ATR×mult &gt; min_reward_pct)<br>
         <span style="color:#555;font-size:0.85em;">* SMA200 richiesto solo se mm200_filter=True per famiglia</span>
       </div>
 
@@ -999,7 +1000,7 @@ function renderParamRef() {
             <tr><td class="param-name">Dist. EMA20 Max</td><td>4.0%</td><td>5.0%</td><td>5.0%</td><td>2.5%</td><td>3.0%</td><td>3.0%</td></tr>
             <tr><td class="param-name">Giorni Sopra EMA20</td><td>5</td><td>3</td><td>5</td><td>5</td><td>3</td><td>3</td></tr>
             <tr><td class="param-name">EMA20 Slope Min</td><td>1.5%</td><td>1.5%</td><td>1.5%</td><td>1.5%</td><td>1.5%</td><td>1.5%</td></tr>
-            <tr><td class="param-name">Min Buy Count</td><td>5/6</td><td>6/6</td><td>5/6</td><td>5/6</td><td>5/6</td><td>5/6</td></tr>
+            <tr><td class="param-name">Min Buy Count</td><td>7/7</td><td>6/6</td><td>5/6</td><td>5/6</td><td>5/6</td><td>5/6</td></tr>
             <tr><td class="param-name">SMA200 Filter</td><td>✓ Sì</td><td>✓ Sì</td><td>✓ Sì</td><td>✓ Sì</td><td>✓ Sì</td><td>✓ Sì</td></tr>
             <tr><td class="param-name">L0 Drawdown</td><td>15%</td><td>20%</td><td>18%</td><td>15%</td><td>20%</td><td>18%</td></tr>
             <tr><td class="param-name">L0 RSI Max</td><td>35</td><td>38</td><td>38</td><td>35</td><td>40</td><td>38</td></tr>
@@ -1025,7 +1026,7 @@ function renderParamRef() {
             <tr><td class="param-name">Dist. EMA20 Max</td><td>1.5%</td><td>2.0%</td><td>2.5%</td><td>2.0%</td><td>1.5%</td><td>0.5%</td></tr>
             <tr><td class="param-name">Giorni Sopra EMA20</td><td>3</td><td>3</td><td>3</td><td>3</td><td>3</td><td>3</td></tr>
             <tr><td class="param-name">EMA20 Slope Min</td><td>1.5%</td><td>1.5%</td><td>1.5%</td><td>1.5%</td><td>1.5%</td><td>0.0%</td></tr>
-            <tr><td class="param-name">Min Buy Count</td><td>5/6</td><td>5/6</td><td>5/6</td><td>5/6</td><td>5/6</td><td>6/6</td></tr>
+            <tr><td class="param-name">Min Buy Count</td><td>7/7</td><td>5/6</td><td>5/6</td><td>5/6</td><td>5/6</td><td>6/6</td></tr>
             <tr><td class="param-name">SMA200 Filter</td><td>✗ No</td><td>✗ No</td><td>✓ Sì</td><td>✗ No</td><td>✗ No</td><td>✗ No</td></tr>
             <tr><td class="param-name">L0 Drawdown</td><td>8%</td><td>10%</td><td>15%</td><td>12%</td><td>8%</td><td style="color:#888;">—</td></tr>
             <tr><td class="param-name">L0 RSI Max</td><td>38</td><td>38</td><td>42</td><td>44</td><td>38</td><td style="color:#888;">—</td></tr>
@@ -1048,7 +1049,7 @@ function renderParamRef() {
             <tr><td class="param-name">Dist. EMA20 Max</td><td>6.0%</td><td>4.0%</td><td>2.5%</td></tr>
             <tr><td class="param-name">Giorni Sopra EMA20</td><td>3</td><td>3</td><td>3</td></tr>
             <tr><td class="param-name">EMA20 Slope Min</td><td>1.5%</td><td>1.5%</td><td>1.5%</td></tr>
-            <tr><td class="param-name">Min Buy Count</td><td>5/6</td><td>5/6</td><td>5/6</td></tr>
+            <tr><td class="param-name">Min Buy Count</td><td>7/7</td><td>5/6</td><td>5/6</td></tr>
             <tr><td class="param-name">SMA200 Filter</td><td>✓ Sì</td><td>✓ Sì</td><td>✗ No</td></tr>
             <tr><td class="param-name">L0 Drawdown</td><td>25%</td><td>20%</td><td>15%</td></tr>
             <tr><td class="param-name">L0 RSI Max</td><td>38</td><td>40</td><td>42</td></tr>
