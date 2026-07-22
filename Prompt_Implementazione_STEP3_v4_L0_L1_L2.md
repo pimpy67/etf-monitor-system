@@ -11,7 +11,7 @@ monitoraggio). Il PDF in `config/` è generato automaticamente dal YAML: non
 modificarlo mai a mano.
 
 Prima di scrivere codice: leggi `config/etf_families.yaml`, `technical_analysis.py`
-e `monitor.py` per capire la struttura attuale (nomi dei parametri esistenti,
+e `monitor.py` per capire la struttura attuale (nomi dei parametri esistenti,P
 come sono organizzate le famiglie ETF, come vengono valutate le condizioni
 di L1 e L0 oggi). Poi implementa le modifiche sotto, in quest'ordine di
 priorità:

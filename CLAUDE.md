@@ -331,23 +331,29 @@ Ogni ETF è assegnato a un "livello" che dice cosa fare:
 | **L1** | Core Portfolio | COMPRA, è il momento | Compra ora, tieni la posizione |
 | **L0** | Deep Recovery | Il prezzo è crollato | Compra il crollo, aspetta recupero |
 
-### L1 — Come Si Entra (Gerarchia 2+2)
+### L1 — Come Si Entra (7 Condizioni TUTTE Obbligatorie)
 
-Il sistema usa una **gerarchia intelligente**:
+**SPECIFICA CORRETTA** (dal Prompt di implementazione STEP 3 v4.0):
 
-**GATE STRUTTURALE (obbligatorio):**
-- A: Prezzo > EMA20 (il prezzo deve stare sopra la media veloce)
-- M: MACD > 0 (il momentum deve spingere al rialzo)
+L1 richiede **TUTTE e 7** le seguenti condizioni:
 
-Se ENTRAMBI sono FALSE → **BLOCCO TOTALE**, nessun ingresso possibile.
+| # | Condizione | Significato | Parametro |
+|---|-----------|-------------|-----------|
+| **1** | **Allineamento** | price > EMA20 > SMA50 (+ price > SMA200 se mm200_filter) | `allineamento_ok` |
+| **2** | **Persistenza** | giorni_sopra_EMA20 ≥ N + slope(EMA20) > 0 | `persistenza_ok` |
+| **3** | **RSI Ottimale** | rsi_entry_low ≤ RSI ≤ rsi_entry_high (per famiglia) | `rsi_ok` |
+| **4** | **Distanza EMA20** | 0% ≤ dist_EMA20 ≤ ema_dist_max (non troppo staccato) | `distance_ok` |
+| **5** | **ADX Forte** | ADX ≥ adx_entry (forza trend confermata) | `adx_ok` |
+| **6** | **MACD Momentum** | histogram > 0 AND (rising OR dist_ema20 < 2%) | `macd_ok` |
+| **7** | **Spazio Residuo** | Resistenza > min_reward_pct OR ATR×mult > min_reward_pct | `space_residuo_ok` |
 
-**VELOCITÀ FLESSIBILE (almeno 2 su 4):**
-- P: Prezzo > SMA50 (allineamento con media media)
-- R: RSI in range ottimale (46-55 per equity)
-- D: ADX > soglia (forza trend confermata)
-- X: EMA20 > SMA50 (doppio allineamento)
+**Regola**: Se **qualsiasi UNA è FALSE** → **INGRESSO BLOCCATO** (L2)
 
-Se **almeno 2 tra P, R, D, X sono TRUE** → **INGRESSO AUTORIZZATO**.
+**Fondamenta Irrinunciabili** (no eccezioni):
+- ✅ REGIME BULL (prezzo > EMA20 > SMA50 > SMA200)
+- ✅ Prezzo > SMA50 (allineamento assoluto)
+- ✅ No kill switch (calo giornaliero > -3%)
+- ✅ **TUTTE e 7 condizioni** (niente "5 su 6")
 
 ---
 
