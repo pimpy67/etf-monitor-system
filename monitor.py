@@ -28,6 +28,7 @@ from technical_analysis import ETFTechnicalAnalyzer
 from alerts import AlertSystem
 from database import PriceDatabase
 from pdf_generator import generate_parameters_pdf
+from pdf_generator_complete import generate_complete_pdf
 
 
 monitor_log = []
@@ -1064,10 +1065,11 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"⚠️  Errore aggiornamento portfolio SL: {e}")
 
-        # STEP 10 — Rigenera PDF parametri (sincronizzato con YAML)
+        # STEP 10 — Rigenera PDF (sincronizzati con YAML)
         try:
             generate_parameters_pdf('data/ETF_Monitor_Parametri_Riferimento.pdf')
-            add_log("✅ PDF parametri rigenerato (sincronizzato con YAML)")
+            generate_complete_pdf('data/ETF_Monitor_Documentazione_Completa.pdf')
+            add_log("✅ PDF rigenerati (parametri + documentazione completa — sincronizzati con YAML)")
         except Exception as e:
             add_log(f"⚠️  Errore generazione PDF: {e}")
 

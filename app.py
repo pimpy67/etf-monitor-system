@@ -14,6 +14,7 @@ from datetime import datetime
 from database import PriceDatabase
 import monitor_lock
 from pdf_generator import generate_parameters_pdf
+from pdf_generator_complete import generate_complete_pdf
 
 app = Flask(__name__)
 db  = PriceDatabase()
@@ -1107,6 +1108,95 @@ def download_parameters_pdf():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/download-complete-documentation')
+def download_complete_documentation():
+    """Scarica il PDF COMPLETO con documentazione + parametri."""
+    try:
+        pdf_path = 'data/ETF_Monitor_Documentazione_Completa.pdf'
+        if not os.path.exists(pdf_path):
+            generate_complete_pdf(pdf_path)
+        return send_file(pdf_path, as_attachment=True, download_name='ETF_Monitor_Documentazione_Completa.pdf')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/get-claude-doc')
+def get_claude_doc():
+    """Carica il CLAUDE.md intero come HTML — visualizzabile nel browser."""
+    try:
+        # Leggi il CLAUDE.md completo
+        with open('CLAUDE.md', 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Converti Markdown → HTML (usando markdown library)
+        try:
+            import markdown
+            html = markdown.markdown(content, extensions=['tables', 'fenced_code', 'codehilite'])
+        except ImportError:
+            # Fallback: markdown grezzo convertito a HTML
+            import re
+            html = content
+            html = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', html, flags=re.MULTILINE)
+            html = re.sub(r'^## (.*?)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
+            html = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
+            html = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', html)
+            html = re.sub(r'\*(.*?)\*(?!\*)', r'<i>\1</i>', html)
+            html = '<pre>' + html + '</pre>'
+
+        # Restituisci HTML con CSS minimo per la leggibilità
+        html_page = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>CLAUDE.md — Documentazione Completa</title>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; }}
+        .container {{ max-width: 900px; margin: 0 auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+        h1, h2, h3 {{ color: #1a5490; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; }}
+        h1 {{ font-size: 2em; margin-top: 40px; }}
+        h2 {{ font-size: 1.5em; margin-top: 30px; }}
+        h3 {{ font-size: 1.2em; margin-top: 20px; }}
+        pre {{ background: #f0f4f8; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 0.9em; }}
+        code {{ background: #f0f4f8; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; }}
+        table {{ border-collapse: collapse; width: 100%; margin: 20px 0; }}
+        table th, table td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
+        table th {{ background: #e8eef7; color: #1a5490; font-weight: bold; }}
+        table tr:nth-child(even) {{ background: #f9f9f9; }}
+        blockquote {{ border-left: 4px solid #1a5490; padding-left: 20px; margin-left: 0; color: #666; }}
+        .toc {{ background: #f0f4f8; padding: 20px; border-radius: 5px; margin: 20px 0; }}
+        .toc a {{ color: #1a5490; text-decoration: none; }}
+        .toc a:hover {{ text-decoration: underline; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📖 CLAUDE.md — Documentazione Completa del Sistema</h1>
+        <p><i>Generato il {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}</i></p>
+        <div class="toc">
+            <p><b>Naviga il documento:</b></p>
+            <ul>
+                <li><a href="#regola">Regola Permanente di Sincronizzazione</a></li>
+                <li><a href="#concetti">Concetti Fondamentali</a></li>
+                <li><a href="#parametri">Parametri Spiegati</a></li>
+                <li><a href="#livelli">Schema Livelli</a></li>
+                <li><a href="#flusso">Flusso End-to-End</a></li>
+                <li><a href="#interazione">Interazione Parametri</a></li>
+                <li><a href="#esempio">Esempio SWDA.L</a></li>
+                <li><a href="#infrastruttura">Infrastruttura Tecnica</a></li>
+            </ul>
+        </div>
+        {html}
+    </div>
+</body>
+</html>
+        """
+        return html_page, 200, {'Content-Type': 'text/html; charset=utf-8'}
+
+    except Exception as e:
+        return jsonify({'error': f'Errore caricamento CLAUDE.md: {str(e)}'}), 500
+
+
 @app.route('/api/parameters-tables-html')
 def get_parameters_tables_html():
     """Genera le tabelle HTML parametri dinamicamente da YAML — 100% sincronizzate."""
@@ -1180,9 +1270,11 @@ def get_parameters_tables_html():
 if __name__ == '__main__':
     os.makedirs('data', exist_ok=True)
 
-    # Genera PDF all'avvio (sincronizzato con YAML)
+    # Genera PDF all'avvio (sincronizzati con YAML)
     try:
         generate_parameters_pdf('data/ETF_Monitor_Parametri_Riferimento.pdf')
+        generate_complete_pdf('data/ETF_Monitor_Documentazione_Completa.pdf')
+        print("✅ PDF generati all'avvio (parametri + documentazione completa)")
     except Exception as e:
         print(f"⚠️ Errore generazione PDF: {e}")
 
