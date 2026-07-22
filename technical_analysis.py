@@ -1188,7 +1188,7 @@ class ETFTechnicalAnalyzer:
         reason_codes = []
 
         # Min buy count richiesto per L1 (dipende dalla famiglia)
-        min_buy_required = self.p.get('min_buy_count', 6)
+        min_buy_required = self.p.get('min_buy_count', 7)
 
         # [DEBUG] Log per tutte le decisioni L1
         if buy_count_finale >= (min_buy_required - 1):
