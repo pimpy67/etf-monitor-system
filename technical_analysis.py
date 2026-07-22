@@ -1128,6 +1128,13 @@ class ETFTechnicalAnalyzer:
         macd_rising    = macd_hp is not None and macd_h is not None and macd_h > macd_hp
         macd_ok        = macd_positive and macd_rising
 
+        # 7️⃣ NUOVA: Spazio Residuo Minimo (resistenza OR volatilità ATR)
+        space_residuo_check = self.l1_check_space_residuo_minimo(current, high, low, 
+                                                                  self._fval(self._atr(high, low, close)) if high is not None and low is not None else None,
+                                                                  hist['Volume'].iloc[-1] if 'Volume' in hist else None,
+                                                                  hist['Volume'].rolling(window=20).mean().iloc[-1] if 'Volume' in hist else None) if high is not None and low is not None else {'valid': False}
+        space_ok       = space_residuo_check.get('valid', False)
+
         conditions = {
             'allineamento_ok':    allineamento,
             'persistenza_ok':     persistenza,
@@ -1135,6 +1142,7 @@ class ETFTechnicalAnalyzer:
             'distance_ok':        dist_ok,
             'adx_ok':             adx_ok,
             'macd_ok':            macd_ok,
+            'space_residuo_ok':   space_ok,
             # Valori per display
             'ema10_current':      round(ema10_v, 4) if ema10_v else None,
             'ema20_current':      round(ema20_v, 4) if ema20_v else None,
@@ -1167,7 +1175,7 @@ class ETFTechnicalAnalyzer:
             'l1_breakout_metrics': None,  # Populated later if buy_count == 6
             'l1_reward_space_metrics': None,  # Populated later if buy_count == 6
         }
-        buy_count = sum([allineamento, persistenza, rsi_ok, dist_ok, adx_ok, macd_ok])
+        buy_count = sum([allineamento, persistenza, rsi_ok, dist_ok, adx_ok, macd_ok, space_ok])
 
         # ── REGIME A 3 STATI (INFORMATIVO, SENZA PENALITÀ) ───────────────────────────────
         # Calcola il regime per dashboard/reporting, ma NON penalizza il buy_count
@@ -1224,11 +1232,8 @@ class ETFTechnicalAnalyzer:
             reason_codes.append('L2_WATCHLIST' if suggested == 2 else 'L3_MONITOR')
 
         elif buy_count_finale >= min_buy_required:
-            # Soglia flessibile: accetta 5/6
-            # MA: REGIME BULL è obbligatorio (fondamenta irrinunciabile)
-            # DEBUG: Log dei filtri per i 5/6
-            if int(buy_count) < 6:
-                print(f"[DEBUG] {current_level} → L1? buy_count={int(buy_count)}, ADX={adx_val}, dist={dist_ema20:.1f}, max_dist={p['ema_dist_max']}")
+            # ✅ TUTTE e 7 condizioni obbligatorie (no "5/6")
+            # FONDAMENTA irrinunciabili: REGIME BULL, prezzo > SMA50, no kill switch
 
             if kill_switch:
                 suggested = current_level
@@ -1245,125 +1250,7 @@ class ETFTechnicalAnalyzer:
                 suggested = 2
                 reason    = f'Prezzo {current:.2f} < SMA50 {sma50_v:.2f}: Watchlist'
                 reason_codes.append('L2_WATCHLIST_PRICE')
-            elif buy_count < 6:
-                # ⚡ STRATO 3 — Filtri di accelerazione per i 5/6 (MOLTO STRINGENTI)
-                # Se meno di 6/6 condizioni passano, richiedi:
-                # 1. ADX forte (>= adx_entry)
-                # 2. Distanza EMA20 non estesa (<= max)
-                # 3. EMA20 slope FORTE (>= ema20_slope_min) — parametrizzato per famiglia
-                adx_fails = adx_val is None or adx_val < p['adx_entry']
-                dist_fails = dist_ema20 > p['ema_dist_max']
-                ema20_slope_threshold_s3 = self.p.get('ema20_slope_min', 0.5)  # Default 0.5% per STRATO 3
-
-                # Calcola EMA20 slope per il controllo aggiuntivo
-                slope_fails = False
-                ema20_slope_value = ema20_slope
-                if ema20_v is not None and len(ema20) >= 11:
-                    ema20_10d_ago = float(ema20.iloc[-11]) if pd.notna(ema20.iloc[-11]) else None
-                    if ema20_10d_ago and ema20_10d_ago > 0:
-                        ema20_slope_value = ((ema20_v - ema20_10d_ago) / ema20_10d_ago * 100)
-                        slope_fails = ema20_slope_value < ema20_slope_threshold_s3  # Soglia parametrizzata
-
-                if adx_fails or dist_fails or slope_fails:
-                    failed_filters = []
-                    if adx_fails:
-                        failed_filters.append(f"ADX {adx_val or 'N/A'} < {p['adx_entry']}")
-                    if dist_fails:
-                        failed_filters.append(f"dist {dist_ema20:.1f}% > {p['ema_dist_max']}%")
-                    if slope_fails:
-                        failed_filters.append(f"slope +{ema20_slope_value:.2f}% < {ema20_slope_threshold_s3}%")
-                    suggested = 2
-                    reason    = f"Ingresso {int(buy_count)}/6 bloccato: {' + '.join(failed_filters)} — Watchlist"
-                    reason_codes.append('L2_5OF6_ACCELERATION_FILTERS')
-                else:
-                    # Passa TUTTI i filtri stringenti
-                    suggested = 1
-                    reason    = f'L1 Trend Sicuro (5/6, ADX+dist+slope {ema20_slope_threshold_s3:.2f}% OK)'
-                    reason_codes.append('L1_ENTRY')
-            elif ema20_v is not None and len(ema20) >= 11:
-                # PRIORITÀ 2 — 7ª condizione: Spazio Residuo Minimo + Override Squeeze
-                # Attiva SOLO se buy_count == 6 (tutte le prime 6 condizioni OK)
-                l1_space_config = p.get('l1_space_residuo', {})
-                min_reward_pct = l1_space_config.get('min_reward_pct', 0.03)
-                resistance_lookback_days = l1_space_config.get('resistance_lookback_days', 30)
-                atr_multiplier = l1_space_config.get('atr_multiplier', 1.8)
-
-                # Calcola squeeze override
-                squeeze_metrics = self._calculate_squeeze_metrics(close, lookback=20, lookback_history=252)
-                squeeze_valido = squeeze_metrics['squeeze_valido']
-
-                # Calcola breakout confermato (ADX rising 5gg + volume expansion)
-                breakout_metrics = self._verify_breakout_confirmed(high, low, close)
-                breakout_confirmed = breakout_metrics['breakout_confirmed']
-
-                # Determina 7ª condizione: spazio residuo OK OPPURE (squeeze_valido + breakout)
-                if squeeze_valido and breakout_confirmed:
-                    # Override squeeze: bypassa min_reward_pct
-                    seventh_condition_ok = True
-                    seventh_condition_reason = f"Squeeze override: {squeeze_metrics['consolidation_range_pct']:.4f} al {squeeze_metrics['squeeze_percentile']:.0f}° percentile + breakout confermato"
-                else:
-                    # Richiedi spazio residuo minimo
-                    space_metrics = self._check_reward_space(close, high, low, min_reward_pct, resistance_lookback_days, atr_multiplier)
-                    seventh_condition_ok = space_metrics['space_ok']
-                    if space_metrics['method_a_ok']:
-                        seventh_condition_reason = f"Spazio resistenza: {space_metrics['distance_resistance']:.1%} >= {min_reward_pct:.1%}"
-                    elif space_metrics['method_b_ok']:
-                        seventh_condition_reason = f"Spazio ATR: {space_metrics['space_atr']:.1%} >= {min_reward_pct:.1%}"
-                    else:
-                        seventh_condition_reason = f"Spazio insufficiente: resistenza {space_metrics['distance_resistance']:.1%}, ATR {space_metrics['space_atr']:.1%} < {min_reward_pct:.1%}"
-
-                # PRIORITÀ 2 STEP 3 v4.0 — Solo 7ª condizione (spazio residuo)
-                # Filtro EMA20 slope RIMOSSO — non è nella specifica
-                if not seventh_condition_ok:
-                    # 7ª condizione fallisce → L2
-                    suggested = 2
-                    reason    = f'7ª condizione fallisce: {seventh_condition_reason} → Watchlist'
-                    reason_codes.append('L2_INSUFFICIENT_REWARD_SPACE')
-                else:
-                    # 7ª condizione OK → L1 INGRESSO
-                    suggested = 1
-                    regime_note = '' if regime_ok else ' (no SMA200)'
-                    macd_note   = '↑' if (macd_hp is not None and macd_h is not None and macd_h > macd_hp) else '~'
-                    rsi_str = f'{rsi_val:.0f}' if rsi_val is not None else '?'
-                    dist_str = f'{dist_ema20:.1f}' if dist_ema20 is not None else '?'
-                    adx_str = f'{adx_val:.0f}' if adx_val is not None else '?'
-                    reason = (
-                        f'L1 Trend Sicuro (6/6+7ª, {seventh_condition_reason}, regime {regime_str}): '
-                        f'RSI {rsi_str} ✓, dist {dist_str}% ✓, ADX {adx_str} ✓, MACD {macd_note} ✓{regime_note}'
-                    )
-                    reason_codes.append('L1_ENTRY')
-            else:
-                suggested = 1
-                regime_note = '' if regime_ok else ' (no SMA200)'
-                macd_note   = '↑' if (macd_hp is not None and macd_h is not None and macd_h > macd_hp) else '~'
-                penalty_note = f' (penalità regime -{regime_penalty:.1f})' if regime_penalty > 0 else ''
-                # Safe formatting with None checks
-                rsi_str = f'{rsi_val:.0f}' if rsi_val is not None else '?'
-                dist_str = f'{dist_ema20:.1f}' if dist_ema20 is not None else '?'
-                adx_str = f'{adx_val:.0f}' if adx_val is not None else '?'
-                reason = (
-                    f'L1 Trend Sicuro (regime {regime_str}, score {buy_count_finale:.1f}): EMA20>SMA50 ✓, {days_above_ema20}gg sopra EMA20 ✓, '
-                    f'RSI {rsi_str} ✓, dist {dist_str}% ✓, ADX {adx_str} ✓, '
-                    f'MACD {macd_note} ✓{regime_note}{penalty_note}'
-                )
-                reason_codes.append('L1_ENTRY')
-
-        elif buy_count_finale >= (min_buy_required - 1):
-            # Watchlist: quasi-L1 ma non tutti i criteri soddisfatti
-            suggested = 2
-            reason    = f'Watchlist: score finale {buy_count_finale:.1f}/{min_buy_required} ({days_above_ema20}gg sopra EMA20, regime {regime_str})'
-            reason_codes.append('L2_WATCHLIST')
-
-        elif days_above_ema20 >= p['days_above_ema'] or (ema20_v and sma50_v and ema20_v > sma50_v):
-            suggested = 2
-            reason    = f'Watchlist: {buy_count}/6 condizioni L1 ({days_above_ema20}gg sopra EMA20)'
-            reason_codes.append('L2_WATCHLIST')
-
-        elif price_ema_ok:
-            suggested = 2
-            reason    = f'Prezzo sopra EMA20 da {days_above_ema20} giorni'
-            reason_codes.append('L2_WATCHLIST')
-
+            
         else:
             suggested = 3
             reason    = 'Monitoraggio passivo'
