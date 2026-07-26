@@ -888,6 +888,16 @@ class ETFTechnicalAnalyzer:
             result['reason_codes'] = ['L0_DISABLED']
             return result
 
+        # Picco degli ultimi 90 giorni (non assoluto) per evitare falsi positivi su trend down lunghi
+        # Calcolato subito, PRIMA dei percorsi FAST/SLOW, così è sempre disponibile per il
+        # messaggio "L0 Deep Recovery: X% dal picco" indipendentemente da quale percorso entra.
+        n_lookback_peak = min(90, len(prices))
+        peak_price = float(prices.iloc[-n_lookback_peak:].max())
+        result['peak_price']  = round(peak_price, 4)
+        result['peak_days']   = len(prices)
+        dist_peak_pct      = (current - peak_price) / peak_price * 100
+        result['distance_from_peak'] = round(dist_peak_pct, 2)
+
         # PRIORITÀ 1 — Percorsi LENTO e RAPIDO (se l0_regime params disponibili)
         l0_regime_params = self.p.get('l0_regime', {})
         regime_check_enabled = bool(l0_regime_params)
@@ -912,14 +922,6 @@ class ETFTechnicalAnalyzer:
                 result['days_below_sma200'] = slow_result['days_below_sma200']
                 result['drawdown_normalized'] = slow_result['drawdown_normalized']
                 return result
-
-        # Picco degli ultimi 90 giorni (non assoluto) per evitare falsi positivi su trend down lunghi
-        n_lookback_peak = min(90, len(prices))
-        peak_price = float(prices.iloc[-n_lookback_peak:].max())
-        result['peak_price']  = round(peak_price, 4)
-        result['peak_days']   = len(prices)
-        dist_peak_pct      = (current - peak_price) / peak_price * 100
-        result['distance_from_peak'] = round(dist_peak_pct, 2)
 
         # Cond 1: drawdown check (pragmatico: 6.5% per equity, non 15%)
         cond1 = dist_peak_pct <= -(l0_dd_threshold * 100)
