@@ -798,7 +798,7 @@ function renderLevelSection(lvl, label, cls, list) {
         <th>ETF</th><th>Ticker</th><th>Prezzo</th>
         <th>%1G</th><th>%1W</th><th>%1M</th>
         <th>EMA20</th><th>SMA50</th><th>Regime</th>
-        <th>RSI</th><th>ADX</th><th>Cond.</th><th>${infoHeader}</th>
+        <th>RSI</th><th>ADX</th><th>${lvl===0 ? 'Drawdown %' : 'Condizioni'}</th><th>${infoHeader}</th>
       </tr></thead>
       <tbody>
         ${count ? list.map(e => renderETFRow(e, lvl)).join('') : `<tr><td colspan="13" class="empty-msg">${emptyMsg}</td></tr>`}
@@ -851,6 +851,9 @@ function renderETFRow(e, lvl) {
       ? `<span class="pct ${pg>0?'pos':pg<0?'neg':'zero'}">${pg>0?'+':''}${pg.toFixed(2)}%</span>`
       : '<span style="color:#555">—</span>';
     infoCell = `${daysStr} &nbsp;|&nbsp; ${pgSpan}`;
+  } else if (lvl === 0) {
+    // Per L0, mostra solo il status (no duplicazione drawdown)
+    infoCell = (e.level_reason || '').replace(/L0 Deep Recovery.*$/i, '').replace(/\s*\(\d+gg sopra EMA\d+\)/g, '').substring(0, 60);
   } else {
     infoCell = (e.level_reason || '').replace(/\s*\(\d+gg sopra EMA\d+\)/g, '').substring(0, 60);
   }
