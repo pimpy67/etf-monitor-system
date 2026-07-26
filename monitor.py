@@ -550,6 +550,7 @@ class ETFMonitor:
                 'sma200':            a.get('sma200'),
                 'rsi':               a.get('rsi'),
                 'adx':               a.get('adx'),
+                'regime':            a.get('regime', 'LATERALE'),  # NUOVO: regime per L0 sorting
                 'macd_histogram':    a.get('macd_histogram'),
                 'dist_ema20':        a.get('dist_ema20'),
                 'days_above_ema20':  a.get('days_above_ema20', 0),

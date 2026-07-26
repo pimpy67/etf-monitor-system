@@ -802,11 +802,21 @@ function renderLevelSection(lvl, label, cls, list) {
       </tr></thead>
       <tbody>
         ${count ? list.sort((a, b) => {
-          // Per L0, ordina per score decrescente (migliori in alto)
+          // Per L0, ordina per REGIME (calcolato correttamente: EMA20 vs SMA50), poi per SCORE decrescente
           if (lvl === 0) {
+            // 1. Priorità: Regime BULL > LATERALE > BEAR
+            const regimeOrder = {'BULL': 0, 'LATERALE': 1, 'BEAR': 2};
+            const regimeA = a.regime || 'LATERALE';
+            const regimeB = b.regime || 'LATERALE';
+            const orderA = regimeOrder[regimeA] != null ? regimeOrder[regimeA] : 1;
+            const orderB = regimeOrder[regimeB] != null ? regimeOrder[regimeB] : 1;
+
+            if (orderA !== orderB) return orderA - orderB; // diverso regime → ordina per regime
+
+            // 2. Se stesso regime: ordina per score decrescente (criteri L0)
             const scoreA = calculateL0Score(a);
             const scoreB = calculateL0Score(b);
-            return scoreB - scoreA; // decrescente
+            return scoreB - scoreA;
           }
           return 0; // altri livelli, mantieni ordine originale
         }).map(e => renderETFRow(e, lvl)).join('') : `<tr><td colspan="13" class="empty-msg">${emptyMsg}</td></tr>`}
