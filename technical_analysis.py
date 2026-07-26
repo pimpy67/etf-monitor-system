@@ -1129,10 +1129,10 @@ class ETFTechnicalAnalyzer:
         macd_ok        = macd_positive and macd_rising
 
         # 7️⃣ NUOVA: Spazio Residuo Minimo (resistenza OR volatilità ATR)
-        space_residuo_check = self.l1_check_space_residuo_minimo(current, high, low, 
+        space_residuo_check = self.l1_check_space_residuo_minimo(current, high, low,
                                                                   self._fval(self._calculate_atr(high, low, close)) if high is not None and low is not None else None,
-                                                                  hist['Volume'].iloc[-1] if 'Volume' in hist else None,
-                                                                  hist['Volume'].rolling(window=20).mean().iloc[-1] if 'Volume' in hist else None) if high is not None and low is not None else {'valid': False}
+                                                                  None,
+                                                                  None) if high is not None and low is not None else {'valid': False}
         space_ok       = space_residuo_check.get('valid', False)
 
         conditions = {
