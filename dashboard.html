@@ -801,10 +801,47 @@ function renderLevelSection(lvl, label, cls, list) {
         <th>RSI</th><th>ADX</th><th>${lvl===0 ? 'Drawdown %' : 'Condizioni'}</th><th>${infoHeader}</th>
       </tr></thead>
       <tbody>
-        ${count ? list.map(e => renderETFRow(e, lvl)).join('') : `<tr><td colspan="13" class="empty-msg">${emptyMsg}</td></tr>`}
+        ${count ? list.sort((a, b) => {
+          // Per L0, ordina per score decrescente (migliori in alto)
+          if (lvl === 0) {
+            const scoreA = calculateL0Score(a);
+            const scoreB = calculateL0Score(b);
+            return scoreB - scoreA; // decrescente
+          }
+          return 0; // altri livelli, mantieni ordine originale
+        }).map(e => renderETFRow(e, lvl)).join('') : `<tr><td colspan="13" class="empty-msg">${emptyMsg}</td></tr>`}
       </tbody>
     </table>
   </div>`;
+}
+
+// ── L0 Scoring: Calcola quanti criteri sono soddisfatti ─────────────────
+function calculateL0Score(e) {
+  let score = 0;
+  // Criterio 1: Regime BULL (price > SMA200)
+  if (e.sma200 != null && e.price != null && e.price > e.sma200) score++;
+  // Criterio 2: RSI < 35 (ipervenduto)
+  if (e.rsi != null && e.rsi < 35) score++;
+  // Criterio 3: ADX > 20 (trend confermato)
+  if (e.adx != null && e.adx > 20) score++;
+  // Criterio 4: Drawdown -15% a -30% (sweet spot)
+  const dd = e.drawdown_from_peak;
+  if (dd != null && dd >= 15 && dd <= 30) score++;
+  return score; // ritorna 0–4
+}
+
+function getL0ScoreColor(score) {
+  switch(score) {
+    case 4: return '#0D5F27'; // 🟢 Verde scuro — MASSIMA OPPORTUNITÀ
+    case 3: return '#4A4A1A'; // 🟡 Arancione scuro
+    case 2: return '#5F1F1F'; // 🔴 Rosso scuro — EVITARE
+    default: return '#2D2D2D'; // ⚪ Grigio — SKIP
+  }
+}
+
+function getL0ScoreBadge(score) {
+  const labels = ['❌ 0/4', '⚠️ 1/4', '⚠️ 2/4', '✓ 3/4', '⭐ 4/4'];
+  return labels[score] || '?/4';
 }
 
 // ── Unified ETF row (L0, L1, L2, L3) ─────────────────────────────────────
@@ -821,6 +858,11 @@ function renderETFRow(e, lvl) {
   }
   const bc = e.buy_count || 0;
   const c  = e.conditions || {};
+
+  // Calcola score L0 e colore sfondo
+  const l0Score = lvl === 0 ? calculateL0Score(e) : -1;
+  const l0BgColor = lvl === 0 ? getL0ScoreColor(l0Score) : 'transparent';
+  const l0ScoreBadge = lvl === 0 ? getL0ScoreBadge(l0Score) : '';
 
   // Condition cell
   let condCell;
@@ -852,8 +894,9 @@ function renderETFRow(e, lvl) {
       : '<span style="color:#555">—</span>';
     infoCell = `${daysStr} &nbsp;|&nbsp; ${pgSpan}`;
   } else if (lvl === 0) {
-    // Per L0, mostra solo il status (no duplicazione drawdown)
-    infoCell = (e.level_reason || '').replace(/L0 Deep Recovery.*$/i, '').replace(/\s*\(\d+gg sopra EMA\d+\)/g, '').substring(0, 60);
+    // Per L0, mostra score + status
+    const baseInfo = (e.level_reason || '').replace(/L0 Deep Recovery.*$/i, '').replace(/\s*\(\d+gg sopra EMA\d+\)/g, '').substring(0, 40);
+    infoCell = `<span style="font-weight:bold">${l0ScoreBadge}</span> ${baseInfo}`;
   } else {
     infoCell = (e.level_reason || '').replace(/\s*\(\d+gg sopra EMA\d+\)/g, '').substring(0, 60);
   }
@@ -877,7 +920,10 @@ function renderETFRow(e, lvl) {
   const inPf = portfolioIsins.has(isin);
   const pfBtn = isin ? `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf?'&#10003;':'+ Port.'}</button>` : '';
 
-  return `<tr style="cursor:pointer;" onclick="openETFDetail('${encodeURIComponent(ticker)}','${isin}')">
+  // Per L0, aggiungi il colore di sfondo e il badge score
+  const trStyle = lvl === 0 ? `style="cursor:pointer;background-color:${l0BgColor};color:#fff;"` : `style="cursor:pointer;"`;
+
+  return `<tr ${trStyle} onclick="openETFDetail('${encodeURIComponent(ticker)}','${isin}')">
     <td class="col-nome">
       <div class="etf-nome"><span class="etf-nome-text">${nome}</span>${nomeBadges}${pfBtn}</div>
       <div style="font-size:0.7em;color:#555;font-family:monospace">${isin}</div>
