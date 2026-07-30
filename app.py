@@ -15,6 +15,7 @@ from database import PriceDatabase
 import monitor_lock
 from pdf_generator import generate_parameters_pdf
 from pdf_generator_complete import generate_complete_pdf
+from technical_analysis import ETFTechnicalAnalyzer
 
 app = Flask(__name__)
 db  = PriceDatabase()

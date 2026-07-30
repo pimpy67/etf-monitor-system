@@ -1304,7 +1304,9 @@ async function loadAllPortfolioSLData() {
 
     positions.forEach(pos => {
       const isin = pos.isin;
-      document.getElementById('sl-sugg-' + isin).textContent = pos.sl_suggested ? '€' + pos.sl_suggested.toFixed(4) : '—';
+      const slSuggEl = document.getElementById('sl-sugg-' + isin);
+      if (slSuggEl) slSuggEl.textContent = pos.sl_suggested ? '€' + pos.sl_suggested.toFixed(4) : '—';
+
       const slPersInput = document.getElementById('sl-pers-' + isin);
       const sharesInput = document.getElementById('shares-' + isin);
       if (slPersInput && !slPersInput.value) slPersInput.value = pos.sl_inserted || '';
@@ -2516,11 +2518,17 @@ async function loadDetailSL() {
 
   try {
     // Clear fields BEFORE fetching to prevent showing stale data while loading
-    document.getElementById('entryPriceDisplay').value = 'Caricamento...';
-    document.getElementById('slSuggestedInput').value = '—';
-    document.getElementById('sgSuggestedInput').value = '—';
-    document.getElementById('slInsertedInput').value = '';
-    document.getElementById('sharesInput').value = '';
+    const elEntry = document.getElementById('entryPriceDisplay');
+    const elSLSugg = document.getElementById('slSuggestedInput');
+    const elSGSugg = document.getElementById('sgSuggestedInput');
+    const elSLIns = document.getElementById('slInsertedInput');
+    const elShares = document.getElementById('sharesInput');
+
+    if (elEntry) elEntry.value = 'Caricamento...';
+    if (elSLSugg) elSLSugg.value = '—';
+    if (elSGSugg) elSGSugg.value = '—';
+    if (elSLIns) elSLIns.value = '';
+    if (elShares) elShares.value = '';
 
     // Pass ISIN as query parameter so backend filters at source
     const query = isin ? `?isin=${encodeURIComponent(isin)}` : '';
@@ -2530,19 +2538,21 @@ async function loadDetailSL() {
 
     // Backend now returns only the requested ISIN (if query param provided)
     const pos = data.positions?.[0] || data.positions?.find(p => p.isin === isin || p.ticker === ticker);
+    const slPanel = document.getElementById('slManagementPanel');
+
     if (pos) {
-      document.getElementById('slManagementPanel').style.display = 'flex';
-      document.getElementById('entryPriceDisplay').value = pos.entry_price ? '€' + pos.entry_price.toFixed(4) : '—';
-      document.getElementById('slSuggestedInput').value = pos.sl_suggested ? '€' + pos.sl_suggested.toFixed(4) : '—';
-      document.getElementById('sgSuggestedInput').value = pos.sg_suggested ? '€' + pos.sg_suggested.toFixed(4) : '—';
-      document.getElementById('slInsertedInput').value = pos.sl_inserted || '';
-      document.getElementById('sharesInput').value = pos.shares || '';
+      if (slPanel) slPanel.style.display = 'flex';
+      if (elEntry) elEntry.value = pos.entry_price ? '€' + pos.entry_price.toFixed(4) : '—';
+      if (elSLSugg) elSLSugg.value = pos.sl_suggested ? '€' + pos.sl_suggested.toFixed(4) : '—';
+      if (elSGSugg) elSGSugg.value = pos.sg_suggested ? '€' + pos.sg_suggested.toFixed(4) : '—';
+      if (elSLIns) elSLIns.value = pos.sl_inserted || '';
+      if (elShares) elShares.value = pos.shares || '';
       window.detailSLData = pos;
       setTimeout(() => updatePLCalc(), 100); // Calcola P&L con i valori caricati
     } else {
-      document.getElementById('slManagementPanel').style.display = 'none';
+      if (slPanel) slPanel.style.display = 'none';
       // Keep loading indicators visible to show that no data was found
-      document.getElementById('entryPriceDisplay').value = '—';
+      if (elEntry) elEntry.value = '—';
     }
   } catch(e) {
     console.log('SL load error:', e);
