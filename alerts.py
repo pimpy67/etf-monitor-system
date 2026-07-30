@@ -380,15 +380,26 @@ class AlertSystem:
         - Performance %
         - SL Suggerito (formula ibrida calcolata da STEP 4)
         - SG Suggerito (target dinamico calcolato da STEP 4)
+
+        **IMPORTANTE**: Mostra solo gli ETF che sono sia nel portafoglio personale
+        CHE nei veri livelli L1/L0 del monitor (etf_l1_tracking, etf_l0_tracking).
         """
         try:
             from database import db
 
-            # Leggi posizioni dal database — includi nuovi campi SL/SG suggerito
+            # Leggi posizioni dal database + verifica livello vero dal monitor
             conn = db._get_connection()
             if not conn:
                 return True  # No DB connection available
             cur = conn.cursor()
+
+            # Ottieni i veri L1 e L0 dal monitor
+            cur.execute("SELECT DISTINCT isin FROM etf_l1_tracking")
+            real_l1_isins = {row[0] for row in cur.fetchall()}
+            cur.execute("SELECT DISTINCT isin FROM etf_l0_tracking")
+            real_l0_isins = {row[0] for row in cur.fetchall()}
+
+            # Leggi il portafoglio personale
             cur.execute("""
                 SELECT pe.id, pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
                        pe.portafoglio, pe.sl_suggerito, pe.sg_suggerito
@@ -402,9 +413,9 @@ class AlertSystem:
             if not positions:
                 return True  # No positions, no email needed
 
-            # Separa L1 e L0
-            l1_positions = [p for p in positions if p[5] == 'L1']  # portafoglio column (index 5)
-            l0_positions = [p for p in positions if p[5] == 'L0']
+            # Filtra: mostra solo ETF che sono SIA nel portafoglio CHE nei veri livelli
+            l1_positions = [p for p in positions if p[1] in real_l1_isins]  # isin at index 1
+            l0_positions = [p for p in positions if p[1] in real_l0_isins]  # isin at index 1
 
             # ── SEZIONE L1 ──────────────────────────────────────────────────
             l1_rows = []
