@@ -679,12 +679,24 @@ class ETFMonitor:
         - send_new_entries: solo nuovi ingressi in L1 (+ nuovi L0)
         - send_l1_exit: ogni uscita da L1
         - send_portfolio_signals: RSI > 72 o condizioni in deterioramento
+
+        **IMPORTANTE**: usa results come source-of-truth per i livelli, NON il database
+        (il DB potrebbe essere out-of-sync con i results appena calcolati)
         """
         today     = datetime.now().date()
         today_str = today.strftime('%Y-%m-%d')
 
-        existing_l1 = self.db.get_all_l1_entries()
-        existing_l0 = self.db.get_all_l0_entries()
+        # Costruisci l'elenco dei livelli ATTUALI da results (source-of-truth)
+        # Non leggiamo dal database per evitare out-of-sync con i results appena calcolati
+        existing_l1 = {}
+        existing_l0 = {}
+        for r in results:
+            isin = r.get('isin', '') or r['ticker']
+            lvl = r['analysis'].get('suggested_level', r.get('livello', 3))
+            if lvl == 1:
+                existing_l1[isin] = r
+            elif lvl == 0:
+                existing_l0[isin] = r
 
         current_l1_isins  = set()
         current_l0_isins  = set()
@@ -785,6 +797,7 @@ class ETFMonitor:
             # ── L1 tracking ──────────────────────────────────────────────────
             if suggested == 1:
                 current_l1_isins.add(isin)
+                # Controlla se è un NUOVO ingresso (non era in L1 nei results precedenti)
                 if isin not in existing_l1:
                     if price:
                         sl_initial = a.get('stop_loss_initial')
