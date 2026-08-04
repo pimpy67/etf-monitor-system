@@ -70,6 +70,19 @@ class ETFTechnicalAnalyzer:
 
     EQUITY_FAMILY = frozenset({'equity_developed', 'equity_sector', 'equity_emerging', 'thematic', 'equity'})
 
+    # Famiglie YAML moderne (config/etf_families.yaml) equivalenti a EQUITY_FAMILY/bond legacy.
+    # Bug trovato il 2026-08-04: is_bond/is_equity_family confrontavano self.etf_type solo contro
+    # questi nomi legacy, mai contro i nomi famiglia YAML attuali -> per qualunque analyzer creato
+    # con famiglia=... (tutto il sistema oggi) risultavano sempre False, disattivando di fatto la
+    # Regola E (ADX debole) ovunque e rendendo la Regola C (stanchezza RSI) sempre attiva anche
+    # per i bond in suggest_level().
+    YAML_BOND_FAMILIES = frozenset({'bond_governativi', 'bond_corp_hy_em'})
+    YAML_EQUITY_COMMODITY_FAMILIES = frozenset({
+        'equity_sviluppati', 'mercati_emergenti', 'settoriali_growth', 'settoriali_difensivi',
+        'commodities', 'oro_metalli_preziosi', 'metalli_industriali',
+        'leva_single_stock', 'crypto_digital_assets',
+    })
+
     # Carica configurazione famiglie da YAML una volta all'avvio della classe
     _FAMILIES_CONFIG = None
 
@@ -987,8 +1000,9 @@ class ETFTechnicalAnalyzer:
           D: RSI > 78 (eccesso) — parziale 90%, flag dashboard
         """
         p = self.p
-        is_bond = self.etf_type == 'bond'
-        is_equity_family = self.etf_type in self.EQUITY_FAMILY or self.etf_type == 'commodity'
+        is_bond = self.etf_type == 'bond' or self.etf_type in self.YAML_BOND_FAMILIES
+        is_equity_family = (self.etf_type in self.EQUITY_FAMILY or self.etf_type == 'commodity'
+                             or self.etf_type in self.YAML_EQUITY_COMMODITY_FAMILIES)
 
         if len(prices) < self.ema20_period:
             return {
@@ -1734,10 +1748,10 @@ class ETFTechnicalAnalyzer:
         Returns:
             Dict con 'exit', 'reason', 'priority', 'exit_price' (se exit=True)
         """
-        is_bond = self.etf_type == 'bond' or self.p.get('rsi_entry_low') is not None and \
-                  self.p.get('rsi_entry_low', 0) < 40
-        is_equity_commodity = self.etf_type in {'equity_developed', 'equity_sector',
-                                                  'equity_emerging', 'commodity', 'thematic'}
+        is_bond = self.etf_type == 'bond' or self.etf_type in self.YAML_BOND_FAMILIES
+        is_equity_commodity = (self.etf_type in {'equity_developed', 'equity_sector',
+                                                   'equity_emerging', 'commodity', 'thematic'}
+                                or self.etf_type in self.YAML_EQUITY_COMMODITY_FAMILIES)
 
         price = market_data.get('close', 0)
         daily_chg = market_data.get('daily_change_pct', 0)

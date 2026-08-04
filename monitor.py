@@ -42,6 +42,17 @@ def add_log(message: str):
     print(entry)
 
 
+def _rsi_period(series: pd.Series, period: int = 5) -> pd.Series:
+    """RSI a periodo configurabile (ETFTechnicalAnalyzer._rsi() usa sempre period=14)."""
+    delta  = series.diff()
+    gains  = delta.where(delta > 0, 0.0)
+    losses = (-delta).where(delta < 0, 0.0)
+    ag = gains.ewm(com=period - 1, min_periods=period).mean()
+    al = losses.ewm(com=period - 1, min_periods=period).mean()
+    rs = ag / al.replace(0, np.nan)
+    return 100 - (100 / (1 + rs))
+
+
 class ETFMonitor:
     """Sistema principale di monitoraggio ETF"""
 
@@ -1397,20 +1408,25 @@ class ETFMonitor:
                     # Dati di mercato per SL/SG
                     ema20 = a.get('ema20')
                     ema10 = a.get('ema10')
-                    rsi_5 = a.get('rsi_5')  # Se non disponibile nel result, calcoleremo
 
-                    # Se rsi_5 non è nel result, prova a calcolarlo da close series (fallback)
-                    if rsi_5 is None and 'close_series' in a:
-                        try:
-                            rsi_5_series = analyzer._rsi(a['close_series'].tail(10))
-                            rsi_5 = float(rsi_5_series.iloc[-1]) if len(rsi_5_series) > 0 else None
-                        except:
-                            rsi_5 = None
-
-                    # EMA20 series (ultimi 10 periodi per calcolo slope)
+                    # RSI(5) e serie EMA20 — 'a' (analysis) non li contiene mai (era un bug:
+                    # 'close_series'/'ema20_series' non sono chiavi che analyze_etf() imposta,
+                    # quindi il fallback precedente non scattava mai e lo Stop Gain dinamico
+                    # restava di fatto statico). Li ricaviamo da uno storico Close indipendente
+                    # via get_ohlc_by_isin (fast-path DB, gia' aggiornato in questo stesso run).
+                    rsi_5 = None
                     ema20_series = None
-                    if 'ema20_series' in a:
-                        ema20_series = a['ema20_series'].tail(10) if hasattr(a['ema20_series'], 'tail') else a['ema20_series'][-10:]
+                    try:
+                        hist_recent = self.db.get_ohlc_by_isin(isin, days=40)
+                        if not hist_recent.empty and len(hist_recent) >= 6:
+                            close_recent = hist_recent['Close'].astype(float).dropna()
+                            rsi5_full = _rsi_period(close_recent, period=5)
+                            if not rsi5_full.empty and pd.notna(rsi5_full.iloc[-1]):
+                                rsi_5 = float(rsi5_full.iloc[-1])
+                            if len(close_recent) >= 20:
+                                ema20_series = analyzer._ema(close_recent, 20).tail(10)
+                    except Exception as e:
+                        add_log(f"    ⚠️  Errore RSI5/EMA20 series {isin}: {e}")
 
                     # CALCOLA SL SUGGERITO — formula ibrida
                     sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, current_price, ema20)
