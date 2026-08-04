@@ -1105,13 +1105,14 @@ class ETFTechnicalAnalyzer:
         regime_str = self.calculate_regime(ema20_v, sma50_v, lateral_band)
         regime_ok = regime_str == "BULL"  # L1 richiede regime BULL
 
-        # 1. Allineamento: price > EMA20 > SMA50 (+ regime SMA200 come filtro aggiuntivo)
+        # 1. Allineamento: price > EMA20 > SMA50 (+ price > SMA200 se mm200_filter) — puramente geometrico
+        #    Il regime BULL/BEAR/LATERALE NON entra qui: è valutato una sola volta, a valle, come fondamenta.
         price_ema_ok  = ema20_v is not None and current > ema20_v
         ema_sma50_ok  = ema20_v is not None and sma50_v is not None and ema20_v > sma50_v
         regime_ok_mm200 = True
         if p['mm200_filter'] and sma200_v is not None:
             regime_ok_mm200 = current > sma200_v
-        allineamento  = price_ema_ok and ema_sma50_ok and regime_ok and regime_ok_mm200
+        allineamento  = price_ema_ok and ema_sma50_ok and regime_ok_mm200
 
         # 2. Persistenza: >= 3gg sopra EMA20 + slope EMA20 positivo
         persistenza   = days_above_ema20 >= p['days_above_ema'] and ema20_slope > 0
@@ -1252,7 +1253,12 @@ class ETFTechnicalAnalyzer:
                 suggested = 2
                 reason    = f'Prezzo {current:.2f} < SMA50 {sma50_v:.2f}: Watchlist'
                 reason_codes.append('L2_WATCHLIST_PRICE')
-            
+            else:
+                # ✅ 7/7 condizioni + tutte le fondamenta (regime BULL, prezzo > SMA50, no kill switch)
+                suggested = 1
+                reason    = f'Ingresso L1 — 7/7 condizioni, regime {regime_str}, RSI {rsi_val:.0f}, ADX {adx_val:.0f}' if rsi_val and adx_val else 'Ingresso L1 — 7/7 condizioni'
+                reason_codes.append('L1_ENTRY')
+
         else:
             suggested = 3
             reason    = 'Monitoraggio passivo'
