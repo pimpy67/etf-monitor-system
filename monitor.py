@@ -147,7 +147,7 @@ class ETFMonitor:
         # 1. Database
         db_df = _pd.DataFrame()
         if isin:
-            db_df = self.db.get_close_by_isin(isin, days=260)
+            db_df = self.db.get_ohlc_by_isin(isin, days=260)
 
         # Usa il DB solo se ha già i dati di oggi (last_date == today)
         if not db_df.empty and len(db_df) >= 55:
@@ -159,8 +159,10 @@ class ETFMonitor:
         # 2. Yahoo Finance (OHLCV completo) — DB assente o datato
         df = self.data_fetcher.get_historical_data(ticker, days=260)
         if not df.empty:
+            # Yahoo Finance fornisce sempre OHLCV completo: salvalo con save_ohlcv_bulk
+            # (save_close_bulk scartava High/Low/Open/Volume anche quando disponibili)
             if isin:
-                self.db.save_close_bulk(isin, df, source='yfinance')
+                self.db.save_ohlcv_bulk(isin, df, source='yfinance')
             else:
                 self.db.save_ohlcv_bulk(ticker, df, source='yfinance')
             return df

@@ -442,6 +442,56 @@ class PriceDatabase:
         finally:
             conn.close()
 
+    def get_ohlc_by_isin(self, isin: str, days: int = 200) -> pd.DataFrame:
+        """
+        Recupera lo storico OHLCV per un ETF tramite ISIN (o ticker=isin).
+
+        A differenza di get_close_by_isin(), include Open/High/Low/Volume —
+        usato dal fast-path DB del monitor per non perdere i dati necessari
+        ad ADX e allo spazio residuo (condizione L1 #7).
+
+        Returns:
+            DataFrame con colonne ['Open','High','Low','Close','Volume'] e index=Date.
+            Open/High/Low/Volume possono essere NaN per righe salvate prima del fix
+            (venivano storicamente scartate da save_close_bulk).
+        """
+        conn = self._get_connection()
+        if not conn:
+            return pd.DataFrame()
+
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT date, open, high, low, close, volume
+                    FROM etf_price_history
+                    WHERE isin = %s OR ticker = %s
+                    ORDER BY date DESC
+                    LIMIT %s
+                """, (isin, isin, days))
+                rows = cur.fetchall()
+
+                if rows:
+                    df = pd.DataFrame(rows)
+                    df['date'] = pd.to_datetime(df['date'])
+                    df = df.sort_values('date').reset_index(drop=True)
+                    for col in ['open', 'high', 'low', 'close']:
+                        df[col] = df[col].astype(float)
+                    result = pd.DataFrame({
+                        'Open':   df['open'].values,
+                        'High':   df['high'].values,
+                        'Low':    df['low'].values,
+                        'Close':  df['close'].values,
+                        'Volume': df['volume'].values,
+                    }, index=df['date'])
+                    result.index.name = 'Date'
+                    return result
+                return pd.DataFrame()
+        except Exception as e:
+            logging.error(f"Errore recupero OHLC {isin}: {e}")
+            return pd.DataFrame()
+        finally:
+            conn.close()
+
     def get_ohlcv(self, ticker: str, days: int = 200) -> pd.DataFrame:
         """
         Recupera lo storico OHLCV per un ETF
