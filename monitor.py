@@ -1440,23 +1440,20 @@ class ETFMonitor:
                     else:
                         sg_suggerito = entry_price * (1 + sg_data.get('target_pct', 0.0))
 
-                    # CONTROLLA REGOLE DI USCITA L1 — STEP 6
-                    market_data = {
-                        'close': current_price,
-                        'ema10': ema10,
-                        'ema20': ema20,
-                        'rsi_14': a.get('rsi'),
-                        'rsi_5': rsi_5,
-                        'rsi_14_prev': a.get('rsi_prev'),
-                        'adx': a.get('adx'),
-                        'daily_change_pct': a.get('pct_change_1d'),
-                        'ema20_series': ema20_series,
-                    }
-                    position_data = {'entry_price': entry_price, 'famiglia': famiglia}
+                    # USCITA REALE — SOLO SL o TP toccati (fix 2026-08-05).
+                    # Il portafoglio reale non usa B/C/E/F/kill-switch (quelle sono segnali
+                    # "interni" della dashboard, non vendite): l'utente compra manualmente
+                    # quando un ETF entra in L1, poi aggiorna ogni giorno SL/TP su Directa a
+                    # mano — la posizione esce SOLO quando il prezzo tocca uno dei due.
+                    # Prima questo blocco usava check_l1_exit() (kill switch, trailing,
+                    # stanchezza, ADX debole, + un secondo calcolo SG interno diverso da
+                    # quello mostrato sotto) per marcare 'exited' nel DB — disallineato dal
+                    # modello reale confermato dall'utente.
+                    sl_hit = sl_suggerito is not None and current_price <= sl_suggerito
+                    tp_hit = bool(sg_data.get('trigger'))
 
-                    exit_check = analyzer.check_l1_exit(market_data, position_data)
-
-                    if exit_check.get('exit'):
+                    if sl_hit or tp_hit:
+                        exit_rule = 'SL' if sl_hit else 'TP'
                         # Uscita richiesta — mark come exited nel DB
                         with conn.cursor() as cur:
                             cur.execute("""
@@ -1464,9 +1461,9 @@ class ETFMonitor:
                                 SET status = 'exited', exit_date = now(), exit_price = %s,
                                     exit_rule = %s
                                 WHERE id = %s
-                            """, (current_price, exit_check.get('reason'), entry_id))
+                            """, (current_price, exit_rule, entry_id))
                             conn.commit()
-                        add_log(f"    🔴 EXIT L1 {fund_name[:40]:40s} | {exit_check.get('reason')}")
+                        add_log(f"    🔴 EXIT L1 {fund_name[:40]:40s} | {exit_rule} toccato (prezzo {current_price:.2f})")
                     else:
                         # Salva SL/SG suggerito — STEP 3 v4.0
                         with conn.cursor() as cur:

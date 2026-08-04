@@ -1360,7 +1360,8 @@ class ETFTechnicalAnalyzer:
 
     def calculate_sg_suggerito_l1(self, entry_price: float, current_price: float,
                                    ema20_series: Optional[pd.Series],
-                                   rsi_5: Optional[float]) -> Dict:
+                                   rsi_5: Optional[float],
+                                   days_held: int = 0) -> Dict:
         """
         Calcola Stop Gain suggerito per posizioni L1 — target dinamico.
 
@@ -1375,8 +1376,13 @@ class ETFTechnicalAnalyzer:
         Args:
             entry_price: Prezzo di carico
             current_price: Prezzo corrente
-            ema20_series: Serie EMA20 (ultimi 10-20 periodi)
+            ema20_series: Serie EMA20 (ultimi 5-10 periodi, solo per lo slope)
             rsi_5: RSI a 5 periodi
+            days_held: giorni di calendario dall'ingresso in posizione. Fix 2026-08-05:
+                prima veniva stimato come len(ema20_series), che essendo sempre una
+                .tail(10) risultava quasi sempre 10 fin dal primo giorno di possesso
+                (decadimento istantaneo invece che graduale). Va passato esplicitamente
+                dal chiamante, che conosce la vera data di ingresso.
 
         Returns:
             Dict con 'sg_suggerito', 'target_pct', 'should_exit', 'trigger'
@@ -1390,7 +1396,6 @@ class ETFTechnicalAnalyzer:
             }
 
         profit_pct = (current_price - entry_price) / entry_price
-        days_held = len(ema20_series) if ema20_series is not None else 0
 
         target_max = self.p.get('sg_target_pct', 0.05)
         target_min = self.p.get('sg_floor_pct', 0.025)

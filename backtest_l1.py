@@ -1,26 +1,30 @@
 """
-backtest_l1.py — Replay walk-forward del PORTAFOGLIO REALE (2026-08-04, v3).
+backtest_l1.py — Replay walk-forward del PORTAFOGLIO REALE (v4, 2026-08-05).
 
 Scope: tutte le 13 famiglie tradabili (esclusa monetario_liquidita, vedi TARGET_FAMILIES)
 
-MODELLO CORRETTO (precisato dall'utente il 2026-08-04) — il sistema NON esegue mai
+MODELLO CONFERMATO (precisato dall'utente il 2026-08-04/05) — il sistema NON esegue mai
 ordini in automatico:
   - Un ETF entra in L1 (7/7 condizioni + fondamenta, via suggest_level()) -> acquisto
     manuale, aggiunto al portafoglio.
   - Ogni giorno il monitor ricalcola SL (calculate_sl_suggerito_l1) e TP
-    (calculate_sg_suggerito_l1) e li manda via email. L'utente li aggiorna
-    manualmente su Directa.
-  - La posizione esce SOLO quando il prezzo tocca SL o TP a mercato (intraday,
-    quindi confrontato contro Low/High del giorno, non solo il Close).
+    (calculate_stop_gain_dynamic — l'UNICA funzione TP usata in produzione dopo il
+    cleanup del 2026-08-05; calculate_sg_suggerito_l1 esisteva in parallelo con
+    parametri diversi ma non era collegata a nessuna decisione reale, solo a
+    check_l1_exit() che a sua volta non guida piu' l'uscita nel DB).
+  - La posizione esce SOLO quando il prezzo tocca SL o TP — controllato UNA volta al
+    giorno sul Close (come fa il monitor reale, non intraday su High/Low).
   - B (trailing), C (stanchezza), E (ADX debole), F (kill switch) NON sono vendite
-    reali — fanno solo uscire l'ETF dalla lista L1 in dashboard (non e' piu' un
-    candidato per un NUOVO acquisto). Il kill switch non e' un ordine a se': se il
-    crollo e' abbastanza forte da bucare lo SL gia' impostato, esce da li'.
+    reali — sono solo segnali "interni" della dashboard (L1 -> L2/L3 nell'universo
+    monitorato), non toccano il portafoglio. Il kill switch non e' un ordine a se':
+    se il crollo buca lo SL gia' impostato esce da li', altrimenti nulla.
   - Costi: 5 EUR Directa acquisto + 5 EUR vendita (flat, indipendenti dalla size).
   - Tassazione: 26% flat sulle plusvalenze (solo sui trade in guadagno).
+  - Size reale confermata dall'utente: si testano sia 5.000 EUR che 10.000 EUR
+    per operazione (--position-sizes).
 
 Uso (dentro il container):
-  python3 backtest_l1.py --start 2025-08-01 --days 800 --compare-min-buy 6 --position-size 5000
+  python3 backtest_l1.py --start 2025-08-01 --days 800 --compare-min-buy 6 --position-sizes 5000,10000
 """
 import sys
 sys.path.insert(0, '/app')
@@ -76,19 +80,9 @@ def make_analyzer(famiglia, min_buy_override=None):
     return analyzer
 
 
-def _rsi_period(series: pd.Series, period: int = 5) -> pd.Series:
-    delta  = series.diff()
-    gains  = delta.where(delta > 0, 0.0)
-    losses = (-delta).where(delta < 0, 0.0)
-    ag = gains.ewm(com=period - 1, min_periods=period).mean()
-    al = losses.ewm(com=period - 1, min_periods=period).mean()
-    rs = ag / al.replace(0, float('nan'))
-    return 100 - (100 / (1 + rs))
-
-
 def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates):
-    """Ingresso via suggest_level() (7/7 o 6/7). Uscita: SOLO SL o TP, ricalcolati
-    ogni giorno, toccati intraday (Low<=SL o High>=TP). Nessuna regola B/C/E/F."""
+    """Ingresso via suggest_level() (7/7 o 6/7). Uscita: SOLO SL o TP, ricalcolati e
+    controllati una volta al giorno sul Close (come il monitor reale). Nessuna regola B/C/E/F."""
     holding = False
     entry_price = None
     entry_date = None
@@ -101,8 +95,6 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates):
         high_slice = high_full.iloc[:pos + 1] if high_full is not None else None
         low_slice = low_full.iloc[:pos + 1] if low_full is not None else None
         close_today = float(close_slice.iloc[-1])
-        high_today = float(high_slice.iloc[-1]) if high_slice is not None else close_today
-        low_today = float(low_slice.iloc[-1]) if low_slice is not None else close_today
 
         if not holding:
             with redirect_stdout(quiet):  # silenzia i print [L1-CHECK] della libreria
@@ -113,28 +105,30 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates):
                 entry_price = close_today
                 entry_date = d.date().isoformat()
         else:
-            ema20_series = analyzer._ema(close_slice, 20)
+            # Stesse funzioni e stessa logica di monitor.py::_update_portfolio_l1_suggerito()
+            # dopo il fix 2026-08-05: SL = calculate_sl_suggerito_l1, TP = calculate_stop_gain_dynamic
+            # (unica funzione TP usata in produzione — calculate_sg_suggerito_l1 non e' piu'
+            # collegata a nessuna decisione reale). Check una volta al giorno sul Close, come
+            # fa il monitor (non intraday su High/Low: il sistema valuta una volta al giorno).
+            ema20_series = analyzer._ema(close_slice, 20).tail(10)
             ema20_today = float(ema20_series.iloc[-1])
 
             sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, close_today, ema20_today)
             sl = sl_data.get('sl_suggerito')
 
-            rsi5_series = _rsi_period(close_slice, period=5)
-            rsi_5 = float(rsi5_series.iloc[-1]) if pd.notna(rsi5_series.iloc[-1]) else None
-            sg_data = analyzer.calculate_sg_suggerito_l1(entry_price, close_today,
-                                                           ema20_series.tail(10), rsi_5)
-            tp = sg_data.get('sg_suggerito')
+            sg_data = analyzer.calculate_stop_gain_dynamic(entry_price, close_today, ema20_series, analyzer.p)
+            tp = entry_price * (1 + sg_data.get('target_pct', 0.0))
 
-            sl_hit = sl is not None and low_today <= sl
-            tp_hit = (tp is not None and high_today >= tp) or sg_data.get('should_exit', False)
+            sl_hit = sl is not None and close_today <= sl
+            tp_hit = bool(sg_data.get('trigger'))
 
             exit_price = None
             exit_reason = None
             if sl_hit:
-                exit_price = sl  # esecuzione stop: si assume eseguito al livello SL
+                exit_price = close_today
                 exit_reason = 'SL'
             elif tp_hit:
-                exit_price = tp if (tp is not None and high_today >= tp) else close_today
+                exit_price = close_today
                 exit_reason = 'TP'
 
             if exit_reason:
@@ -178,7 +172,9 @@ def apply_costs_and_tax(trade, position_size):
     return trade
 
 
-def backtest_ticker(fetcher, ticker, famiglia, start_date, fetch_days, min_buy_variants, position_size):
+def backtest_ticker(fetcher, ticker, famiglia, start_date, fetch_days, min_buy_variants):
+    """Simula UNA volta per ticker/variante (solo % lordi) — i costi/tasse si
+    applicano dopo, per size diverse, senza dover ri-simulare."""
     hist = fetcher.get_historical_data(ticker, days=fetch_days)
     if hist.empty or len(hist) < 220:
         return None, f'Storico insufficiente ({len(hist)}gg, servono >=220 per SMA200)'
@@ -196,16 +192,16 @@ def backtest_ticker(fetcher, ticker, famiglia, start_date, fetch_days, min_buy_v
     for label, override in min_buy_variants:
         analyzer = make_analyzer(famiglia, override)
         trades = simulate(analyzer, close_full, high_full, low_full, hist.index, test_dates)
-        trades = [apply_costs_and_tax(t, position_size) for t in trades]
         per_variant[label] = {'n_trades': len(trades), 'trades': trades}
 
     return {'ticker': ticker, 'famiglia': famiglia, 'variants': per_variant}, None
 
 
-def aggregate(results, label):
+def aggregate(results, label, position_size):
     all_trades = []
     for r in results:
         for t in r['variants'][label]['trades']:
+            t = apply_costs_and_tax(dict(t), position_size)  # copia: non mutare il trade condiviso tra size diverse
             all_trades.append({**t, 'ticker': r['ticker'], 'famiglia': r['famiglia']})
 
     closed = [t for t in all_trades if t['status'] == 'closed']
@@ -250,9 +246,10 @@ def main():
     parser.add_argument('--days', type=int, default=800, help='giorni di storico da scaricare per ticker')
     parser.add_argument('--compare-min-buy', type=int, default=None,
                          help='se fornito, esegue anche una simulazione con min_buy_count forzato a questo valore')
-    parser.add_argument('--position-size', type=float, default=5000.0,
-                         help='capitale ipotetico per trade (EUR), per calcolare costi/tasse in valore assoluto')
+    parser.add_argument('--position-sizes', default='5000,10000',
+                         help='capitali ipotetici per trade (EUR, separati da virgola), per costi/tasse in valore assoluto')
     args = parser.parse_args()
+    position_sizes = [float(x) for x in args.position_sizes.split(',')]
 
     start_date = (datetime.strptime(args.start, '%Y-%m-%d').date()
                   if args.start else (datetime.now() - timedelta(days=365)).date())
@@ -261,9 +258,9 @@ def main():
     if args.compare_min_buy is not None:
         variants.append((f'override_{args.compare_min_buy}', args.compare_min_buy))
 
-    print(f"BACKTEST L1 v3 — portafoglio reale (SL/TP giornalieri, no B/C/E/F) — dal {start_date.isoformat()} a oggi")
+    print(f"BACKTEST L1 v4 — portafoglio reale (SL/TP giornalieri su Close, no B/C/E/F) — dal {start_date.isoformat()} a oggi")
     print(f"Famiglie: {', '.join(sorted(TARGET_FAMILIES))}")
-    print(f"Varianti: {[v[0] for v in variants]}  |  Position size: {args.position_size}EUR  |  "
+    print(f"Varianti: {[v[0] for v in variants]}  |  Position sizes: {position_sizes}EUR  |  "
           f"Costi Directa: {DIRECTA_FEE_BUY}+{DIRECTA_FEE_SELL}EUR  |  Tax: {TAX_RATE:.0%}")
     print("=" * 78)
 
@@ -277,8 +274,7 @@ def main():
         ticker = item['ticker']
         print(f"[{i}/{len(universe)}] {ticker:14s} ({item['famiglia']})...", end=' ')
         try:
-            res, err = backtest_ticker(fetcher, ticker, item['famiglia'], start_date, args.days,
-                                        variants, args.position_size)
+            res, err = backtest_ticker(fetcher, ticker, item['famiglia'], start_date, args.days, variants)
         except Exception as e:
             res, err = None, str(e)
         if err:
@@ -293,44 +289,47 @@ def main():
     print("\n" + "=" * 78)
     print(f"ETF testati: {len(results)}  |  skip per storico insufficiente: {len(errors)}\n")
 
-    agg_by_variant = {}
-    for label, _ in variants:
-        agg = aggregate(results, label)
-        agg_by_variant[label] = agg
-        print(f"--- Variante {label} ---")
-        print(f"  Trade totali: {agg['n_trades_total']}  (chiusi: {agg['n_trades_closed']}, ancora aperti: {agg['n_trades_open']})")
-        print(f"  Uscite: {agg['n_exit_sl']} via SL, {agg['n_exit_tp']} via TP")
-        print(f"  Durata media posizione chiusa: {agg['avg_duration_days']} giorni")
-        print(f"  Rendimento medio LORDO per trade: {agg['avg_gross_pct_gain']}%")
-        print(f"  Rendimento medio NETTO per trade (dopo costi+tasse): {agg['avg_net_pct_gain']}%")
-        print(f"  Win rate (netto): {agg['win_rate_pct']}%")
-        print(f"  Somma rendimenti LORDI (equal-weight, non compounded): {agg['sum_gross_pct_gain']}%")
-        print(f"  Somma rendimenti NETTI (equal-weight, non compounded): {agg['sum_net_pct_gain']}%")
-        print(f"  P&L netto totale su {args.position_size}EUR/trade: {agg['total_net_eur']}EUR "
-              f"(costi Directa: {agg['total_fees_eur']}EUR, tasse: {agg['total_tax_eur']}EUR)")
-        print()
+    agg_by_size = {}
+    for size in position_sizes:
+        agg_by_variant = {}
+        for label, _ in variants:
+            agg = aggregate(results, label, size)
+            agg_by_variant[label] = agg
+            print(f"--- Variante {label} | Size {size}EUR ---")
+            print(f"  Trade totali: {agg['n_trades_total']}  (chiusi: {agg['n_trades_closed']}, ancora aperti: {agg['n_trades_open']})")
+            print(f"  Uscite: {agg['n_exit_sl']} via SL, {agg['n_exit_tp']} via TP")
+            print(f"  Durata media posizione chiusa: {agg['avg_duration_days']} giorni")
+            print(f"  Rendimento medio LORDO per trade: {agg['avg_gross_pct_gain']}%")
+            print(f"  Rendimento medio NETTO per trade (dopo costi+tasse): {agg['avg_net_pct_gain']}%")
+            print(f"  Win rate (netto): {agg['win_rate_pct']}%")
+            print(f"  Somma rendimenti LORDI (equal-weight, non compounded): {agg['sum_gross_pct_gain']}%")
+            print(f"  Somma rendimenti NETTI (equal-weight, non compounded): {agg['sum_net_pct_gain']}%")
+            print(f"  P&L netto totale su {size}EUR/trade: {agg['total_net_eur']}EUR "
+                  f"(costi Directa: {agg['total_fees_eur']}EUR, tasse: {agg['total_tax_eur']}EUR)")
+            print()
+        agg_by_size[size] = agg_by_variant
 
-    if len(variants) > 1:
-        print("=" * 78)
-        print("CONFRONTO DIRETTO")
-        labels = [v[0] for v in variants]
-        for k, nice in [('n_trades_total', 'Trade totali'), ('avg_duration_days', 'Durata media (gg)'),
-                         ('avg_gross_pct_gain', 'Rendimento medio LORDO/trade (%)'),
-                         ('avg_net_pct_gain', 'Rendimento medio NETTO/trade (%)'),
-                         ('win_rate_pct', 'Win rate netto (%)'),
-                         ('total_net_eur', f'P&L netto totale su {args.position_size}EUR/trade (EUR)')]:
-            vals = '  vs  '.join(f"{lbl}={agg_by_variant[lbl][k]}" for lbl in labels)
-            print(f"  {nice:45s}: {vals}")
+        if len(variants) > 1:
+            print(f"--- CONFRONTO DIRETTO (size {size}EUR) ---")
+            labels = [v[0] for v in variants]
+            for k, nice in [('n_trades_total', 'Trade totali'), ('avg_duration_days', 'Durata media (gg)'),
+                             ('avg_gross_pct_gain', 'Rendimento medio LORDO/trade (%)'),
+                             ('avg_net_pct_gain', 'Rendimento medio NETTO/trade (%)'),
+                             ('win_rate_pct', 'Win rate netto (%)'),
+                             ('total_net_eur', f'P&L netto totale su {size}EUR/trade (EUR)')]:
+                vals = '  vs  '.join(f"{lbl}={agg_by_variant[lbl][k]}" for lbl in labels)
+                print(f"  {nice:45s}: {vals}")
+            print()
 
     with open('data/backtest_l1_result.json', 'w', encoding='utf-8') as f:
         json.dump({
             'start_date': start_date.isoformat(),
-            'position_size': args.position_size,
+            'position_sizes': position_sizes,
             'directa_fee_buy': DIRECTA_FEE_BUY,
             'directa_fee_sell': DIRECTA_FEE_SELL,
             'tax_rate': TAX_RATE,
             'variants': [v[0] for v in variants],
-            'aggregates': agg_by_variant,
+            'aggregates_by_size': {str(s): a for s, a in agg_by_size.items()},
             'errors': errors,
         }, f, indent=2, ensure_ascii=False)
     print("\nRisultato completo salvato in data/backtest_l1_result.json")
