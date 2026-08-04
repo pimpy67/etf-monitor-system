@@ -148,30 +148,25 @@ dashboard.html (JavaScript)
 | **L1** | Core Portfolio | Trend confermato — logica gerarchia 2+2 |
 | **L0** | Deep Recovery | ETF in calo forte (8–20% dal picco) con segnali rimbalzo |
 
-### L1 — Entrata (Gerarchia 2+2)
+### L1 — Entrata: gate rigido a 7 condizioni (dal 22/07/2026, `min_buy_count: 7` per tutte le famiglie)
 
-**GATE STRUTTURALE** (2/2 OBBLIGATORI):
-| Parametro | Condizione |
-|-----------|-----------|
-| **A** | `price > EMA20` |
-| **M** | `MACD_histogram > 0` |
+| # | Condizione | Logica |
+|---|-----------|--------|
+| 1 | Allineamento | `price > EMA20 > SMA50` (+ SMA200 se `mm200_filter`) — puramente geometrico |
+| 2 | Persistenza | `days_above_EMA20 ≥ N` (per famiglia, oggi 3 per tutte) AND `slope(EMA20) > 0` |
+| 3 | RSI ottimale | `rsi_entry_low ≤ RSI ≤ rsi_entry_high` (per famiglia) |
+| 4 | Distanza EMA20 | `0% ≤ dist_EMA20 ≤ ema_dist_max` |
+| 5 | ADX | `ADX ≥ adx_entry` |
+| 6 | MACD momentum | `histogram > 0` AND (rising OR `dist_EMA20 < 2%`) |
+| 7 | Spazio residuo | resistenza (max N gg) o ATR×mult ≥ `min_reward_pct` |
 
-Se **A ∧ M** sono entrambi FALSE → **BLOCCO TOTALE**.
+Se **una sola** è FALSE → bloccato (L2). Poi le **fondamenta**: regime BULL (`(EMA20−SMA50)/SMA50 > lateral_band`), prezzo>SMA50, no kill switch.
 
-**VELOCITY FLESSIBILE** (≥2 su 4):
-| Parametro | Condizione |
-|-----------|-----------|
-| **P** | `price > SMA50` |
-| **R** | `rsi_entry_low ≤ RSI ≤ rsi_entry_high` (per famiglia) |
-| **D** | `ADX ≥ adx_min_threshold` |
-| **X** | `EMA20 > SMA50` |
+> ⚠️ **"Gerarchia 2+2" (Gate A+M + Velocity P/R/D/X, sizing 60-100%) esiste ancora nel codice** (`check_l1_entry_accelerated()`, STEP 12) ma **non decide il livello reale** — viene solo calcolata e salvata come metadata (`l1_accelerated_entry` in `dashboard_data.json`). Il gate che conta oggi è quello a 7 condizioni sopra. Stesso discorso per il sistema "tiered" (`check_l1_entry_tiered()`, quality score 0-4): calcolato, non collegato a nulla.
 
-**Confidence Sizing**:
-- Gate 2/2 ✓ + Velocity 2/4 → 60% allocation
-- Gate 2/2 ✓ + Velocity 3/4 → 80% allocation
-- Gate 2/2 ✓ + Velocity 4/4 → 100% allocation
+### L1 — Uscita: due motori distinti (dashboard vs portafoglio reale)
 
-### L1 — Uscita (6 regole, in ordine priorità)
+**Dashboard** (`suggest_level()`, classifica il livello nell'universo monitorato):
 
 | # | Regola | Trigger | Azione |
 |---|--------|---------|--------|
@@ -180,7 +175,13 @@ Se **A ∧ M** sono entrambi FALSE → **BLOCCO TOTALE**.
 | B | Trailing Stop | EMA10 < EMA20 | Totale |
 | C | Stanchezza | RSI era ≥70, ora <70 | Totale (non-bond) |
 | E | ADX debole | ADX < 18 + price < EMA20 | Totale |
-| D | Uscita Parziale | RSI > 78 | 90% (10% → XEON) |
+| — | Downgrade score/regime | buy_count<7 o regime≠BULL | L1→L2 |
+
+**Portafoglio reale** (`check_l1_exit()`, le posizioni comprate davvero in `etf_portfolio_entries`): F kill switch → **SL dinamico** → B trailing → C stanchezza → **SG dinamico** (take profit) → E ADX debole. Niente Regola A, niente downgrade per score — usa lo stop loss/gain dinamico al loro posto.
+
+> **Fix 2026-08-04**: prima la Regola E non scattava mai (bug nomi famiglia legacy vs YAML) e il target dello Stop Gain dinamico era di fatto statico (dati mai passati alla funzione). Entrambi corretti — dettagli in `CLAUDE.md`.
+
+**⚠️ Come funziona davvero (nessun automatismo)**: il sistema non compra/vende mai da solo. L'utente acquista manualmente gli ETF che entrano in L1, poi ogni giorno riceve via email SL e TP ricalcolati e li aggiorna manualmente su Directa. La posizione esce solo quando il prezzo tocca uno dei due a mercato. **B, C, E, F non sono vendite** — segnalano solo che l'ETF non è più un candidato per un *nuovo* acquisto, non toccano le posizioni aperte.
 
 ---
 

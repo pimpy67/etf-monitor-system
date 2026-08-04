@@ -159,10 +159,10 @@ Se prezzo = €98  → 98 < 100.5 ✗ Possibile uscita L1
 
 **Cosa sono?** Limiti inferiore e superiore dell'RSI per dire "OK, puoi comprare".
 
-**Esempio (equity_sviluppati):**
+**Esempio (equity_sviluppati, dal 2026-08-04):**
 ```
 rsi_entry_low: 45
-rsi_entry_high: 55
+rsi_entry_high: 58
 
 Se RSI = 50 → DENTRO al range, ingresso OK ✓
 Se RSI = 30 → SOTTO al range, prezzo troppo debole
@@ -227,17 +227,17 @@ Se prezzo = €105 → distanza = 5% → FUORI dal limite, prezzo troppo staccat
 
 **Esempio:**
 ```
-days_above_ema = 5
+days_above_ema = 3   # dal 2026-08-04 è 3 per TUTTE le 14 famiglie
+                      # (prima equity_sviluppati/settoriali_growth/settoriali_difensivi
+                      # erano a 5, allineate alle altre per aumentare le occasioni L1)
 
 Giorno 1: prezzo > EMA20 ✓
 Giorno 2: prezzo > EMA20 ✓
 Giorno 3: prezzo > EMA20 ✓
-Giorno 4: prezzo > EMA20 ✓
-Giorno 5: prezzo > EMA20 ✓
 → OK, INGRESSO CONFERMATO
 
 Se Giorno 2: prezzo scende sotto EMA20
-→ Falso segnale, counter riazzera, aspetta di nuovo 5 giorni
+→ Falso segnale, counter riazzera, aspetta di nuovo 3 giorni
 ```
 
 ---
@@ -349,31 +349,57 @@ L1 richiede **TUTTE e 7** le seguenti condizioni:
 
 **Regola**: Se **qualsiasi UNA è FALSE** → **INGRESSO BLOCCATO** (L2)
 
-**Fondamenta Irrinunciabili** (no eccezioni):
-- ✅ REGIME BULL (prezzo > EMA20 > SMA50 > SMA200)
+**Fondamenta Irrinunciabili** (no eccezioni, verificate *dopo* il 7/7):
+- ✅ Regime BULL: `(EMA20 − SMA50) / SMA50 > lateral_band` (soglia per famiglia, calculate_regime()). Dal fix del 2026-08-04 è verificato **una sola volta qui** — prima era anche incorporato dentro la condizione 1 (Allineamento), rendendo la condizione 1 un doppio controllo mascherato; oggi la condizione 1 è puramente geometrica (price>EMA20>SMA50 [+SMA200]).
 - ✅ Prezzo > SMA50 (allineamento assoluto)
 - ✅ No kill switch (calo giornaliero > -3%)
-- ✅ **TUTTE e 7 condizioni** (niente "5 su 6")
+- ✅ **TUTTE e 7 condizioni** (niente "6 su 7") — `min_buy_count: 7` per tutte le 14 famiglie in `config/etf_families.yaml`
+
+> **`ema20_slope_min`** (visto nel YAML per ogni famiglia, es. 1.5% per equity_sviluppati) **non è collegato a nessun controllo nel codice** — è un parametro morto, residuo di un'implementazione precedente. La condizione 2 (Persistenza) verifica solo `slope(EMA20) > 0`, senza soglia minima.
 
 ---
 
-### L1 — Come Si Esce (6 Regole di Uscita)
+### L1 — Come Si Esce — DUE MOTORI DISTINTI (scoperta e corretta il 2026-08-04)
+
+Il codice ha **due regole di uscita separate e non equivalenti**. Confonderle porta a misurare la cosa sbagliata (è successo durante un backtest lo stesso giorno).
+
+**1) Dashboard — `suggest_level()`** (classifica il livello nell'universo monitorato, NON le posizioni reali):
 
 | Priorità | Regola | Trigger | Azione |
 |:---:|--------|---------|--------|
 | 1 | **F — Kill Switch** | Calo giornaliero ≤ −3% | USCITA totale |
 | 2 | **A — Stop Loss** | Prezzo < EMA20 per 3 giorni | USCITA totale |
 | 3 | **B — Trailing Stop** | EMA10 < EMA20 | USCITA totale |
-| 4 | **C — Stanchezza** | RSI era ≥ 70, scende sotto | USCITA totale |
-| 5 | **E — ADX Debole** | ADX < 18 + prezzo < EMA20 | USCITA totale |
-| 6 | **D — Piede Dentro** | RSI > 78 | USCITA 90%, mantieni 10% + monetario |
+| 4 | **C — Stanchezza** | RSI era ≥ 70, scende sotto | USCITA totale (non-bond) |
+| 5 | **E — ADX Debole** | ADX < 18 + prezzo < EMA20 | USCITA totale (equity/commodity) |
+| — | Downgrade punteggio/regime | buy_count < 7 OPPURE regime lascia BULL | L1→L2 |
 
-**Uscita Parziale (Piede Dentro):**
-Se attiva la regola D:
-- Vendi 90% della posizione
-- Compra ETF monetario (XEON — pagherà ~3-4% annuo)
-- Mantieni 10% dell'ETF: rimane in L1 come "sensore"
-- Al prossimo segnale di ingresso, rientra con il 100%
+**2) Portafoglio reale — `check_l1_exit()`** (le posizioni comprate davvero, tracciate in `etf_portfolio_entries`, aggiornate da `monitor.py::_update_portfolio_l1_suggerito()`):
+
+| Priorità | Regola | Trigger | Azione |
+|:---:|--------|---------|--------|
+| 1 | **F — Kill Switch** | Calo giornaliero ≤ −3% | USCITA |
+| 2 | **SL dinamico** | Prezzo ≤ SL suggerito (`calculate_sl_suggerito_l1`: EMA20−buffer se profitto<2%, EMA20×0.99 se ≥2%) | USCITA |
+| 3 | **B — Trailing** | EMA10 < EMA20 | USCITA |
+| 4 | **C — Stanchezza** | RSI era ≥70, scende sotto (non-bond) | USCITA |
+| 5 | **SG dinamico** | Prezzo ≥ target (`calculate_sg_suggerito_l1`) OPPURE RSI(5)<soglia con profitto>1% | USCITA |
+| 6 | **E — ADX Debole** | ADX < 18 + prezzo < EMA20 (equity/commodity) | USCITA |
+
+**Non ha** la Regola A (prezzo<EMA20 da 3gg) né il downgrade per punteggio/regime — quelle esistono solo lato dashboard. Al loro posto usa lo stop loss/stop gain dinamico.
+
+**3) Come opera davvero l'utente (precisato 2026-08-04) — questa è la regola che conta per calcolare rendimenti reali:**
+
+Il sistema **non esegue mai ordini in automatico**. Il flusso reale è:
+- L'ETF entra in L1 (7/7 + fondamenta) → acquisto manuale, aggiunto al portafoglio personale
+- Ogni giorno il monitor ricalcola SL e TP e li manda via email (`alerts.py`)
+- L'utente imposta/aggiorna manualmente questi due ordini su Directa
+- La posizione esce **solo** quando il prezzo tocca lo SL o il TP a mercato (eseguito dal broker, non dal codice)
+- **B, C, E, F non sono azioni di vendita separate** — servono solo a far uscire l'ETF dalla lista L1 in dashboard, cioè "non è più un candidato per un *nuovo* acquisto". Non toccano le posizioni già aperte.
+- Il kill switch (F) non è un ordine a sé: se il crollo è abbastanza forte da bucare lo SL già impostato, esce da lì; altrimenti non succede nulla di automatico.
+
+**Per backtest/calcolo di rendimenti reali usare solo**: entrata = 7/7+fondamenta, uscita = SL (`calculate_sl_suggerito_l1`) o TP (`calculate_sg_suggerito_l1`), **ricalcolati ogni giorno**, il primo dei due che viene toccato. Aggiungere: €5 Directa acquisto + €5 vendita, tassazione 26% flat sulle plusvalenze.
+
+> **Fix 2026-08-04**: prima di oggi la Regola E non scattava **mai** in nessuno dei due motori (bug: `is_equity_family`/`is_equity_commodity` confrontavano contro nomi di famiglia legacy, mai contro i nomi YAML attuali). Fissato con `YAML_BOND_FAMILIES`/`YAML_EQUITY_COMMODITY_FAMILIES` in `technical_analysis.py`. Anche il target SG era di fatto **statico** (nessun decadimento temporale/slope EMA20) perché `ema20_series`/`rsi_5` non venivano mai popolati in `monitor.py` — ora derivati da uno storico Close reale via `database.py::get_ohlc_by_isin()`.
 
 ---
 
@@ -434,27 +460,37 @@ PASSO 2: Calcolare indicatori tecnici
 ├─ MACD (accelerazione)
 └─ Tutti i calcoli usano i parametri da etf_families.yaml
 
-PASSO 3: Determinare il livello GLOBALE (L0/L1/L2/L3)
-├─ Leggi parametri della famiglia ETF (es. equity_sviluppati)
-├─ Esegui le 4 verifiche di ingresso L1 (gerarchia 2+2)
-│  ├─ GATE A: prezzo > EMA20?
-│  ├─ GATE M: MACD histogram > 0?
-│  ├─ Se entrambi FALSE → L2 max
-│  └─ Se almeno 1 TRUE → valuta VELOCITÀ
-├─ Conta quante tra P, R, D, X sono TRUE
-│  ├─ 0-1 vere: L2
-│  ├─ 2-3 vere: L1 (ingresso autorizzato)
-│  └─ 4 vere: L1 (ingresso massimamente confermato)
-└─ Se nessun ingresso → rimane L3 (universe)
+PASSO 3: Determinare il livello GLOBALE (L0/L1/L2/L3) — suggest_level()
+├─ Leggi parametri della famiglia ETF (es. equity_sviluppati) da etf_families.yaml
+├─ Verifica le 7 condizioni (vedi sezione "L1 — Come Si Entra" sotto)
+├─ Conta quante sono TRUE (buy_count)
+│  └─ Serve buy_count >= min_buy_count (= 7 per TUTTE le famiglie oggi, zero tolleranza)
+├─ Se 7/7: verifica le fondamenta (regime BULL, prezzo > SMA50, no kill switch)
+│  ├─ Tutte vere → L1
+│  └─ Una fallisce → resta L2
+└─ Se < 7/7 → L2 (se sopra EMA20 abbastanza gg) o L3 (universe)
 
-PASSO 4: Verificare uscite L1 (se già in posizione)
-├─ Regola F: calo giornaliero ≤ -3%? → USCITA totale
-├─ Regola A: prezzo < EMA20 da 3+ giorni? → USCITA totale
-├─ Regola B: EMA10 < EMA20? → USCITA totale
-├─ Regola C: RSI era ≥70, ora <70? → USCITA totale
-├─ Regola E: ADX < 18 E prezzo < EMA20? → USCITA totale
-├─ Regola D: RSI > 78? → USCITA 90% (piede dentro)
-└─ Calcola stop loss dinamico con trailing
+  NOTA: esiste in parallelo un secondo motore, la "Gerarchia 2+2"
+  (check_l1_entry_accelerated(), Gate A+M + Velocity P/R/D/X, sizing 60-100%)
+  e un motore "tiered" (check_l1_entry_tiered(), quality score 0-4). Entrambi
+  vengono CALCOLATI e loggati/salvati come metadata (l1_accelerated_entry,
+  l1_tiered_entry nel dashboard_data.json) ma NON decidono il livello — è
+  informativo/sperimentale, non collegato a suggest_level(). Non farsi
+  guidare da questi campi per capire perché un ETF è o non è in L1.
+
+PASSO 4: Verificare uscite L1 — DUE MOTORI DISTINTI, non intercambiabili
+├─ Dashboard (classificazione L1↔L2/L3 nell'universo monitorato):
+│  suggest_level() con current_level=1, regole F→A→B→C→E
+│  + downgrade automatico se buy_count scende sotto 7 o il regime lascia BULL
+│  Non sono vendite reali: un ETF che esce da L1 qui significa solo
+│  "non è più un candidato per un NUOVO acquisto"
+└─ Portafoglio reale (posizioni in etf_portfolio_entries, quelle comprate
+   davvero): NESSUN AUTOMATISMO. Ogni giorno il monitor ricalcola SL
+   (calculate_sl_suggerito_l1) e TP (calculate_sg_suggerito_l1) e li
+   manda via email. L'utente li imposta/aggiorna manualmente su Directa.
+   La posizione esce solo quando il prezzo tocca uno dei due a mercato —
+   è questa l'unica regola che conta per sapere quanto tieni davvero
+   una posizione e per calcolare rendimenti reali (vedi sezione dedicata sotto).
 
 PASSO 5: Valutare L0 (se prezzo è in crollo)
 ├─ Drawdown? Prezzo ≤ picco × (1 - dd_threshold)?
@@ -583,7 +619,14 @@ function downloadPDF() {
 
 Nessun parametro agisce da solo. Ecco come si combinano:
 
-### Scenario 1: Ingresso L1 Accelerato (Gerarchia 2+2)
+### Scenario 1: Ingresso L1 Accelerato (Gerarchia 2+2) — motore parallelo, NON autoritativo
+
+> ⚠️ Questo scenario descrive `check_l1_entry_accelerated()`, un motore calcolato in
+> parallelo (STEP 12) e salvato come metadata (`l1_accelerated_entry`, `l1_velocity_count`)
+> ma che **non decide il livello reale**. Il gate che conta oggi è quello a 7 condizioni
+> descritto in "L1 — Come Si Entra" sopra (`min_buy_count: 7`, zero tolleranza). Questo
+> esempio resta utile per capire l'idea di sizing per confidenza, ma con questi numeri
+> (Gate 2/2 + Velocity 2/4) l'ETF **non** entrerebbe in L1 nel sistema live.
 
 ```
 Giorno 1, ore 17:00 — Monitor esegue
@@ -683,7 +726,13 @@ Dopo 15 giorni:
 
 ## 🎓 Esempio Completo: ETF SWDA.L (MSCI World)
 
-Fingiamo di seguire SWDA.L per una settimana intera. SWDA.L è **equity_sviluppati**, quindi usa questi parametri dal YAML:
+> ⚠️ Esempio narrativo tenuto per didattica sul funzionamento generale degli indicatori,
+> ma con due parti superate: (1) usa la logica Gate+Velocity ("Gerarchia 2+2"), sostituita
+> dal gate rigido a 7 condizioni; (2) i valori YAML sotto sono quelli precedenti allo
+> Step 4 del 2026-08-04 — `equity_sviluppati` oggi ha `rsi_entry_high: 58`,
+> `days_above_ema: 3`. Valori aggiornati nella tabella famiglie in fondo al documento.
+
+Fingiamo di seguire SWDA.L per una settimana intera. SWDA.L è **equity_sviluppati**, quindi usa questi parametri dal YAML (valori storici, vedi nota sopra):
 
 ```yaml
 rsi_entry_low: 45
@@ -873,6 +922,23 @@ Fa: git push → git reset VPS → docker build → docker up
 - Ticker Yahoo Finance: formato `SWDA.L`, `ENRJ.PA`, `XEON.DE`
 - **240 ETF monitorati** (aggiornato 2026-07-22)
 - Email resend: `onboarding@resend.dev` → `andreapavan67@gmail.com`
+- **Backtest storici**: usare `backtest_l1.py` (nel repo) come base — fetcha da Yahoo Finance
+  direttamente (non dal DB, il cui storico pre-fix ha ancora righe Open/High/Low NULL) e usa
+  `check_l1_exit()` per le uscite, non la logica di `suggest_level()` (vedi sopra perché sono
+  diverse). Fetch fresco è necessario anche perché il DB storico va "auto-risanandosi" solo
+  giorno per giorno da oggi in poi.
+
+### Sessione fix 2026-08-04 (riassunto)
+- Fix bug `suggested` non assegnato quando un ETF raggiungeva 7/7 (mai accaduto prima, quindi
+  mai emerso) + disaccoppiamento regime da `allineamento_ok`
+- Step 4: persistenza 5→3 (equity_sviluppati, settoriali_growth, settoriali_difensivi), tetto
+  RSI alzato (equity_sviluppati 55→58, mercati_emergenti 52→58, settoriali_growth 58→60),
+  spazio residuo →2.5% su 6 famiglie
+- Fix DB: `save_close_bulk()`/`get_close_by_isin()` scartavano Open/High/Low/Volume per gli
+  ETF con ISIN dal secondo run del giorno in poi → nuovo `get_ohlc_by_isin()` usato dal
+  fast-path del monitor; `save_ohlcv_bulk()` usato anche per gli ETF con ISIN
+- Fix Regola E (ADX debole) mai attiva + Regola C sempre attiva sui bond in dashboard +
+  Stop Gain dinamico di fatto statico (vedi sezione "L1 — Come Si Esce" sopra)
 
 ---
 
