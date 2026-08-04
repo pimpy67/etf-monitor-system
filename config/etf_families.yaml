@@ -21,7 +21,7 @@ families:
     description: "Equity sviluppati \u2014 Large cap, ACWI, All-World"
     entry_mode: STANDARD
     rsi_entry_low: 45
-    rsi_entry_high: 55
+    rsi_entry_high: 58
     rsi_exit_min: 40
     rsi_overbought: 78
     adx_entry: 22
@@ -29,7 +29,7 @@ families:
     lateral_band: 0.01
     atr_max: 0.03
     aum_min: 50
-    days_above_ema: 5
+    days_above_ema: 3
     mm200_filter: true
     min_buy_count: 7
     ema20_slope_min: 1.5
@@ -65,7 +65,7 @@ families:
       recovery_min_pct: 0.015
       ema_fast_period: 10
     l1_space_residuo:
-      min_reward_pct: 0.03
+      min_reward_pct: 0.025
       resistance_lookback_days: 30
       atr_multiplier: 1.8
       squeeze_threshold_pct: 0.008
@@ -78,7 +78,7 @@ families:
   mercati_emergenti:
     description: "Mercati emergenti \u2014 EM globale, Asia, LatAm, EMEA"
     rsi_entry_low: 40
-    rsi_entry_high: 52
+    rsi_entry_high: 58
     rsi_exit_min: 38
     rsi_overbought: 76
     adx_entry: 22
@@ -122,7 +122,7 @@ families:
       recovery_min_pct: 0.02
       ema_fast_period: 10
     l1_space_residuo:
-      min_reward_pct: 0.035
+      min_reward_pct: 0.025
       resistance_lookback_days: 25
       atr_multiplier: 1.7
       squeeze_threshold_pct: 0.01
@@ -136,7 +136,7 @@ families:
   settoriali_growth:
     description: "Settoriali crescita \u2014 Tech, AI, Semi, Nasdaq, Digitale"
     rsi_entry_low: 48
-    rsi_entry_high: 58
+    rsi_entry_high: 60
     rsi_exit_min: 38
     rsi_overbought: 78
     adx_entry: 25
@@ -144,7 +144,7 @@ families:
     lateral_band: 0.015
     atr_max: 0.05
     aum_min: 50
-    days_above_ema: 5
+    days_above_ema: 3
     mm200_filter: true
     min_buy_count: 7
     ema20_slope_min: 1.0
@@ -180,7 +180,7 @@ families:
       recovery_min_pct: 0.025
       ema_fast_period: 8
     l1_space_residuo:
-      min_reward_pct: 0.035
+      min_reward_pct: 0.025
       resistance_lookback_days: 25
       atr_multiplier: 1.8
       squeeze_threshold_pct: 0.012
@@ -202,7 +202,7 @@ families:
     lateral_band: 0.01
     atr_max: 0.025
     aum_min: 50
-    days_above_ema: 5
+    days_above_ema: 3
     mm200_filter: true
     min_buy_count: 7
     ema20_slope_min: 0.4
@@ -412,7 +412,7 @@ families:
       recovery_min_pct: 0.025
       ema_fast_period: 10
     l1_space_residuo:
-      min_reward_pct: 0.035
+      min_reward_pct: 0.025
       resistance_lookback_days: 20
       atr_multiplier: 1.7
       squeeze_threshold_pct: 0.015
@@ -470,7 +470,7 @@ families:
       recovery_min_pct: 0.02
       ema_fast_period: 10
     l1_space_residuo:
-      min_reward_pct: 0.03
+      min_reward_pct: 0.025
       resistance_lookback_days: 25
       atr_multiplier: 1.8
       squeeze_threshold_pct: 0.01
@@ -528,7 +528,7 @@ families:
       recovery_min_pct: 0.02
       ema_fast_period: 10
     l1_space_residuo:
-      min_reward_pct: 0.032
+      min_reward_pct: 0.025
       resistance_lookback_days: 22
       atr_multiplier: 1.7
       squeeze_threshold_pct: 0.012
