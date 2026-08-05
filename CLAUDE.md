@@ -954,6 +954,48 @@ Con i dati a 3 anni ormai disponibili, il confronto diretto 7 vs 6 **non è più
 - **Collegare il sistema "tiered" già scritto ma inutilizzato** (`check_l1_entry_tiered()`/`check_l1_entry_accelerated()`, quality score 0-4, sizing 50-100%) per intercettare selettivamente i trade di qualità medio-alta che oggi il gate rigido scarta, senza prendersi tutto il rumore del 6/7 (incluso il 2024)
 - **Raffinare il modello di backtest con compensazione fiscale minus/plus** prima di scartare definitivamente `min_buy_count=6`
 
+### Fase 2 — Ipotesi filtro ADX su `min_buy_count=6`: TESTATA E RESPINTA (2026-08-05)
+
+Un'analisi esterna aveva ipotizzato che un filtro ADX aggiuntivo su `min_buy_count=6`
+avrebbe eliminato una quota rilevante di segnali falsi, specialmente nel 2024 (l'anno
+negativo). Invece di implementarlo sulla fiducia, `backtest_l1.py` è stato esteso per
+registrare, su ogni trade entrato esattamente a 6/7 nei 3 anni (469 trade), **quale**
+delle 7 condizioni mancava.
+
+**Distribuzione condizione mancante (469 trade, 6/7)**:
+
+| Condizione | Trade | % |
+|---|:---:|:---:|
+| `macd_ok` | 344 | 73.3% |
+| `rsi_ok` | 90 | 19.2% |
+| `adx_ok` | 34 | 7.2% |
+| `space_residuo_ok` | 1 | 0.2% |
+
+**Per anno**:
+
+| Anno | Trade | macd_ok | rsi_ok | adx_ok |
+|---|:---:|:---:|:---:|:---:|
+| 2023 | 19 | 14 (73.7%) | 5 (26.3%) | — |
+| **2024** | 143 | 106 (**74.1%**) | 28 (19.6%) | 9 (**6.3%**) |
+| 2025 | 159 | 121 (76.1%) | 27 (17.0%) | 11 (6.9%) |
+| 2026 | 148 | 103 (69.6%) | 30 (20.3%) | 14 (9.5%) |
+
+**Conclusione: ipotesi respinta.** `adx_ok` non è affatto la condizione mancante
+dominante (7.2% sul totale) e **non è nemmeno leggermente sovrarappresentata nel 2024**
+(6.3%, il valore più basso tra i 4 anni) — un filtro ADX aggiuntivo su
+`min_buy_count=6` avrebbe scartato solo ~7% dei trade in modo pressoché uniforme su
+tutti gli anni, senza correggere selettivamente il 2024. La condizione dominante ovunque
+è `macd_ok` (~70-76% in ogni singolo anno, inclusi quelli buoni) — quindi nemmeno un
+filtro MACD spiegherebbe perché il 2024 specificamente è stato negativo: il profilo
+delle condizioni mancanti nei trade 6/7 del 2024 è statisticamente indistinguibile da
+quello degli altri anni. Questo rafforza la decisione #7 sopra (l'edge di
+`min_buy_count=6` è fragile/regime-dipendente) con un dato in più: la causa non è "entra
+con un requisito debole in particolare" — è che il 2024 è stato un anno strutturalmente
+sfavorevole per il tipo di setup che 6/7 cattura, non isolabile con un filtro sulle
+condizioni d'ingresso già misurate. Prossimo esperimento sensato, se si vuole
+continuare su questa strada: un indicatore di **regime di mercato** (es. VIX, ampiezza
+di mercato) come filtro esterno, non un'altra soglia sulle 7 condizioni esistenti.
+
 ---
 
 ## Infrastruttura Tecnica
