@@ -405,14 +405,26 @@ Il sistema **non esegue mai ordini in automatico**. Il flusso reale è:
 
 ### L0 — Come Si Entra (Deep Recovery)
 
-**Tutte 4 condizioni sono obbligatorie:**
+`suggest_level_0()` ha **tre percorsi di ingresso**, non uno solo. I primi due (FAST/SLOW)
+hanno priorità; se nessuno scatta si valuta il terzo (PRAGMATIC_4CONDITIONS):
 
-1. **Drawdown:** Prezzo almeno X% sotto il picco storico (dd_threshold dal YAML)
-2. **RSI Ipervenduto:** RSI < rsi_max (es. 45 per equity)
-3. **Divergenza Rialzista:** Il prezzo fa un minimo più basso, ma RSI fa un minimo più alto
-4. **Segnale di Recupero:** RSI risorge > 40, OPPURE prezzo sale ≥ 1% su 5 giorni
+1. **FAST** (flash crash): crollo rapido rilevato via z-score ATR su pochi giorni
+2. **SLOW** (bear sostenuto): giorni consecutivi sotto SMA200 + drawdown normalizzato
+3. **PRAGMATIC_4CONDITIONS** — tutte e 4 obbligatorie:
+   1. **Drawdown:** Prezzo almeno X% sotto il picco storico (dd_threshold dal YAML)
+   2. **RSI Ipervenduto:** RSI < rsi_max (es. 45 per equity)
+   3. **Divergenza Rialzista:** Il prezzo fa un minimo più basso, ma RSI fa un minimo più alto
+   4. **Segnale di Recupero:** RSI risorge > 40, OPPURE prezzo sale ≥ 1% su 5 giorni
 
-**Esempio:**
+> **Fix 2026-08-05**: prima FAST e SLOW entravano in L0 al solo rilevamento del crollo,
+> senza nessuna prova che l'inversione fosse davvero iniziata — a differenza del
+> percorso pragmatico, che richiede sempre divergenza+recovery. Causa sospetta dei
+> "falsi L0" che continuavano a scendere o lateralizzavano dopo l'ingresso. Ora
+> entrambi richiedono `_get_l0_confirmation_signal()` (RSI risalito sopra soglia
+> OPPURE prezzo che riconquista l'EMA20/50) prima di confermare l'ingresso; se non
+> confermato, si prosegue al percorso successivo (FAST → SLOW → PRAGMATIC).
+
+**Esempio (percorso pragmatico):**
 ```
 ETF = €100 (picco)
 Scende a €93 (calo 7%) + RSI = 35 → entra L0
@@ -427,14 +439,60 @@ Poi RSI rimbalza a €42 → INGRESSO L0 CONFERMATO
 
 ---
 
-### L0 — Come Si Esce
+### L0 — Come Si Esce — DUE MOTORI DISTINTI (come L1, vedi sopra)
+
+**1) Dashboard — `suggest_level_0()`** (classifica il livello nell'universo monitorato,
+NON le posizioni comprate davvero):
 
 | Simbolo | Regola | Trigger | Azione |
 |:---:|--------|---------|--------|
-| γ | Promozione | Prezzo > EMA20 | Esce da L0, va a L2 |
-| β | Trappola | RSI < 25 dopo entry | USCITA, era una trappola |
-| α | Stop Assoluto | Prezzo < panic_low | USCITA urgente |
-| ε | Tempo Scaduto | 30 giorni senza recupero | USCITA in monitor.py |
+| β | Trappola | RSI < 25 dopo entry | Esce da L0, torna a L2/L3 |
+| α | Invalidazione | Prezzo < trigger_low_price (il minimo al momento dell'ingresso) | Esce da L0, torna a L3 |
+| ε | Tempo Scaduto | 30 giorni senza recupero | Documentato, non implementato — vedi nota sotto |
+
+> **Fix 2026-08-05 — rimossa γ** (prezzo > EMA20 → promuovi a L2): su richiesta esplicita,
+> un ETF in L0 non deve passare a L2 solo perché il prezzo supera l'EMA20 — quel segnale
+> è già richiesto per CONFERMARE l'ingresso nei percorsi FAST/SLOW (vedi sopra), non ha
+> senso riusarlo anche come motivo di uscita. L0 punta a inversioni di medio-lungo periodo:
+> un ETF resta classificato L0 finché non perde davvero i requisiti (β o α), non quando il
+> recupero si conferma — quello è il punto, non la fine. Rimossi due punti che
+> implementavano la stessa promozione gamma per vie diverse (`suggest_level_0()` e un
+> blocco ridondante in `monitor.py` via `etf_l0_tracking`).
+>
+> **ε (timeout 30gg) non è mai stato implementato** a livello di tracking dashboard —
+> resta solo documentato. Non bloccante: la maggior parte degli L0 esce comunque via β
+> o α prima di 30 giorni; da valutare se serve davvero.
+
+**2) Portafoglio reale — `_update_portfolio_l0_suggerito()`** (le posizioni in
+`etf_portfolio_entries` con `portafoglio='L0'`, quelle comprate davvero):
+
+| Priorità | Regola | Trigger |
+|:---:|--------|---------|
+| 1 | SL trailing | Prezzo ≤ SL suggerito (`calculate_sl_suggerito_l0`: <5% profitto → entry×0.98, 5-15% → pareggio entry×1.01, >15% → protegge metà gain) |
+| 2 | TP fisso di famiglia | Prezzo ≥ TP suggerito (`calculate_tp_suggerito_l0`, **nuovo 2026-08-05** — target fisso `l0_take_profit_pct` per famiglia, vedi tabella sotto) |
+
+> **Fix 2026-08-05 — stessa contraddizione già risolta su L1**: `check_l0_exit()` chiudeva
+> automaticamente le posizioni reali su kill switch, RSI<25, prezzo<minimo 30gg o timeout
+> 45gg — in contrasto con "nessun automatismo, l'unica uscita reale è il tocco manuale di
+> SL o TP". Verificato sul DB di produzione: 4 delle 5 posizioni L1 storiche risultavano
+> chiuse con `exit_rule='B_trailing'` (regola dashboard-only), non da un vero tocco di
+> SL/TP. `check_l0_exit()` rimossa (dead code). Ora l'uscita reale dipende solo da
+> `sl_hit`/`tp_hit`; la posizione non viene mai riclassificata a L1/L2, resta L0 finché
+> non tocca uno dei due livelli.
+>
+> **Prima L0 non aveva alcun Take Profit** — solo SL. Aggiunto `l0_take_profit_pct` per
+> le 13 famiglie con L0 attivo (target ~2-2.5x il drawdown minimo richiesto in ingresso:
+> non basta recuperare il calo, serve un margine reale di nuovo trend):
+
+| Famiglia | l0_take_profit_pct | Famiglia | l0_take_profit_pct |
+|----------|:---:|----------|:---:|
+| equity_sviluppati | 16% | oro_metalli_preziosi | 16% |
+| mercati_emergenti | 18% | metalli_industriali | 18% |
+| settoriali_growth | 22% | real_estate_reit | 13% |
+| settoriali_difensivi | 10% | crypto_digital_assets | 45% |
+| bond_governativi | 6% | leva_single_stock | 30% |
+| bond_corp_hy_em | 8% | private_equity_buffer | 12% |
+| commodities | 20% | monetario_liquidita | n/a (L0 disabilitato) |
 
 ---
 
@@ -966,9 +1024,10 @@ Fa: git push → git reset VPS → docker build → docker up
 - Email resend: `onboarding@resend.dev` → `andreapavan67@gmail.com`
 - **Backtest storici**: usare `backtest_l1.py` (nel repo) come base — fetcha da Yahoo Finance
   direttamente (non dal DB, il cui storico pre-fix ha ancora righe Open/High/Low NULL) e usa
-  `check_l1_exit()` per le uscite, non la logica di `suggest_level()` (vedi sopra perché sono
-  diverse). Fetch fresco è necessario anche perché il DB storico va "auto-risanandosi" solo
-  giorno per giorno da oggi in poi.
+  `calculate_sl_suggerito_l1`/`calculate_stop_gain_dynamic` per le uscite (le uniche due
+  funzioni reali, `check_l1_exit()` è stata rimossa il 2026-08-05 perché dead code), non la
+  logica di `suggest_level()` (vedi sopra perché sono diverse). Fetch fresco è necessario
+  anche perché il DB storico va "auto-risanandosi" solo giorno per giorno da oggi in poi.
 
 ### Sessione fix 2026-08-04 (riassunto)
 - Fix bug `suggested` non assegnato quando un ETF raggiungeva 7/7 (mai accaduto prima, quindi
@@ -981,6 +1040,34 @@ Fa: git push → git reset VPS → docker build → docker up
   fast-path del monitor; `save_ohlcv_bulk()` usato anche per gli ETF con ISIN
 - Fix Regola E (ADX debole) mai attiva + Regola C sempre attiva sui bond in dashboard +
   Stop Gain dinamico di fatto statico (vedi sezione "L1 — Come Si Esce" sopra)
+
+### Sessione fix 2026-08-05 (riassunto) — L0 + email + bug portafoglio
+
+**L0 (stessa filosofia già applicata a L1)**:
+- FAST/SLOW ora richiedono conferma di recupero prima di entrare (vedi "L0 — Come Si Entra")
+- Rimossa la promozione automatica L0→L2 su prezzo>EMA20 (γ) — resta L0 finché non perde i
+  requisiti (vedi "L0 — Come Si Esce")
+- Aggiunto Take Profit per L0 (`l0_take_profit_pct`, mancava — c'era solo SL)
+- Portafoglio reale L0: uscita ora solo SL/TP (rimossa `check_l0_exit()`, stessa
+  contraddizione già risolta su L1 — kill switch/bear trap/stop assoluto/timeout non sono
+  vendite reali)
+
+**Bug portafoglio reale (trovati indagando "perché non arrivano le email")**:
+- `etf_portfolio_entries` aveva **due colonne** per L0/L1 (`portafoglio` letta dal monitor,
+  `portfolio_type` scritta da dashboard) mai sincronizzate — un ETF aggiunto come L0 da
+  dashboard veniva elaborato dal monitor con la logica SL/TP di L1. Fix: `add_portfolio_entry()`
+  scrive entrambe; riga esistente corretta con UPDATE una tantum su produzione.
+- `get_portfolio_entries()` non filtrava per `status` — la dashboard mostrava posizioni
+  chiuse da settimane come se fossero ancora attive (da qui la convinzione errata che il
+  portafoglio non fosse vuoto). Fix: filtro `WHERE status='active'`.
+- Verificato che 4 delle 5 posizioni L1 storiche erano state chiuse con `exit_rule='B_trailing'`
+  (regola dashboard-only, non un vero tocco di SL/TP) — uscite premature dal bug pre-fix.
+
+**Email**:
+- Il resoconto portafoglio veniva inviato PRIMA del ricalcolo giornaliero di SL/TP (mostrava
+  sempre i valori di ieri) — spostato dopo gli STEP 4/7 in `monitor.py::run()`
+- Rimosso il secondo invio duplicato alle 17:30 UTC (era un workaround per il bug sopra,
+  ora inutile — resta solo l'invio delle 17:00 UTC / 19:00 CEST)
 
 ---
 
