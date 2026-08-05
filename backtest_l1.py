@@ -83,9 +83,15 @@ def make_analyzer(famiglia, min_buy_override=None):
     return analyzer
 
 
-def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates):
+def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, require_macd=False):
     """Ingresso via suggest_level() (7/7 o 6/7). Uscita: SOLO SL o TP, ricalcolati e
-    controllati una volta al giorno sul Close (come il monitor reale). Nessuna regola B/C/E/F."""
+    controllati una volta al giorno sul Close (come il monitor reale). Nessuna regola B/C/E/F.
+
+    require_macd=True (2026-08-05, test "smart 6/7"): oltre a buy_count>=min_buy_count,
+    richiede che macd_ok sia SEMPRE tra le condizioni vere — la condizione che puo'
+    mancare deve essere un'altra. Test per verificare se rendere il MACD obbligatorio
+    anche sotto 7/7 migliora la qualita' dei trade (ipotesi emersa dalla segmentazione
+    win-rate per condizione mancante, vedi CLAUDE.md)."""
     holding = False
     entry_price = None
     entry_date = None
@@ -106,10 +112,12 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates):
                 result = analyzer.suggest_level(close_slice, current_level=3,
                                                  high=high_slice, low=low_slice)
             if result.get('suggested_level') == 1:
+                c = result.get('conditions', {})
+                if require_macd and not c.get('macd_ok', False):
+                    continue  # smart 6/7: la condizione mancante non puo' essere il MACD
                 holding = True
                 entry_price = close_today
                 entry_date = d.date().isoformat()
-                c = result.get('conditions', {})
                 entry_buy_count = result.get('buy_count')
                 entry_missing = [k for k in CONDITION_KEYS if not c.get(k, True)]
         else:
@@ -199,9 +207,10 @@ def backtest_ticker(fetcher, ticker, famiglia, start_date, fetch_days, min_buy_v
         return None, 'Nessuna data nel range di backtest'
 
     per_variant = {}
-    for label, override in min_buy_variants:
+    for label, override, require_macd in min_buy_variants:
         analyzer = make_analyzer(famiglia, override)
-        trades = simulate(analyzer, close_full, high_full, low_full, hist.index, test_dates)
+        trades = simulate(analyzer, close_full, high_full, low_full, hist.index, test_dates,
+                           require_macd=require_macd)
         per_variant[label] = {'n_trades': len(trades), 'trades': trades}
 
     return {'ticker': ticker, 'famiglia': famiglia, 'variants': per_variant}, None
@@ -301,9 +310,12 @@ def main():
     start_date = (datetime.strptime(args.start, '%Y-%m-%d').date()
                   if args.start else (datetime.now() - timedelta(days=365)).date())
 
-    variants = [('native_7', None)]
+    variants = [('native_7', None, False)]
     if args.compare_min_buy is not None:
-        variants.append((f'override_{args.compare_min_buy}', args.compare_min_buy))
+        variants.append((f'override_{args.compare_min_buy}', args.compare_min_buy, False))
+        # Test 2026-08-05: "smart 6/7" — stessa soglia, ma MACD non puo' mai essere
+        # la condizione mancante (vedi CLAUDE.md, follow-up segmentazione win rate).
+        variants.append((f'smart_{args.compare_min_buy}_macd', args.compare_min_buy, True))
 
     print(f"BACKTEST L1 v4 — portafoglio reale (SL/TP giornalieri su Close, no B/C/E/F) — dal {start_date.isoformat()} a oggi")
     print(f"Famiglie: {', '.join(sorted(TARGET_FAMILIES))}")
@@ -345,7 +357,7 @@ def main():
     agg_by_size = {}
     for size in position_sizes:
         agg_by_variant = {}
-        for label, _ in variants:
+        for label, _, _ in variants:
             agg = aggregate(results, label, size)
             agg_by_variant[label] = agg
             print(f"--- Variante {label} | Size {size}EUR ---")
