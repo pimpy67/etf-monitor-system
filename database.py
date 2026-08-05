@@ -973,7 +973,14 @@ class PriceDatabase:
     # ── Portfolio ─────────────────────────────────────────────────────────────
 
     def get_portfolio_entries(self) -> List[Dict]:
-        """Restituisce tutti gli ETF nel portafoglio."""
+        """Restituisce gli ETF ATTIVI nel portafoglio.
+
+        Fix 2026-08-05: prima non filtrava per status, quindi la dashboard
+        (Portafoglio Personale, tab L1/L0) mostrava anche le posizioni con
+        status='exited' come se fossero ancora aperte — un ETF chiuso da
+        settimane restava visibile in "L1 Portfolio (N)" senza nessuna
+        indicazione che non era più una posizione reale.
+        """
         conn = self._get_connection()
         if not conn:
             return []
@@ -985,6 +992,7 @@ class PriceDatabase:
                            is_partial, partial_exit_date, partial_exit_price,
                            portfolio_type, stop_loss_l0_suggested
                     FROM etf_portfolio_entries
+                    WHERE status = 'active'
                     ORDER BY entry_date DESC
                 """)
                 return [dict(r) for r in cur.fetchall()]
@@ -1036,25 +1044,35 @@ class PriceDatabase:
     def add_portfolio_entry(self, isin: str, entry_date: str,
                             entry_price: float, fund_name: str = '',
                             portfolio_type: str = 'L1', stop_loss_l0_suggested: float = None) -> bool:
-        """Aggiunge un ETF al portafoglio (L1 o L0) con opzionali stop loss L0."""
+        """Aggiunge un ETF al portafoglio (L1 o L0) con opzionali stop loss L0.
+
+        Fix 2026-08-05: la tabella ha DUE colonne per lo stesso concetto —
+        'portafoglio' (letta da monitor.py per calcolare SL/TP giornalieri e
+        da alerts.py per l'email) e 'portfolio_type' (scritta/letta qui e in
+        dashboard.html). Questo metodo scriveva solo la seconda, lasciando
+        'portafoglio' bloccata sul default 'L1' — un ETF aggiunto come L0 da
+        dashboard veniva quindi elaborato con la logica SL/TP di L1 dal
+        monitor, mai da quella L0. Ora scrive entrambe le colonne allineate.
+        """
         conn = self._get_connection()
         if not conn:
             return False
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO etf_portfolio_entries (isin, fund_name, entry_date, entry_price, status, portfolio_type, stop_loss_l0_suggested)
-                    VALUES (%s, %s, %s, %s, 'active', %s, %s)
+                    INSERT INTO etf_portfolio_entries (isin, fund_name, entry_date, entry_price, status, portfolio_type, portafoglio, stop_loss_l0_suggested)
+                    VALUES (%s, %s, %s, %s, 'active', %s, %s, %s)
                     ON CONFLICT (isin) DO UPDATE
                         SET entry_date = EXCLUDED.entry_date,
                             entry_price = EXCLUDED.entry_price,
                             fund_name = EXCLUDED.fund_name,
                             status = 'active',
                             portfolio_type = EXCLUDED.portfolio_type,
+                            portafoglio = EXCLUDED.portafoglio,
                             stop_loss_l0_suggested = EXCLUDED.stop_loss_l0_suggested,
                             exit_date = NULL,
                             exit_price = NULL
-                """, (isin, fund_name, entry_date, entry_price, portfolio_type, stop_loss_l0_suggested))
+                """, (isin, fund_name, entry_date, entry_price, portfolio_type, portfolio_type, stop_loss_l0_suggested))
                 conn.commit()
                 return True
         except Exception as e:
