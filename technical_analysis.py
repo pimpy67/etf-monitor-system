@@ -1811,101 +1811,34 @@ class ETFTechnicalAnalyzer:
             'stage': stage
         }
 
-    def check_l0_exit(self, market_data: Dict, position_data: Dict) -> Dict:
+    def calculate_tp_suggerito_l0(self, entry_price: float, current_price: float) -> Dict:
         """
-        Controlla regole di uscita per posizioni L0.
+        Calcola Take Profit suggerito per L0 — target fisso per famiglia.
 
-        SCELTA CONFERMATA: Ordine priorità
-        1. F — Kill Switch: calo giornaliero ≤ -3%
-        2. β — Bear Trap: RSI scende sotto 25 dopo ingresso
-        3. α — Stop Assoluto: prezzo < minimo 30 giorni
-        4. Trailing Stop: prezzo ≤ SL suggerito (progressivo)
-        5. ε — Timeout: 45 giorni senza superare EMA20
-
-        Promozione (NON è uscita — solo display):
-        - γ: Prezzo > EMA20 → livello sale da L0 a L2 (ma posizione rimane in P_L0)
+        A differenza di L1 (rally di breve termine, target 4-15% con decadimento
+        temporale), L0 punta a inversioni di medio-lungo periodo dopo un crollo
+        vero: il target è un singolo valore fisso e ampio (`l0_take_profit_pct`
+        nello YAML, calibrato ~2-2.5x il drawdown minimo richiesto in ingresso —
+        non basta recuperare il calo, serve un margine reale di trend nuovo).
 
         Args:
-            market_data: Dict con 'close', 'rsi_14', 'ema20', 'daily_change_pct', 'close_series'
-            position_data: Dict con 'entry_price', 'entry_date'
+            entry_price: Prezzo di carico
+            current_price: Prezzo corrente
 
         Returns:
-            Dict con 'exit', 'reason', 'priority' se exit=True
+            Dict con 'tp_suggerito', 'target_pct', 'trigger'
         """
-        price = market_data.get('close', 0)
-        daily_chg = market_data.get('daily_change_pct', 0)
-        rsi = market_data.get('rsi_14')
-        ema20 = market_data.get('ema20')
-        close_series = market_data.get('close_series')
+        tp_pct = self.p.get('l0_take_profit_pct')
+        if entry_price is None or entry_price <= 0 or tp_pct is None:
+            return {'tp_suggerito': None, 'target_pct': None, 'trigger': False}
 
-        entry_price = position_data.get('entry_price', 0)
-
-        # P1 — Kill Switch
-        if daily_chg is not None and daily_chg <= -3.0:
-            return {
-                'exit': True,
-                'reason': f'F_kill_switch: calo {daily_chg:.1f}%',
-                'priority': 1
-            }
-
-        # P2 — Bear Trap: RSI < 25
-        if rsi is not None and rsi < 25:
-            return {
-                'exit': True,
-                'reason': f'β_bear_trap: RSI {rsi:.0f} < 25',
-                'priority': 2
-            }
-
-        # P3 — Stop Assoluto: prezzo < minimo 30gg
-        if close_series is not None and len(close_series) >= 30:
-            min_30d = float(close_series.tail(30).min())
-            if price < min_30d:
-                return {
-                    'exit': True,
-                    'reason': f'α_stop_assoluto: prezzo {price:.2f} < min30 {min_30d:.2f}',
-                    'priority': 3
-                }
-
-        # P4 — Trailing Stop
-        sl_data = self.calculate_sl_suggerito_l0(entry_price, price)
-        sl = sl_data.get('sl_suggerito')
-        if sl is not None and price <= sl:
-            return {
-                'exit': True,
-                'reason': f'trailing_stop: prezzo {price:.2f} ≤ SL {sl:.2f}',
-                'priority': 4,
-                'sl_level': sl
-            }
-
-        # P5 — Timeout 45 giorni senza EMA20
-        days_no_recovery = position_data.get('days_no_recovery', 0)
-        if ema20 is not None and price < ema20:
-            days_no_recovery += 1
-        else:
-            days_no_recovery = 0
-
-        if days_no_recovery >= 45:
-            return {
-                'exit': True,
-                'reason': f'ε_timeout_45gg: {days_no_recovery} giorni senza EMA20',
-                'priority': 5
-            }
-
-        # Promozione γ (NON è uscita — aggiorna solo il livello display)
-        livello_display = 'L0'
-        if ema20 is not None and price > ema20:
-            livello_display = 'L2'
-            if ema20 is not None and close_series is not None:
-                sma50 = self._sma(close_series.astype(float), 50)
-                sma50_v = self._fval(sma50)
-                if sma50_v is not None and price > sma50_v:
-                    livello_display = 'L1'  # Tecnicalmente L1 ma posizione rimane P_L0
+        tp = entry_price * (1 + tp_pct)
+        trigger = current_price is not None and current_price >= tp
 
         return {
-            'exit': False,
-            'reason': None,
-            'days_no_recovery': days_no_recovery,
-            'livello_display': livello_display
+            'tp_suggerito': round(tp, 4),
+            'target_pct': round(tp_pct * 100, 2),
+            'trigger': trigger
         }
 
     # ── Full analysis ──────────────────────────────────────────────────────────

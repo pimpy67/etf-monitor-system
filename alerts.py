@@ -509,8 +509,9 @@ class AlertSystem:
                     color = '#28a745' if pct_change >= 0 else '#dc3545'
                     sign = '+' if pct_change >= 0 else ''
 
-                    # SL suggerito per L0
+                    # SL/TP suggeriti per L0
                     sl_sug_str = f'€{float(sl_sug):.2f}' if sl_sug else '—'
+                    tp_sug_str = f'€{float(sg_sug):.2f}' if sg_sug else '—'
 
                     l0_rows.append(
                         f'<tr style="background:{"#f8f9fa" if len(l0_rows) % 2 == 0 else "white"}">'
@@ -520,6 +521,7 @@ class AlertSystem:
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{current_price:.2f}</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:{color}"><strong>{sign}{pct_change:.1f}%</strong></td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{sl_sug_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{tp_sug_str}</td>'
                         f'</tr>'
                     )
                 except Exception as e:
@@ -551,7 +553,7 @@ class AlertSystem:
             if l0_rows:
                 l0_section = (
                     f'<h2 style="color:#E65100;margin:16px 0 8px">🟠 PORTAFOGLIO L0 — Medio/Lungo Termine</h2>'
-                    f'<p style="margin:0 0 8px;font-size:11px;color:#666">Posizioni in deep recovery con trailing stop progressivo.</p>'
+                    f'<p style="margin:0 0 8px;font-size:11px;color:#666">Posizioni in deep recovery — SL trailing progressivo, TP fisso di famiglia.</p>'
                     f'<table style="width:100%;border-collapse:collapse;font-size:12px">'
                     f'<tr style="background:#E65100;color:white">'
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:left">ETF</th>'
@@ -559,6 +561,7 @@ class AlertSystem:
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo</th>'
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Perf</th>'
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">SL Sug.</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">TP Sug.</th>'
                     f'</tr>'
                     f'{"".join(l0_rows)}'
                     f'</table>'
@@ -588,8 +591,8 @@ class AlertSystem:
                 f'<hr style="border:none;border-top:1px solid #ccc;margin:20px 0">'
                 f'<p style="margin:12px 0;font-size:11px;color:#666">'
                 f'<strong>📌 Legenda:</strong><br>'
-                f'• <strong>SL Sug.</strong> = Stop Loss suggerito (formula ibrida L1: largo &lt;2%, stretto ≥2%)<br>'
-                f'• <strong>SG Sug.</strong> = Stop Gain suggerito (target dinamico, L1 only)<br>'
+                f'• <strong>SL Sug.</strong> = Stop Loss suggerito (L1: formula ibrida, largo &lt;2%, stretto ≥2% — L0: trailing progressivo)<br>'
+                f'• <strong>SG/TP Sug.</strong> = L1: Stop Gain dinamico (target ravvicinato, si adatta al momentum) — L0: Take Profit fisso di famiglia (target ampio, medio-lungo periodo)<br>'
                 f'• <strong>⚠️</strong> = Performance &lt; -2% (attenzione)<br>'
                 f'• <strong>✓</strong> = In profitto<br>'
                 f'• <strong>◆</strong> = In perdita ma &gt; -2%</p>'

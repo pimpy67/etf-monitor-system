@@ -1076,13 +1076,6 @@ class ETFMonitor:
                 self.send_alerts(results)
             except Exception as e:
                 add_log(f"ERRORE Alert: {e}")
-
-            # 7. Invia resoconto portafoglio
-            try:
-                add_log("Invio resoconto portafoglio...")
-                self.alert_system.send_portfolio_report()
-            except Exception as e:
-                add_log(f"ERRORE Resoconto portafoglio: {e}")
         else:
             add_log("Alert saltati (refresh silenzioso)")
 
@@ -1094,13 +1087,24 @@ class ETFMonitor:
             add_log(f"⚠️  Errore aggiornamento L1 suggerito: {e}")
             add_log(traceback.format_exc())
 
-        # STEP 7 — Aggiorna SL suggerito per portafoglio L0
+        # STEP 7 — Aggiorna SL/TP suggerito per portafoglio L0
         try:
-            add_log("Aggiornamento SL suggerito L0...")
+            add_log("Aggiornamento SL/TP suggerito L0...")
             self._update_portfolio_l0_suggerito(results)
         except Exception as e:
             add_log(f"⚠️  Errore aggiornamento L0 suggerito: {e}")
             add_log(traceback.format_exc())
+
+        # 7. Invia resoconto portafoglio — DOPO l'aggiornamento SL/TP (fix 2026-08-05:
+        # prima veniva inviato PRIMA degli STEP 4/7 sopra, quindi l'email mostrava
+        # sempre i valori SL/TP del giorno precedente invece di quelli appena calcolati
+        # sul prezzo di oggi)
+        if send_daily_report:
+            try:
+                add_log("Invio resoconto portafoglio...")
+                self.alert_system.send_portfolio_report()
+            except Exception as e:
+                add_log(f"ERRORE Resoconto portafoglio: {e}")
 
         # STEP 9 — Prepara candidati L0 per email
         try:
@@ -1199,13 +1203,23 @@ class ETFMonitor:
 
     def _update_portfolio_l0_suggerito(self, results: list):
         """
-        STEP 7 — Aggiorna SL suggerito per posizioni L0 attive.
+        STEP 7 — Aggiorna SL/TP suggeriti per posizioni L0 attive.
+
+        Fix 2026-08-05: prima l'uscita reale passava da check_l0_exit() (kill switch,
+        bear trap RSI<25, stop assoluto min30gg, timeout 45gg) — la stessa contraddizione
+        già corretta su L1: il sistema non esegue mai ordini in automatico, l'unica
+        uscita reale è il tocco manuale di SL o TP. Ora la posizione esce SOLO quando
+        il prezzo tocca lo SL trailing (calculate_sl_suggerito_l0) o il TP fisso di
+        famiglia (calculate_tp_suggerito_l0, nuovo — prima L0 non aveva alcun target
+        di uscita al rialzo). La posizione NON viene mai riclassificata a L1/L2: resta
+        in portafoglio L0 finché non tocca uno dei due livelli, coerente con la logica
+        "medio-lungo periodo, esce solo quando perde davvero i requisiti" di L0.
 
         Per ogni entry in portafoglio L0:
-        1. Recupera dati di mercato (price, ema20, rsi, close_series)
+        1. Recupera dati di mercato (price, ema20)
         2. Chiama calculate_sl_suggerito_l0() → SL trailing progressivo
-        3. Controlla regole exit con check_l0_exit()
-        4. Salva nel DB sl_suggerito e aggiorna contatori
+        3. Chiama calculate_tp_suggerito_l0() → TP fisso di famiglia
+        4. Uscita reale solo se prezzo tocca SL o TP; altrimenti salva SL/TP e contatori
         """
         try:
             # Leggi tutte le entry L0 attive
@@ -1271,8 +1285,10 @@ class ETFMonitor:
                     sl_suggerito = sl_data.get('sl_suggerito')
                     stage = sl_data.get('stage')
 
-                    # Dati mercato per check exit L0
-                    rsi = a.get('rsi')
+                    # CALCOLA TP SUGGERITO — target fisso di famiglia
+                    tp_data = analyzer.calculate_tp_suggerito_l0(entry_price, current_price)
+                    tp_suggerito = tp_data.get('tp_suggerito')
+
                     profit_pct = (current_price - entry_price) / entry_price if entry_price > 0 else 0
 
                     # Contatore stallo: se profit è tra -1% e +2%
@@ -1287,38 +1303,34 @@ class ETFMonitor:
                     else:
                         days_no_rec = 0
 
-                    # CONTROLLA REGOLE DI USCITA L0 — STEP 7
-                    close_series = a.get('close_series')
-                    market_data_l0 = {
-                        'close': current_price,
-                        'ema20': ema20,
-                        'rsi_14': rsi,
-                        'daily_change_pct': a.get('pct_change_1d'),
-                    }
-                    position_data_l0 = {'entry_price': entry_price, 'famiglia': famiglia, 'days_held': days_no_rec}
+                    # USCITA REALE — solo tocco di SL o TP (nessun automatismo su
+                    # kill switch/bear trap/timeout, sono solo segnali informativi sotto)
+                    sl_hit = sl_suggerito is not None and current_price <= sl_suggerito
+                    tp_hit = tp_data.get('trigger', False)
 
-                    exit_check_l0 = analyzer.check_l0_exit(market_data_l0, position_data_l0)
-
-                    if exit_check_l0.get('exit'):
-                        # Uscita richiesta per L0
+                    if sl_hit or tp_hit:
+                        exit_rule = (f'TP raggiunto: {current_price:.2f}€ ≥ {tp_suggerito:.2f}€'
+                                     if tp_hit else
+                                     f'SL toccato: {current_price:.2f}€ ≤ {sl_suggerito:.2f}€')
                         with conn.cursor() as cur:
                             cur.execute("""
                                 UPDATE etf_portfolio_entries
                                 SET status = 'exited', exit_date = now(), exit_price = %s,
                                     exit_rule = %s
                                 WHERE id = %s
-                            """, (current_price, exit_check_l0.get('reason'), entry_id))
+                            """, (current_price, exit_rule, entry_id))
                             conn.commit()
-                        add_log(f"    🔴 EXIT L0 {fund_name[:40]:40s} | {exit_check_l0.get('reason')}")
+                        icon = '🟢' if tp_hit else '🔴'
+                        add_log(f"    {icon} EXIT L0 {fund_name[:40]:40s} | {exit_rule}")
                     else:
-                        # Nessuna uscita — salva SL e contatori
+                        # Nessuna uscita — salva SL, TP e contatori
                         with conn.cursor() as cur:
                             cur.execute("""
                                 UPDATE etf_portfolio_entries
-                                SET sl_suggerito = %s, days_no_recovery = %s,
+                                SET sl_suggerito = %s, sg_suggerito = %s, days_no_recovery = %s,
                                     stallo_counter = %s, stop_loss_updated_at = now()
                                 WHERE id = %s
-                            """, (sl_suggerito, days_no_rec, stallo_cnt, entry_id))
+                            """, (sl_suggerito, tp_suggerito, days_no_rec, stallo_cnt, entry_id))
                             conn.commit()
 
                         alert_msg = ''
@@ -1327,7 +1339,7 @@ class ETFMonitor:
                         elif days_no_rec and days_no_rec >= 40:
                             alert_msg = f' ⏱️ TIMEOUT {days_no_rec}gg'
 
-                        add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ ({stage}){alert_msg}")
+                        add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ ({stage}) | TP: {tp_suggerito:.2f}€{alert_msg}")
 
                 except Exception as e:
                     add_log(f"    ⚠️  Errore L0 {isin}: {type(e).__name__}: {e}")
