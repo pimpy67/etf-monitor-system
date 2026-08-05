@@ -97,6 +97,7 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, 
     entry_date = None
     entry_buy_count = None
     entry_missing = None
+    entry_features = None
     trades = []
 
     quiet = io.StringIO()
@@ -120,6 +121,20 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, 
                 entry_date = d.date().isoformat()
                 entry_buy_count = result.get('buy_count')
                 entry_missing = [k for k in CONDITION_KEYS if not c.get(k, True)]
+                # Feature extraction (2026-08-05): valori numerici assoluti all'ingresso,
+                # gia' calcolati da suggest_level() e presenti in 'conditions' — nessuna
+                # modifica al motore reale, solo cattura di dati gia' esistenti per poter
+                # confrontare dopo le "impronte digitali" di trade vincenti vs perdenti.
+                sma200_v = c.get('sma200_current')
+                entry_features = {
+                    'adx':            c.get('adx'),
+                    'rsi':            c.get('rsi'),
+                    'ema20_slope':    c.get('ema20_slope'),
+                    'dist_ema20':     c.get('dist_ema20'),
+                    'dist_sma200':    round(100 * (close_today - sma200_v) / sma200_v, 2)
+                                      if sma200_v else None,
+                    'atr_normalized': c.get('atr_normalized'),
+                }
         else:
             # Stesse funzioni e stessa logica di monitor.py::_update_portfolio_l1_suggerito()
             # dopo il fix 2026-08-05: SL = calculate_sl_suggerito_l1, TP = calculate_stop_gain_dynamic
@@ -155,6 +170,7 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, 
                     'status': 'closed', 'gross_pct_gain': gross_pct,
                     'exit_reason': exit_reason,
                     'entry_buy_count': entry_buy_count, 'entry_missing': entry_missing,
+                    'entry_features': entry_features,
                 })
                 holding = False
                 entry_price = None
@@ -169,6 +185,7 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, 
             'status': 'open', 'gross_pct_gain': gross_pct,
             'exit_reason': None,
             'entry_buy_count': entry_buy_count, 'entry_missing': entry_missing,
+            'entry_features': entry_features,
         })
 
     return trades
@@ -296,6 +313,43 @@ def analyze_missing_conditions(results, label):
     print()
 
 
+def analyze_entry_features(results, label):
+    """Feature extraction (2026-08-05, proposta utente): confronta i valori numerici
+    assoluti all'ingresso (ADX, RSI, pendenza EMA20, distanza da EMA20/SMA200, ATR%
+    normalizzato) tra i trade 6/7 finiti in Take Profit e quelli finiti in Stop Loss —
+    per capire se esiste una combinazione di soglie continue che discrimina i trade
+    vincenti meglio del semplice conteggio booleano di condizioni vere/false. I valori
+    sono gia' calcolati da suggest_level() (nessuna modifica al motore reale), solo
+    catturati in piu' per ogni trade in simulate()."""
+    all_trades = []
+    for r in results:
+        for t in r['variants'][label]['trades']:
+            if t.get('status') == 'closed' and t.get('entry_buy_count') == 6:
+                all_trades.append(t)
+
+    tp_trades = [t for t in all_trades if t.get('exit_reason') == 'TP']
+    sl_trades = [t for t in all_trades if t.get('exit_reason') == 'SL']
+    print(f"Feature extraction sui trade 6/7 chiusi: {len(tp_trades)} finiti in TP vs "
+          f"{len(sl_trades)} finiti in SL\n")
+
+    feature_keys = ['adx', 'rsi', 'ema20_slope', 'dist_ema20', 'dist_sma200', 'atr_normalized']
+
+    def avg(trades, key):
+        vals = [t['entry_features'][key] for t in trades
+                if t.get('entry_features') and t['entry_features'].get(key) is not None]
+        return (round(sum(vals) / len(vals), 4) if vals else None), len(vals)
+
+    print(f"{'Parametro ingresso':20s} {'Media TP':>14s} {'Media SL':>14s} {'Divario (TP-SL)':>18s}")
+    for k in feature_keys:
+        avg_tp, n_tp = avg(tp_trades, k)
+        avg_sl, n_sl = avg(sl_trades, k)
+        divario = round(avg_tp - avg_sl, 4) if (avg_tp is not None and avg_sl is not None) else None
+        tp_str = f"{avg_tp} (n={n_tp})" if avg_tp is not None else f"n/d (n={n_tp})"
+        sl_str = f"{avg_sl} (n={n_sl})" if avg_sl is not None else f"n/d (n={n_sl})"
+        print(f"{k:20s} {tp_str:>20s} {sl_str:>20s} {str(divario):>12s}")
+    print()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--start', default=None, help='YYYY-MM-DD, default = oggi - 365 giorni')
@@ -353,6 +407,11 @@ def main():
         print(f"FASE 2 — ANALISI CONDIZIONI MANCANTI (variante override_{args.compare_min_buy})")
         print("=" * 78)
         analyze_missing_conditions(results, f'override_{args.compare_min_buy}')
+
+        print("=" * 78)
+        print(f"FASE 2 — FEATURE EXTRACTION TP vs SL (variante override_{args.compare_min_buy})")
+        print("=" * 78)
+        analyze_entry_features(results, f'override_{args.compare_min_buy}')
 
     agg_by_size = {}
     for size in position_sizes:
