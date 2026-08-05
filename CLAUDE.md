@@ -881,7 +881,8 @@ Storico: salvato in l1_exit_history
 
 1. **`min_buy_count` resta a 7 in produzione.** Nessuna modifica a YAML o alla logica L1 per un periodo di validazione live. **Rinforzato dai dati a 3 anni**: 7/7 è ora la scelta più solida delle due, non più solo quella "attuale in attesa di conferma".
 2. **Periodo di validazione live: 3-4 settimane dal 2026-08-05** — resta valido.
-3. **`leva_single_stock` — ESCLUDERLA dal gate L1 ora**, non più solo osservarla: il criterio fissato inizialmente ("3 nuovi ingressi negativi") è ampiamente soddisfatto dai dati storici a 3 anni (12 trade, pattern negativo netto). *(Azione da eseguire: aggiungere l'esclusione nel codice/YAML quando si riprende in mano la config — non ancora fatto al 2026-08-05.)*
+3. **`leva_single_stock` esclusa dal gate L1 — FATTO (2026-08-05)**: `min_buy_count: 8` in `config/etf_families.yaml` (irraggiungibile su 7 condizioni). Non è una rimozione dall'Excel/monitor: la famiglia resta tracciata in L0/L2/L3 come tutte le altre, blocca solo la promozione a L1. Impatto verificato: 10 perdenti su 12 trade nel backtest a 3 anni, +6.124€ di miglioramento sul P&L netto 3 anni (10.000€/trade) rimuovendola dal calcolo (da +1.489€ a +7.613€).
+   > ⚠️ **Gap noto**: questo blocco vale solo per `suggest_level()` (il gate principale). `check_l1_entry_tiered()`/`check_l1_entry_accelerated()` (i motori paralleli della Fase 3 "sistema tiered") **non leggono `min_buy_count`** — se/quando si collegano quei motori, l'esclusione di `leva_single_stock` va applicata esplicitamente anche lì, altrimenti la famiglia può rientrare da quella porta.
 4. **`mercati_emergenti` declassata da "motore" a "da monitorare"** — non trattarla più come un contributo affidabile per default.
 5. **`check_l1_exit()` e `calculate_sg_suggerito_l1()` rimosse** (erano dead code, mai più chiamate).
 6. **`alerts.py` non toccato** — revisione rimandata al prossimo sprint.

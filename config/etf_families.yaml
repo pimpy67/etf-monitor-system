@@ -670,7 +670,9 @@ families:
     days_above_ema: 3
     mm200_filter: true
     hold_days_max: 30
-    min_buy_count: 7
+    min_buy_count: 8  # 2026-08-05: esclusa da L1 (backtest 3 anni: 10 perdenti su 12 trade,
+                      # -6.124EUR di impatto su 10k/trade). 8 = irraggiungibile su 7 condizioni,
+                      # blocca solo suggest_level() — resta monitorata in L0/L2/L3.
     ema20_slope_min: 0.5
     sl_initial_pct: 0.08
     sl_atr_multiplier: 2.5
