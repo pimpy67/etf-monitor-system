@@ -856,6 +856,36 @@ Storico: salvato in l1_exit_history
 
 ---
 
+## Stato Attuale & Roadmap L1 (dal 2026-08-05)
+
+> Sezione viva — aggiornarla quando arrivano nuovi dati (es. dal backtest esteso a 3 anni) o quando si prende una decisione. Non è uno storico di modifiche già fatte (quello è più sotto, "Note Operative") ma il punto di riferimento su cosa è deciso, cosa è in osservazione, e quando si riapre la discussione.
+
+### Cosa sappiamo (validato dal backtest 12 mesi, modello reale: entrata 7/7+fondamenta, uscita solo SL/TP giornalieri via `calculate_sl_suggerito_l1`/`calculate_stop_gain_dynamic`, costi Directa 5+5€, tasse 26%)
+
+- Il sistema è **profittevole al netto di costi e tasse**, sia a `min_buy_count=7` (+1.572€ su 10.000€/trade, 3 trade, 100% win rate) sia a `min_buy_count=6` (+14.451€ su 10.000€/trade, 234 trade, 52.9% win rate).
+- Il salto da "in perdita" a "profittevole" è arrivato da un **fix di codice** (funzione TP sbagliata + bug del contatore giorni), non da modifiche ai parametri YAML — nessun valore di soglia è stato toccato.
+- `min_buy_count=6` ha un'aspettativa positiva reale, non casuale: asimmetria vincita/perdita -4.3% (SL) vs +5.1% (TP).
+- `equity_sviluppati` + `mercati_emergenti` = 84% dei trade e del profitto con `min_buy_count=6`. `leva_single_stock` è l'unica famiglia con pattern chiaramente negativo (4/4 trade in perdita, campione piccolo).
+- Il confronto diretto 7 vs 6 resta **statisticamente inconclusivo**: N=3 per il 7/7 non è sufficiente per dire se sia "migliore" o solo più raro.
+
+### Decisioni prese
+
+1. **`min_buy_count` resta a 7 in produzione.** Nessuna modifica a YAML o alla logica L1 per un periodo di validazione live.
+2. **Periodo di validazione live: 3-4 settimane dal 2026-08-05** — per confermare che il comportamento reale (SL/TP aggiornati manualmente su Directa su suggerimento giornaliero) rispecchi quanto misurato nel backtest (che controlla SL/TP una volta al giorno sul close).
+3. **`leva_single_stock` — criterio esplicito di esclusione**: se nei prossimi 3 nuovi ingressi L1 di questa famiglia il rendimento medio netto resta negativo, va esclusa dal gate L1 (resta comunque monitorata in L0/dashboard). Non è una decisione a sensazione — è già stato fissato il criterio, va solo applicato quando succede.
+4. **`check_l1_exit()` e `calculate_sg_suggerito_l1()` rimosse** (erano dead code dopo il fix del 2026-08-05, mai più chiamate).
+5. **`alerts.py` non toccato** — revisione rimandata al prossimo sprint (insieme al lavoro sul frontend), per assicurarsi che le email inviino i valori SL/TP coerenti con `calculate_sl_suggerito_l1`/`calculate_stop_gain_dynamic`.
+
+### Punto di decisione successivo
+
+Dopo **entrambi**: (a) il completamento del backtest esteso a 3 anni (in corso dal 2026-08-05, include un tratto di mercato ribassista — il test a 12 mesi era quasi tutto BULL/LATERALE) e (b) la fine delle 3-4 settimane di validazione live, si decide insieme tra:
+
+- **Restare a `min_buy_count=7`** (selettivo, campione ancora piccolo ma qualità alta)
+- **Passare a `min_buy_count=6`** (frequenza sostenibile, aspettativa positiva già misurata)
+- **Collegare il sistema "tiered" già scritto ma inutilizzato** (`check_l1_entry_tiered()`/`check_l1_entry_accelerated()`, quality score 0-4, sizing 50-100%) per avere size variabile invece di un singolo numero fisso — opzione che unirebbe volume e qualità senza dover scegliere un solo valore.
+
+---
+
 ## Infrastruttura Tecnica
 
 ### VPS & Percorsi
