@@ -819,10 +819,16 @@ class ETFTechnicalAnalyzer:
           4. Segnale di recupero: RSI risalito > 32 OPPURE micro-breakout
 
         Uscita (se gia' in L0, basta 1):
-          α: prezzo < panic_low (stop assoluto)    [gestito in monitor.py]
-          β: RSI < 25 dopo ingresso (trappola)
-          γ: prezzo > EMA20 (take profit → promuovi a L2)
-          ε: 30gg senza recupero                   [gestito in monitor.py]
+          α: prezzo < trigger_low_price (invalidazione)  [gestito in monitor.py]
+          β: RSI < 25 dopo ingresso (trappola ribassista)
+          ε: 30gg senza recupero                         [non implementato — vedi nota]
+
+        Fix 2026-08-05: rimossa γ (prezzo > EMA20 → promuovi a L2). L0 punta a
+        inversioni di medio-lungo periodo dopo un crollo vero: superare l'EMA20 è
+        il segnale di CONFERMA dell'ingresso (richiesto dai percorsi FAST/SLOW),
+        non un motivo per smettere di seguirla come L0. L'ETF resta classificato
+        L0 finché non perde davvero i requisiti (RSI<25 o invalidazione del
+        trigger low), non solo perché il prezzo è tornato sopra la media veloce.
         """
         result = {
             'l0_entry': False, 'l0_exit_rule': None, 'l0_exit_trigger': None,
@@ -879,13 +885,7 @@ class ETFTechnicalAnalyzer:
 
         # ── Uscita (se gia' in L0) ────────────────────────────────────────────
         if current_level == 0:
-            if ema20_v and current > ema20_v:
-                result['l0_exit_rule']    = 'gamma'
-                result['l0_exit_trigger'] = (
-                    f'Prezzo {current:.4f} > EMA20 {ema20_v:.4f} — take profit, promuovi a L2'
-                )
-                result['reason_codes'] = ['L0_EXIT_GAMMA']
-            elif rsi_val < 25:
+            if rsi_val < 25:
                 result['l0_exit_rule']    = 'beta'
                 result['l0_exit_trigger'] = (
                     f'RSI={rsi_val:.0f} < 25 dopo ingresso — trappola ribassista, esci'
@@ -893,6 +893,10 @@ class ETFTechnicalAnalyzer:
                 result['reason_codes'] = ['L0_EXIT_BETA']
             else:
                 result['reason_codes'] = ['L0_HOLD']
+                # Info display-only: recupero in corso, ma non cambia livello — resta L0
+                # finché non perde i requisiti (vedi nota fix 2026-08-05 sopra).
+                if ema20_v and current > ema20_v:
+                    result['l0_recovery_in_progress'] = True
             return result
 
         # ── Entrata ───────────────────────────────────────────────────────────

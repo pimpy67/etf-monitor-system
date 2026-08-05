@@ -727,31 +727,14 @@ class ETFMonitor:
                         add_log(f"    ❌ L0 INVALIDAZIONE: prezzo {price:.2f} < trigger_low {trigger_low:.2f}")
                         continue  # Skip rest L0 processing
 
-                # PRIORITÀ 1 FASE 2 — Check recovery signal → promotion L0 → L2
-                # Fix 2026-08-05: prima leggeva close_series da a.get('close_series'), chiave
-                # che analyze_etf() non imposta mai (sempre None) — il blocco non scattava
-                # mai. Ora lo storico Close viene ricavato via get_ohlc_by_isin, come gia'
-                # fatto per SL/TP dell'L1.
-                try:
-                    confirmation_mode_active = l0_state.get('confirmation_mode') if l0_state else None
-                    if confirmation_mode_active:
-                        hist_recent_l0 = self.db.get_ohlc_by_isin(isin, days=70)
-                        if not hist_recent_l0.empty and len(hist_recent_l0) >= 20:
-                            close_series = hist_recent_l0['Close'].astype(float).dropna()
-                            famiglia = ETFTechnicalAnalyzer.detect_family(r.get('categoria', ''))
-                            analyzer = ETFTechnicalAnalyzer(famiglia=famiglia)
-                            recovery_signal = analyzer._get_l0_confirmation_signal(
-                                close_series, confirmation_mode_active.lower(),
-                                l0_state.get('trigger_low_price'),
-                                reclaim_ema_period=(50 if confirmation_mode_active == 'SLOW' else 20)
-                            )
-                            if recovery_signal.get('recovery_signal'):
-                                # Recovery confermato → promuovi a L2
-                                self.db.remove_l0_entry(isin)
-                                suggested = 2  # Promozione a L2 (watchlist)
-                                add_log(f"    🟢 L0 RECOVERY: {r['nome'][:40]} → L2 ({recovery_signal.get('signal_type')})")
-                except Exception as e:
-                    add_log(f"    ⚠️  L0 recovery check error: {e}")
+                # Fix 2026-08-05: rimossa la promozione automatica L0 → L2 su recovery_signal
+                # confermato. Era la stessa logica della γ ora rimossa da suggest_level_0()
+                # (vedi commento lì) applicata via un percorso diverso (etf_l0_tracking):
+                # usava _get_l0_confirmation_signal — la stessa funzione richiesta per
+                # CONFERMARE l'ingresso FAST/SLOW — come se fosse un segnale di USCITA.
+                # L0 punta a inversioni di medio-lungo periodo: un ETF resta classificato
+                # L0 finché non perde davvero i requisiti (β RSI<25, o invalidazione sotto
+                # trigger_low_price qui sotto), non solo perché il recupero si conferma.
 
                 # Estrai confirmation_mode e trigger_low_price per TUTTI i L0 (new o existing).
                 # Fix 2026-08-05: prima leggeva da a.get('l0_regime_filter', {}).get('regime_type')
