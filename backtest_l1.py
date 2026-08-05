@@ -53,6 +53,9 @@ TARGET_FAMILIES = {
     # e' comunque un candidato L1, e' il parcheggio "piede dentro" del sistema.
 }
 
+CONDITION_KEYS = ['allineamento_ok', 'persistenza_ok', 'rsi_ok', 'distance_ok',
+                   'adx_ok', 'macd_ok', 'space_residuo_ok']
+
 DIRECTA_FEE_BUY = 5.0
 DIRECTA_FEE_SELL = 5.0
 TAX_RATE = 0.26
@@ -86,6 +89,8 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates):
     holding = False
     entry_price = None
     entry_date = None
+    entry_buy_count = None
+    entry_missing = None
     trades = []
 
     quiet = io.StringIO()
@@ -104,6 +109,9 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates):
                 holding = True
                 entry_price = close_today
                 entry_date = d.date().isoformat()
+                c = result.get('conditions', {})
+                entry_buy_count = result.get('buy_count')
+                entry_missing = [k for k in CONDITION_KEYS if not c.get(k, True)]
         else:
             # Stesse funzioni e stessa logica di monitor.py::_update_portfolio_l1_suggerito()
             # dopo il fix 2026-08-05: SL = calculate_sl_suggerito_l1, TP = calculate_stop_gain_dynamic
@@ -138,6 +146,7 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates):
                     'exit_date': d.date().isoformat(), 'exit_price': exit_price,
                     'status': 'closed', 'gross_pct_gain': gross_pct,
                     'exit_reason': exit_reason,
+                    'entry_buy_count': entry_buy_count, 'entry_missing': entry_missing,
                 })
                 holding = False
                 entry_price = None
@@ -151,6 +160,7 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates):
             'exit_date': None, 'exit_price': last_price,
             'status': 'open', 'gross_pct_gain': gross_pct,
             'exit_reason': None,
+            'entry_buy_count': entry_buy_count, 'entry_missing': entry_missing,
         })
 
     return trades
@@ -240,6 +250,43 @@ def aggregate(results, label, position_size):
     }
 
 
+def analyze_missing_conditions(results, label):
+    """FASE 2 — per i trade entrati a 6/7 (non 7/7), quale delle 7 condizioni
+    mancava all'ingresso? Serve a capire se un'eventuale futura condizione ADX
+    piu' stretta avrebbe davvero filtrato i falsi segnali del 2024, invece di
+    assumerlo. Non tocca la simulazione: e' solo diagnostica sui trade gia' aperti."""
+    all_trades = []
+    for r in results:
+        for t in r['variants'][label]['trades']:
+            all_trades.append({**t, 'ticker': r['ticker'], 'famiglia': r['famiglia']})
+
+    six_of_seven = [t for t in all_trades if t.get('entry_buy_count') == 6]
+    print(f"Trade entrati esattamente a 6/7 (esclusi quelli a 7/7): {len(six_of_seven)} su {len(all_trades)} totali\n")
+
+    cond_count = {}
+    for t in six_of_seven:
+        missing = t.get('entry_missing') or []
+        for c in missing:
+            cond_count[c] = cond_count.get(c, 0) + 1
+    print("Condizione mancante — distribuzione su tutti i trade 6/7:")
+    for c, n in sorted(cond_count.items(), key=lambda kv: -kv[1]):
+        pct = round(100 * n / len(six_of_seven), 1) if six_of_seven else 0
+        print(f"  {c:20s} mancante in {n:4d} trade ({pct}%)")
+
+    print("\nCondizione mancante — per anno di ingresso:")
+    years = sorted(set(t['entry_date'][:4] for t in six_of_seven))
+    for y in years:
+        yr_trades = [t for t in six_of_seven if t['entry_date'][:4] == y]
+        yr_cond = {}
+        for t in yr_trades:
+            for c in (t.get('entry_missing') or []):
+                yr_cond[c] = yr_cond.get(c, 0) + 1
+        top = sorted(yr_cond.items(), key=lambda kv: -kv[1])
+        top_str = ', '.join(f"{c}={n}" for c, n in top)
+        print(f"  {y}: {len(yr_trades)} trade — {top_str}")
+    print()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--start', default=None, help='YYYY-MM-DD, default = oggi - 365 giorni')
@@ -288,6 +335,12 @@ def main():
 
     print("\n" + "=" * 78)
     print(f"ETF testati: {len(results)}  |  skip per storico insufficiente: {len(errors)}\n")
+
+    if args.compare_min_buy is not None:
+        print("=" * 78)
+        print(f"FASE 2 — ANALISI CONDIZIONI MANCANTI (variante override_{args.compare_min_buy})")
+        print("=" * 78)
+        analyze_missing_conditions(results, f'override_{args.compare_min_buy}')
 
     agg_by_size = {}
     for size in position_sizes:
