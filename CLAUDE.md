@@ -996,6 +996,43 @@ condizioni d'ingresso già misurate. Prossimo esperimento sensato, se si vuole
 continuare su questa strada: un indicatore di **regime di mercato** (es. VIX, ampiezza
 di mercato) come filtro esterno, non un'altra soglia sulle 7 condizioni esistenti.
 
+**Follow-up 2026-08-05 — segmentazione win rate per condizione mancante** (test proposto
+dopo che un'analisi esterna ipotizzava "il 73% dei fallimenti è causato dal MACD" —
+un'affermazione che il dato sopra NON supporta di per sé, perché misura solo la
+*frequenza* con cui una condizione manca, non se quei trade vanno peggio. Va misurato
+separatamente, ed è quello che segue):
+
+| Condizione mancante | Trade | Win rate netto | Rend. medio netto | P&L netto totale (10k€/trade) |
+|---|:---:|:---:|:---:|:---:|
+| `macd_ok` | 340 | 44.1% | -0.01% | -428€ |
+| `rsi_ok` | 86 | 50.0% | +0.04% | +372€ |
+| `adx_ok` | 33 | **57.6%** | **+0.33%** | **+1.099€** |
+
+**C'è un effetto reale**: i trade dove manca il MACD sono i peggiori (44.1% win rate),
+quelli dove manca l'ADX i migliori (57.6%) — l'ipotesi esterna "MACD obbligatorio anche
+a 6/7" non è campata in aria, ha un fondamento nei dati.
+
+**Ma non spiega il 2024 specificamente**: `macd_ok` mancante nel 2024 ha win rate 35.8%
+(peggio della media 2024 di 37.1%, ma di poco) — e i trade 2024 dove mancava invece RSI
+o ADX (37 trade, per differenza) sommano comunque **-3.559€ netti**, ancora chiaramente
+in perdita. Un filtro "MACD obbligatorio" avrebbe tolto qualche trade cattivo ovunque
+(migliora la qualità media in generale), ma il 2024 sarebbe rimasto un anno negativo
+anche depurato dai trade con MACD mancante. Conferma quanto scritto sopra: la causa del
+2024 è di regime di mercato, non isolabile scegliendo quale condizione rendere
+obbligatoria.
+
+**Nota laterale utile**: escludendo `leva_single_stock` (già fuori da L1 in produzione,
+`min_buy_count=8`) il bucket `macd_ok` mancante passa da -428€ a **+4.804€** netti —
+la famiglia leva pesava sproporzionatamente in quel gruppo. Conferma indiretta che
+l'esclusione già fatta di `leva_single_stock` è stata la mossa con più impatto reale
+finora, più della caccia a una condizione specifica da rendere obbligatoria.
+
+**Conclusione**: rendere `macd_ok` obbligatorio anche a 6/7 è un filtro di qualità
+generico ragionevole da testare con una simulazione vera (non solo questo replay
+statistico) se si vuole aumentare il volume oltre il 7/7 rigido — ma va presentato come
+tale, non come soluzione mirata al 2024. La "conferma 2gg consecutivi" e il "filtro di
+regime macro" restano ipotesi non testate a questo punto.
+
 ---
 
 ## Infrastruttura Tecnica
