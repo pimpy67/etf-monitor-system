@@ -919,22 +919,37 @@ class ETFTechnicalAnalyzer:
             # Verifica Percorso RAPIDO (flash crash) — ha priorità
             fast_result = self._analyze_l0_fast_path(prices, high, low, l0_regime_params)
             if fast_result['fast_path_triggered'] and not kill_switch:
-                result['l0_entry']      = True
-                result['l0_regime_mode'] = 'FAST'
-                result['reason_codes']  = ['L0_ENTRY_FAST_PATH']
-                result['flash_crash_zscore'] = fast_result['zscore']
-                result['fast_path_trigger_price'] = fast_result['trigger_price']
-                return result
+                # Fix 2026-08-05: prima entrava solo per il crollo, senza nessuna prova che
+                # l'inversione fosse davvero iniziata. Ora richiede anche la conferma di
+                # recupero (RSI risalito o prezzo che riconquista l'EMA20) — la stessa
+                # funzione gia' usata (ma solo dopo l'ingresso) per la promozione a L2.
+                confirmation = self._get_l0_confirmation_signal(
+                    prices, 'fast', fast_result['trigger_price'], reclaim_ema_period=20)
+                if confirmation['recovery_signal']:
+                    result['l0_entry']      = True
+                    result['l0_regime_mode'] = 'FAST'
+                    result['reason_codes']  = ['L0_ENTRY_FAST_PATH']
+                    result['flash_crash_zscore'] = fast_result['zscore']
+                    result['fast_path_trigger_price'] = fast_result['trigger_price']
+                    result['recovery_signal_type'] = confirmation['signal_type']
+                    return result
+                # Crollo rilevato ma nessuna inversione confermata ancora: non entra da
+                # questo percorso, prosegue a valutare il percorso lento e poi il pragmatico.
 
             # Verifica Percorso LENTO (bear sostenuto) — alternativa al rapido
             slow_result = self._analyze_l0_slow_path(prices, high, low, l0_regime_params)
             if slow_result['slow_path_valid'] and not kill_switch:
-                result['l0_entry']      = True
-                result['l0_regime_mode'] = 'SLOW'
-                result['reason_codes']  = ['L0_ENTRY_SLOW_PATH']
-                result['days_below_sma200'] = slow_result['days_below_sma200']
-                result['drawdown_normalized'] = slow_result['drawdown_normalized']
-                return result
+                confirmation = self._get_l0_confirmation_signal(
+                    prices, 'slow', slow_result['min_reached'], reclaim_ema_period=50)
+                if confirmation['recovery_signal']:
+                    result['l0_entry']      = True
+                    result['l0_regime_mode'] = 'SLOW'
+                    result['reason_codes']  = ['L0_ENTRY_SLOW_PATH']
+                    result['days_below_sma200'] = slow_result['days_below_sma200']
+                    result['drawdown_normalized'] = slow_result['drawdown_normalized']
+                    result['recovery_signal_type'] = confirmation['signal_type']
+                    return result
+                # Regime bear confermato ma nessuna inversione ancora: prosegue al pragmatico.
 
         # Cond 1: drawdown check (pragmatico: 6.5% per equity, non 15%)
         cond1 = dist_peak_pct <= -(l0_dd_threshold * 100)

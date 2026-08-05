@@ -728,28 +728,38 @@ class ETFMonitor:
                         continue  # Skip rest L0 processing
 
                 # PRIORITÀ 1 FASE 2 — Check recovery signal → promotion L0 → L2
+                # Fix 2026-08-05: prima leggeva close_series da a.get('close_series'), chiave
+                # che analyze_etf() non imposta mai (sempre None) — il blocco non scattava
+                # mai. Ora lo storico Close viene ricavato via get_ohlc_by_isin, come gia'
+                # fatto per SL/TP dell'L1.
                 try:
-                    confirmation_mode = l0_state.get('confirmation_mode') if l0_state else None
-                    close_series = a.get('close_series')
-                    if confirmation_mode and close_series is not None:
-                        # Usa il metodo existente per ottenere il recovery signal
-                        famiglia = ETFTechnicalAnalyzer.detect_family(r.get('categoria', ''))
-                        analyzer = ETFTechnicalAnalyzer(famiglia=famiglia)
-                        recovery_signal = analyzer._get_l0_confirmation_signal(
-                            close_series, confirmation_mode,
-                            l0_state.get('trigger_low_price'),
-                            reclaim_ema_period=(50 if confirmation_mode == 'SLOW' else 20)
-                        )
-                        if recovery_signal.get('recovery_signal'):
-                            # Recovery confermato → promuovi a L2
-                            self.db.remove_l0_entry(isin)
-                            suggested = 2  # Promozione a L2 (watchlist)
-                            add_log(f"    🟢 L0 RECOVERY: {r['nome'][:40]} → L2 ({recovery_signal.get('signal_type')})")
+                    confirmation_mode_active = l0_state.get('confirmation_mode') if l0_state else None
+                    if confirmation_mode_active:
+                        hist_recent_l0 = self.db.get_ohlc_by_isin(isin, days=70)
+                        if not hist_recent_l0.empty and len(hist_recent_l0) >= 20:
+                            close_series = hist_recent_l0['Close'].astype(float).dropna()
+                            famiglia = ETFTechnicalAnalyzer.detect_family(r.get('categoria', ''))
+                            analyzer = ETFTechnicalAnalyzer(famiglia=famiglia)
+                            recovery_signal = analyzer._get_l0_confirmation_signal(
+                                close_series, confirmation_mode_active.lower(),
+                                l0_state.get('trigger_low_price'),
+                                reclaim_ema_period=(50 if confirmation_mode_active == 'SLOW' else 20)
+                            )
+                            if recovery_signal.get('recovery_signal'):
+                                # Recovery confermato → promuovi a L2
+                                self.db.remove_l0_entry(isin)
+                                suggested = 2  # Promozione a L2 (watchlist)
+                                add_log(f"    🟢 L0 RECOVERY: {r['nome'][:40]} → L2 ({recovery_signal.get('signal_type')})")
                 except Exception as e:
                     add_log(f"    ⚠️  L0 recovery check error: {e}")
 
-                # Estrai confirmation_mode e trigger_low_price per TUTTI i L0 (new o existing)
-                confirmation_mode = a.get('l0_regime_filter', {}).get('regime_type')  # 'FAST' or 'SLOW'
+                # Estrai confirmation_mode e trigger_low_price per TUTTI i L0 (new o existing).
+                # Fix 2026-08-05: prima leggeva da a.get('l0_regime_filter', {}).get('regime_type')
+                # — un calcolo parallelo (l0_detect_regime_filter, solo informativo) con valori
+                # 'fast_crash'/'slow_bear'/'none' mai uguali a 'FAST'/'SLOW' attesi altrove, e
+                # comunque mai presente in 'a'. La fonte vera e' l0_data.l0_regime_mode, impostato
+                # da suggest_level_0() quando il percorso FAST/SLOW determina davvero l'ingresso.
+                confirmation_mode = a.get('l0_data', {}).get('l0_regime_mode')  # 'FAST' or 'SLOW' o None
                 trigger_low_price = price  # Il prezzo al momento del trigger
 
                 if isin not in existing_l0:
