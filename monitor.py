@@ -42,17 +42,6 @@ def add_log(message: str):
     print(entry)
 
 
-def _rsi_period(series: pd.Series, period: int = 5) -> pd.Series:
-    """RSI a periodo configurabile (ETFTechnicalAnalyzer._rsi() usa sempre period=14)."""
-    delta  = series.diff()
-    gains  = delta.where(delta > 0, 0.0)
-    losses = (-delta).where(delta < 0, 0.0)
-    ag = gains.ewm(com=period - 1, min_periods=period).mean()
-    al = losses.ewm(com=period - 1, min_periods=period).mean()
-    rs = ag / al.replace(0, np.nan)
-    return 100 - (100 / (1 + rs))
-
-
 class ETFMonitor:
     """Sistema principale di monitoraggio ETF"""
 
@@ -1343,12 +1332,14 @@ class ETFMonitor:
         """
         STEP 4 — Aggiorna SL/SG suggerito per posizioni L1 attive.
 
-        Per ogni entry in portafoglio L1:
-        1. Recupera dati di mercato (price, ema20, ema10, rsi_5, ema20_series, etc)
-        2. Chiama calculate_sl_suggerito_l1() → SL ibrido
-        3. Chiama calculate_sg_suggerito_l1() → SG dinamico
-        4. Salva nel DB sl_suggerito e sg_suggerito
-        5. Controlla regole exit con check_l1_exit()
+        Per ogni entry in portafoglio L1 (fix 2026-08-05, modello reale confermato):
+        1. Recupera dati di mercato (price, ema20, ema20_series, etc)
+        2. Chiama calculate_sl_suggerito_l1() → SL
+        3. Chiama calculate_stop_gain_dynamic() → TP (unica funzione TP, niente decadimento
+           temporale, si muove con lo slope EMA20)
+        4. Marca 'exited' nel DB SOLO se il prezzo tocca SL o scatta il trigger del TP —
+           nessun'altra regola (B/C/E/F sono solo segnali dashboard, non vendite reali)
+        5. Altrimenti salva sl_suggerito/sg_suggerito aggiornati
         """
         try:
             # Leggi tutte le entry L1 attive
@@ -1407,26 +1398,20 @@ class ETFMonitor:
 
                     # Dati di mercato per SL/SG
                     ema20 = a.get('ema20')
-                    ema10 = a.get('ema10')
 
-                    # RSI(5) e serie EMA20 — 'a' (analysis) non li contiene mai (era un bug:
-                    # 'close_series'/'ema20_series' non sono chiavi che analyze_etf() imposta,
-                    # quindi il fallback precedente non scattava mai e lo Stop Gain dinamico
-                    # restava di fatto statico). Li ricaviamo da uno storico Close indipendente
-                    # via get_ohlc_by_isin (fast-path DB, gia' aggiornato in questo stesso run).
-                    rsi_5 = None
+                    # Serie EMA20 per lo slope di calculate_stop_gain_dynamic() — 'a' (analysis)
+                    # non la contiene mai (analyze_etf() non imposta quella chiave), quindi la
+                    # ricaviamo da uno storico Close indipendente via get_ohlc_by_isin
+                    # (fast-path DB, gia' aggiornato in questo stesso run).
                     ema20_series = None
                     try:
                         hist_recent = self.db.get_ohlc_by_isin(isin, days=40)
-                        if not hist_recent.empty and len(hist_recent) >= 6:
+                        if not hist_recent.empty and len(hist_recent) >= 20:
                             close_recent = hist_recent['Close'].astype(float).dropna()
-                            rsi5_full = _rsi_period(close_recent, period=5)
-                            if not rsi5_full.empty and pd.notna(rsi5_full.iloc[-1]):
-                                rsi_5 = float(rsi5_full.iloc[-1])
                             if len(close_recent) >= 20:
                                 ema20_series = analyzer._ema(close_recent, 20).tail(10)
                     except Exception as e:
-                        add_log(f"    ⚠️  Errore RSI5/EMA20 series {isin}: {e}")
+                        add_log(f"    ⚠️  Errore EMA20 series {isin}: {e}")
 
                     # CALCOLA SL SUGGERITO — formula ibrida
                     sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, current_price, ema20)
