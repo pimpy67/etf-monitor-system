@@ -1187,6 +1187,10 @@ class ETFTechnicalAnalyzer:
                                                                   None) if high is not None and low is not None else {'valid': False}
         space_ok       = space_residuo_check.get('valid', False)
 
+        
+        smart_6_7_triggered = False
+        smart_6_7_macd_enabled = self.p.get('use_smart_6_7_macd', False)
+        # Initialize smart_6_7 vars BEFORE using them
         conditions = {
             'allineamento_ok':    allineamento,
             'persistenza_ok':     persistenza,
@@ -1234,8 +1238,6 @@ class ETFTechnicalAnalyzer:
         # ── SMART 6/7 MACD: Variante sperimentale ──────────────────────────────
         # Se abilitato (use_smart_6_7_macd: true) e buy_count == 6 con MACD obbligatorio,
         # permetti ingresso L1 (instead of min_buy_count=7)
-        smart_6_7_macd_enabled = self.p.get('use_smart_6_7_macd', False)
-        smart_6_7_triggered = False
         if smart_6_7_macd_enabled and buy_count == 6 and macd_ok:
             # Accetta 6/7 solo se MACD è stato la condizione che manca
             missing_conditions = not allineamento or not persistenza or not rsi_ok or not dist_ok or not adx_ok or not space_ok
