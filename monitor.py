@@ -1089,6 +1089,30 @@ class ETFMonitor:
             except Exception as e:
                 add_log(f"ERRORE Resoconto portafoglio: {e}")
 
+        # STEP 8 — Sincronizza segnali L1 al portafoglio personale
+        try:
+            from sync_l1_portfolio import PortfolioL1Syncer
+            
+            # Filtra i segnali L1 (suggested_level == 1)
+            l1_signals = [r for r in results if r.get('suggested_level') == 1]
+            
+            if l1_signals:
+                syncer = PortfolioL1Syncer(self.db)
+                sync_result = syncer.sync_l1_entries(l1_signals)
+                add_log(f"Portfolio L1 Sync: {sync_result['added']} added, {sync_result['skipped']} skipped")
+                
+                # Invia email con nuove posizioni aggiunte
+                if sync_result['added'] > 0:
+                    for detail in sync_result['details']:
+                        if detail['added']:
+                            add_log(f"  ✅ {detail['ticker']} → Portfolio L1 (Entry €{detail['entry_price']:.2f})")
+            else:
+                add_log("Portfolio L1 Sync: No new L1 signals to add")
+                
+        except Exception as e:
+            add_log(f"⚠️  Portfolio L1 Sync error: {e}")
+
+
         # STEP 9 — Prepara candidati L0 per email
         try:
             add_log("Raccolta candidati L0...")

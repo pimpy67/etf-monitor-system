@@ -601,6 +601,43 @@ class AlertSystem:
             )
 
             return self._send_email(subject, body_html)
+    def send_portfolio_l1_sync_alert(self, new_entries: list) -> bool:
+        """Invia email con nuove posizioni L1 aggiunte al portafoglio."""
+        if not new_entries:
+            return False
+
+        html_rows = ""
+        for entry in new_entries:
+            if entry.get('added'):
+                html_rows += f"""
+                <tr>
+                    <td>{entry.get('ticker')}</td>
+                    <td>€{entry.get('entry_price', 0):.2f}</td>
+                    <td>€{entry.get('sl', 0):.2f}</td>
+                    <td>€{entry.get('tp', 0):.2f}</td>
+                    <td style="color: #27ae60;">✓ Added</td>
+                </tr>
+                """
+
+        html = f"""
+        <h2>📊 Portfolio L1 Sync Alert</h2>
+        <p>Le seguenti posizioni sono state aggiunte automaticamente al portafoglio L1:</p>
+        <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background-color: #ecf0f1;">
+                <th>ETF</th>
+                <th>Entry Price</th>
+                <th>Stop Loss</th>
+                <th>Take Profit</th>
+                <th>Status</th>
+            </tr>
+            {html_rows}
+        </table>
+        <p><strong>Azione richiesta:</strong> Imposta gli ordini Stop Loss e Take Profit su Directa.</p>
+        """
+
+        subject = f"✅ Portfolio L1: {len([e for e in new_entries if e.get('added')])} nuove posizioni"
+        return self._send_email(subject, html)
+
 
         except Exception as e:
             print(f"❌ Errore invio resoconto portafoglio: {e}")
