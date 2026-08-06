@@ -891,8 +891,8 @@ class ETFTechnicalAnalyzer:
         global_params = self.p.get('global_params', {}) if hasattr(self, 'p') else {}
         l0_whitelist = global_params.get('l0_whitelist', [])
         l0_blacklist = global_params.get('l0_blacklist', [])
-        
-        familia_name = self.familia
+
+        familia_name = self.famiglia
         if l0_whitelist and familia_name not in l0_whitelist:
             l0_enabled = False
             result['reason_codes'] = ['L0_DISABLED_NOT_IN_WHITELIST']
