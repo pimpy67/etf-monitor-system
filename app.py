@@ -358,41 +358,58 @@ def portfolio_sl():
 
 @app.route('/api/accept-sl-suggestion', methods=['POST'])
 def accept_sl_suggestion():
-    """Salva lo SL personale e il numero di quote per un ETF nel portafoglio."""
+    """Salva lo SL/TP personale per un ETF nel portafoglio."""
     try:
         data = request.get_json()
         isin = data.get('isin')
         sl_value = data.get('sl_value')
-        shares = data.get('shares')
+        tp_value = data.get('tp_value')
 
         if not isin:
             return jsonify({'error': 'ISIN required'}), 400
 
-        if sl_value is None or shares is None:
-            return jsonify({'error': 'sl_value and shares required'}), 400
+        if sl_value is None and tp_value is None:
+            return jsonify({'error': 'Almeno SL o TP richiesto'}), 400
 
-        # Salva SL personale e shares nel database
+        # Salva SL/TP personale nel database
         conn = db.get_connection()
         if not conn:
             return jsonify({'error': 'Database unavailable'}), 500
 
         try:
             with conn.cursor() as cur:
-                cur.execute("""
+                # Prepara i parametri di UPDATE dinamicamente
+                updates = []
+                params = []
+                if sl_value is not None:
+                    updates.append("stop_loss_inserted = %s")
+                    updates.append("stop_loss_updated_at = NOW()")
+                    params.append(float(sl_value))
+                if tp_value is not None:
+                    updates.append("stop_gain_target = %s")
+                    params.append(float(tp_value))
+
+                params.append(isin)  # WHERE isin = ?
+
+                query = f"""
                     UPDATE etf_portfolio_entries
-                    SET stop_loss_inserted = %s, shares = %s, stop_loss_updated_at = NOW()
+                    SET {', '.join(updates)}
                     WHERE isin = %s AND status = 'active'
-                """, (float(sl_value), float(shares), isin))
+                """
+                cur.execute(query, params)
                 conn.commit()
 
                 if cur.rowcount > 0:
-                    return jsonify({
+                    result = {
                         'status': 'saved',
                         'isin': isin,
-                        'sl_inserted': float(sl_value),
-                        'shares': float(shares),
                         'timestamp': datetime.now().isoformat()
-                    })
+                    }
+                    if sl_value is not None:
+                        result['sl_inserted'] = float(sl_value)
+                    if tp_value is not None:
+                        result['tp_inserted'] = float(tp_value)
+                    return jsonify(result)
                 else:
                     return jsonify({'error': 'Portfolio entry not found'}), 404
         finally:
@@ -735,6 +752,8 @@ def get_portfolio():
             'entry_mode':          entry.get('entry_mode', 'STANDARD'),
             'portfolio_type':      entry.get('portfolio_type', 'L1'),
             'stop_loss_l0_suggested': float(entry.get('stop_loss_l0_suggested')) if entry.get('stop_loss_l0_suggested') else None,
+            'sl_inserted':         float(entry.get('stop_loss_inserted')) if entry.get('stop_loss_inserted') else None,
+            'tp_inserted':         float(entry.get('stop_gain_target')) if entry.get('stop_gain_target') else None,
             'accumulated_pcts':    accumulated_pcts,
             'accumulated_dates':   accumulated_dates,
         })

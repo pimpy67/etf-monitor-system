@@ -1414,9 +1414,9 @@ function renderPortfolioTable(portfolioData, portfolioType) {
           <div><strong>Pr. Carico</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;">€${prAcq}</span></div>
           <div><strong>SL Suggerito${portfolioType === 'L0' ? ' (dinamico)' : ''}</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;" id="sl-sugg-${isin}">${portfolioType === 'L0' && p.stop_loss_l0_suggested ? '€' + parseFloat(p.stop_loss_l0_suggested).toFixed(4) : '—'}</span></div>
           <div><strong>SL Personale</strong><br><input type="text" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="sl-pers-${isin}" placeholder="Inserisci SL" oninput="updatePortfolioP_L('${isin}',${prAcq})"></div>
-          <div><strong>Quote</strong><br><input type="number" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="shares-${isin}" placeholder="N. quote" min="1" oninput="updatePortfolioP_L('${isin}',${prAcq})"></div>
-          <div><strong>P&L se attivi SL</strong><br><span style="font-family:monospace;font-size:1.1em;" id="pnl-${isin}">—</span></div>
-          <div><button class="btn-pf-save" onclick="savePortfolioSL('${isin}')" style="background:#238636;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:600;">💾 Salva</button></div>
+          <div><strong>TP Suggerito</strong><br><span style="font-family:monospace;font-size:1.1em;color:#3fb950;" id="tp-sugg-${isin}">${p.sg_suggested ? '€' + parseFloat(p.sg_suggested).toFixed(4) : '—'}</span></div>
+          <div><strong>TP Personale</strong><br><input type="text" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#3fb950;" id="tp-pers-${isin}" placeholder="Inserisci TP" value="${p.tp_inserted ? parseFloat(p.tp_inserted).toFixed(4) : ''}"></div>
+          <div><button class="btn-pf-save" onclick="savePortfolioSL_TP('${isin}')" style="background:#238636;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:600;">💾 Salva</button></div>
         </div>
       </td>
     </tr>
@@ -1458,47 +1458,27 @@ async function loadPortfolioSLData(isin) {
     const pos = data.positions?.[0];
     if (pos) {
       document.getElementById('sl-sugg-' + isin).textContent = pos.sl_suggested ? '€' + pos.sl_suggested.toFixed(4) : '—';
+      document.getElementById('tp-sugg-' + isin).textContent = pos.sg_suggested ? '€' + pos.sg_suggested.toFixed(4) : '—';
       if (!document.getElementById('sl-pers-' + isin).value) {
         document.getElementById('sl-pers-' + isin).value = pos.sl_inserted || '';
       }
-      if (!document.getElementById('shares-' + isin).value) {
-        document.getElementById('shares-' + isin).value = pos.shares || '';
+      if (!document.getElementById('tp-pers-' + isin).value) {
+        document.getElementById('tp-pers-' + isin).value = pos.tp_inserted || '';
       }
-      updatePortfolioP_L(isin, pos.entry_price);
     }
   } catch(e) {
     console.log('Error loading portfolio SL:', e);
   }
 }
 
-function updatePortfolioP_L(isin, entryPrice) {
-  const slInput = document.getElementById('sl-pers-' + isin);
-  const sharesInput = document.getElementById('shares-' + isin);
-  const pnlSpan = document.getElementById('pnl-' + isin);
+async function savePortfolioSL_TP(isin) {
+  const slValue = document.getElementById('sl-pers-' + isin)?.value;
+  const tpValue = document.getElementById('tp-pers-' + isin)?.value;
 
-  const sl = parseFloat(slInput?.value);
-  const shares = parseFloat(sharesInput?.value);
-
-  if (!sl || !shares || sl <= 0 || shares <= 0) {
-    pnlSpan.textContent = '—';
+  if (!slValue && !tpValue) {
+    alert('Inserisci almeno SL o TP');
     return;
   }
-
-  // Formula corretta: (SL - Prezzo Carico) × Quote
-  const pnl = (sl - entryPrice) * shares;
-  const pnlPct = (pnl / (entryPrice * shares)) * 100;
-  const pnlClass = pnl > 0 ? '#3fb950' : pnl < 0 ? '#f85149' : '#8b949e';
-  const sign = pnl >= 0 ? '+' : '';
-
-  pnlSpan.textContent = `${sign}${pnl.toFixed(2)}€ (${sign}${pnlPct.toFixed(2)}%)`;
-  pnlSpan.style.color = pnlClass;
-}
-
-async function savePortfolioSL(isin) {
-  const slValue = document.getElementById('sl-pers-' + isin)?.value;
-  const sharesValue = document.getElementById('shares-' + isin)?.value;
-
-  if (!slValue || !sharesValue) return;
 
   try {
     const resp = await fetch('/api/accept-sl-suggestion', {
@@ -1506,15 +1486,15 @@ async function savePortfolioSL(isin) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         isin: isin,
-        sl_value: parseFloat(slValue),
-        shares: parseFloat(sharesValue)
+        sl_value: slValue ? parseFloat(slValue) : null,
+        tp_value: tpValue ? parseFloat(tpValue) : null
       })
     });
 
     if (resp.ok) {
-      console.log('✅ SL salvato per ' + isin);
+      console.log('✅ SL/TP salvati per ' + isin);
     } else {
-      console.log('❌ Errore salvataggio SL');
+      console.log('❌ Errore salvataggio SL/TP');
     }
   } catch(e) {
     console.log('Errore:', e);
