@@ -311,7 +311,7 @@ families:
       squeeze_threshold_pct: 0.004
       squeeze_percentile_threshold: 25
     entry_mode: STANDARD
-    use_smart_6_7_macd: true
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.025
       target_floor_pct: 0.01
@@ -371,7 +371,7 @@ families:
       squeeze_threshold_pct: 0.005
       squeeze_percentile_threshold: 25
     entry_mode: STANDARD
-    use_smart_6_7_macd: true
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.04
       target_floor_pct: 0.015
@@ -842,7 +842,7 @@ families:
       squeeze_threshold_pct: 0.001
       squeeze_percentile_threshold: 30
     entry_mode: STANDARD
-    use_smart_6_7_macd: true
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.005
       target_floor_pct: 0.002
