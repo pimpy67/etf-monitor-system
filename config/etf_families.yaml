@@ -20,6 +20,7 @@ families:
   equity_sviluppati:
     description: "Equity sviluppati \u2014 Large cap, ACWI, All-World"
     entry_mode: STANDARD
+    use_smart_6_7_macd: false
     rsi_entry_low: 45
     rsi_entry_high: 58
     rsi_exit_min: 40
@@ -130,6 +131,7 @@ families:
       squeeze_threshold_pct: 0.01
       squeeze_percentile_threshold: 20
     entry_mode: STANDARD
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.065
       target_floor_pct: 0.03
@@ -189,6 +191,7 @@ families:
       squeeze_threshold_pct: 0.012
       squeeze_percentile_threshold: 20
     entry_mode: STANDARD
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.07
       target_floor_pct: 0.03
@@ -248,6 +251,7 @@ families:
       squeeze_threshold_pct: 0.006
       squeeze_percentile_threshold: 25
     entry_mode: STANDARD
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.03
       target_floor_pct: 0.015
@@ -307,6 +311,7 @@ families:
       squeeze_threshold_pct: 0.004
       squeeze_percentile_threshold: 25
     entry_mode: STANDARD
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.025
       target_floor_pct: 0.01
@@ -366,6 +371,7 @@ families:
       squeeze_threshold_pct: 0.005
       squeeze_percentile_threshold: 25
     entry_mode: STANDARD
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.04
       target_floor_pct: 0.015
@@ -425,6 +431,7 @@ families:
       squeeze_threshold_pct: 0.015
       squeeze_percentile_threshold: 20
     entry_mode: STANDARD
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.06
       target_floor_pct: 0.025
@@ -484,6 +491,7 @@ families:
       squeeze_threshold_pct: 0.01
       squeeze_percentile_threshold: 20
     entry_mode: STANDARD
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.055
       target_floor_pct: 0.025
@@ -543,6 +551,7 @@ families:
       squeeze_threshold_pct: 0.012
       squeeze_percentile_threshold: 20
     entry_mode: STANDARD
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.06
       target_floor_pct: 0.025
@@ -602,6 +611,7 @@ families:
       squeeze_threshold_pct: 0.008
       squeeze_percentile_threshold: 22
     entry_mode: STANDARD
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.04
       target_floor_pct: 0.015
@@ -661,6 +671,7 @@ families:
       squeeze_threshold_pct: 0.025
       squeeze_percentile_threshold: 18
     entry_mode: STANDARD
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.15
       target_floor_pct: 0.05
@@ -724,6 +735,7 @@ families:
       squeeze_threshold_pct: 0.02
       squeeze_percentile_threshold: 18
     entry_mode: STANDARD
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.2
       target_floor_pct: 0.08
@@ -783,6 +795,7 @@ families:
       squeeze_threshold_pct: 0.007
       squeeze_percentile_threshold: 25
     entry_mode: STANDARD
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.035
       target_floor_pct: 0.015
@@ -829,6 +842,7 @@ families:
       squeeze_threshold_pct: 0.001
       squeeze_percentile_threshold: 30
     entry_mode: STANDARD
+    use_smart_6_7_macd: false
     l1_stop_gain_dynamic:
       target_max_pct: 0.005
       target_floor_pct: 0.002

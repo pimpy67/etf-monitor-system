@@ -1179,6 +1179,8 @@ class ETFTechnicalAnalyzer:
             'adx_ok':             adx_ok,
             'macd_ok':            macd_ok,
             'space_residuo_ok':   space_ok,
+            'smart_6_7_macd_enabled': smart_6_7_macd_enabled,
+            'smart_6_7_triggered': smart_6_7_triggered,
             # Valori per display
             'ema10_current':      round(ema10_v, 4) if ema10_v else None,
             'ema20_current':      round(ema20_v, 4) if ema20_v else None,
@@ -1212,6 +1214,18 @@ class ETFTechnicalAnalyzer:
             'l1_reward_space_metrics': None,  # Populated later if buy_count == 6
         }
         buy_count = sum([allineamento, persistenza, rsi_ok, dist_ok, adx_ok, macd_ok, space_ok])
+
+        # ── SMART 6/7 MACD: Variante sperimentale ──────────────────────────────
+        # Se abilitato (use_smart_6_7_macd: true) e buy_count == 6 con MACD obbligatorio,
+        # permetti ingresso L1 (instead of min_buy_count=7)
+        smart_6_7_macd_enabled = self.p.get('use_smart_6_7_macd', False)
+        smart_6_7_triggered = False
+        if smart_6_7_macd_enabled and buy_count == 6 and macd_ok:
+            # Accetta 6/7 solo se MACD è stato la condizione che manca
+            missing_conditions = not allineamento or not persistenza or not rsi_ok or not dist_ok or not adx_ok or not space_ok
+            if missing_conditions and macd_ok:  # MACD è presente
+                smart_6_7_triggered = True
+                buy_count = 7  # Simula 7/7 completando con smart logic
 
         # ── REGIME A 3 STATI (INFORMATIVO, SENZA PENALITÀ) ───────────────────────────────
         # Calcola il regime per dashboard/reporting, ma NON penalizza il buy_count
