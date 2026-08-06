@@ -847,6 +847,8 @@ class ETFTechnicalAnalyzer:
         rsi_val = float(rsi.dropna().iloc[-1]) if len(rsi.dropna()) > 0 else 50.0
         ema20   = self._ema(prices, self.ema20_period)
         ema20_v = self._fval(ema20)
+        sma50   = self._sma(prices, 50)
+        sma50_v = self._fval(sma50)
         # Ensure current price is valid
         curr_price = prices.iloc[-1]
         if pd.isna(curr_price) or curr_price is None:
@@ -857,6 +859,11 @@ class ETFTechnicalAnalyzer:
         result['rsi']           = round(rsi_val, 1)
         result['ema20_current'] = round(ema20_v, 4) if ema20_v else None
         result['current_price'] = round(current, 4)
+
+        # Calcola regime per L0 filter
+        lateral_band = self.p.get('lateral_band', 0.01)
+        regime_str = self.calculate_regime(ema20_v, sma50_v, lateral_band)
+        result['regime_str'] = regime_str
 
         # Kill switch: crollo giornaliero >= 3%
         kill_switch = False
@@ -938,7 +945,7 @@ class ETFTechnicalAnalyzer:
         if regime_check_enabled and high is not None and low is not None:
             # Verifica Percorso RAPIDO (flash crash) — ha priorità
             fast_result = self._analyze_l0_fast_path(prices, high, low, l0_regime_params)
-            if fast_result['fast_path_triggered'] and not kill_switch:
+            if fast_result['fast_path_triggered'] and not kill_switch and regime_ok:
                 # Fix 2026-08-05: prima entrava solo per il crollo, senza nessuna prova che
                 # l'inversione fosse davvero iniziata. Ora richiede anche la conferma di
                 # recupero (RSI risalito o prezzo che riconquista l'EMA20) — la stessa
@@ -958,7 +965,7 @@ class ETFTechnicalAnalyzer:
 
             # Verifica Percorso LENTO (bear sostenuto) — alternativa al rapido
             slow_result = self._analyze_l0_slow_path(prices, high, low, l0_regime_params)
-            if slow_result['slow_path_valid'] and not kill_switch:
+            if slow_result['slow_path_valid'] and not kill_switch and regime_ok:
                 confirmation = self._get_l0_confirmation_signal(
                     prices, 'slow', slow_result['min_reached'], reclaim_ema_period=50)
                 if confirmation['recovery_signal']:
@@ -993,7 +1000,12 @@ class ETFTechnicalAnalyzer:
         result['micro_breakout'] = micro_brk
         result['recovery_pct'] = recovery_pct if 'recovery_pct' in locals() else 0.0
 
-        entry_ok = cond1 and cond2 and cond3 and cond4
+        # REGIME CHECK — L0 only allowed in BULL market (new 2026-08-06)
+        l0_regime_required = global_params.get('l0_regime_required', 'BULL')
+        regime_ok = (regime_str == l0_regime_required)
+        result['regime_ok_for_l0'] = regime_ok
+
+        entry_ok = cond1 and cond2 and cond3 and cond4 and regime_ok
         if entry_ok and kill_switch:
             result['l0_entry']      = False
             result['reason_codes']  = ['KILL_SWITCH', 'L0_ENTRY_BLOCKED']
@@ -1007,6 +1019,7 @@ class ETFTechnicalAnalyzer:
             if not cond2: missing.append('L0_COND_RSI')
             if not cond3: missing.append('L0_COND_DIVERGENCE')
             if not cond4: missing.append('L0_COND_RECOVERY')
+            if not regime_ok: missing.append(f'L0_REGIME_{regime_str}_NOT_BULL')
             result['reason_codes'] = missing or ['L0_WAIT']
 
         return result

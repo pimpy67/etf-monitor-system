@@ -601,6 +601,10 @@ class AlertSystem:
             )
 
             return self._send_email(subject, body_html)
+        except Exception as e:
+            print(f'❌ Errore send_portfolio_report: {e}')
+            return False
+
     def send_portfolio_l1_sync_alert(self, new_entries: list) -> bool:
         """Invia email con nuove posizioni L1 aggiunte al portafoglio."""
         if not new_entries:
@@ -637,10 +641,3 @@ class AlertSystem:
 
         subject = f"✅ Portfolio L1: {len([e for e in new_entries if e.get('added')])} nuove posizioni"
         return self._send_email(subject, html)
-
-
-        except Exception as e:
-            print(f"❌ Errore invio resoconto portafoglio: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
