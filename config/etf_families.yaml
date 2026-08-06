@@ -35,6 +35,7 @@ families:
     rsi_overbought: 78
     adx_entry: 22
     ema_dist_max: 4.0
+    mm200_distance_max: 3.0
     lateral_band: 0.01
     atr_max: 0.03
     aum_min: 50
@@ -93,6 +94,7 @@ families:
     rsi_overbought: 76
     adx_entry: 22
     ema_dist_max: 5.0
+    mm200_distance_max: 4.0
     lateral_band: 0.012
     atr_max: 0.04
     aum_min: 50
@@ -153,6 +155,7 @@ families:
     rsi_overbought: 78
     adx_entry: 25
     ema_dist_max: 5.0
+    mm200_distance_max: 4.0
     lateral_band: 0.015
     atr_max: 0.05
     aum_min: 50
@@ -213,6 +216,7 @@ families:
     rsi_overbought: 65
     adx_entry: 18
     ema_dist_max: 2.5
+    mm200_distance_max: 2.0
     lateral_band: 0.01
     atr_max: 0.025
     aum_min: 50
@@ -273,6 +277,7 @@ families:
     rsi_overbought: 70
     adx_entry: 12
     ema_dist_max: 1.5
+    mm200_distance_max: 1.2
     lateral_band: 0.005
     atr_max: 0.015
     aum_min: 100
@@ -333,6 +338,7 @@ families:
     rsi_overbought: 70
     adx_entry: 15
     ema_dist_max: 2.0
+    mm200_distance_max: 1.6
     lateral_band: 0.008
     atr_max: 0.025
     aum_min: 50
@@ -393,6 +399,7 @@ families:
     rsi_overbought: 75
     adx_entry: 22
     ema_dist_max: 3.0
+    mm200_distance_max: 2.4
     lateral_band: 0.015
     atr_max: 0.06
     aum_min: 50
@@ -453,6 +460,7 @@ families:
     rsi_overbought: 68
     adx_entry: 18
     ema_dist_max: 2.5
+    mm200_distance_max: 2.0
     lateral_band: 0.015
     atr_max: 0.04
     aum_min: 50
@@ -513,6 +521,7 @@ families:
     rsi_overbought: 65
     adx_entry: 20
     ema_dist_max: 3.0
+    mm200_distance_max: 2.4
     lateral_band: 0.012
     atr_max: 0.05
     aum_min: 30
@@ -573,6 +582,7 @@ families:
     rsi_overbought: 65
     adx_entry: 15
     ema_dist_max: 2.0
+    mm200_distance_max: 1.6
     lateral_band: 0.01
     atr_max: 0.03
     aum_min: 50
@@ -633,6 +643,7 @@ families:
     rsi_overbought: 70
     adx_entry: 28
     ema_dist_max: 6.0
+    mm200_distance_max: 4.8
     lateral_band: 0.03
     atr_max: 0.15
     aum_min: 100
@@ -693,6 +704,7 @@ families:
     rsi_overbought: 65
     adx_entry: 28
     ema_dist_max: 4.0
+    mm200_distance_max: 3.2
     lateral_band: 0.02
     atr_max: 0.2
     aum_min: 50
@@ -754,6 +766,7 @@ families:
     rsi_overbought: 65
     adx_entry: 15
     ema_dist_max: 2.5
+    mm200_distance_max: 2.0
     lateral_band: 0.008
     atr_max: 0.03
     aum_min: 50
@@ -814,6 +827,7 @@ families:
     rsi_overbought: 97
     adx_entry: null
     ema_dist_max: 0.5
+    mm200_distance_max: 0.4
     lateral_band: 0.0
     atr_max: 0.005
     aum_min: 100

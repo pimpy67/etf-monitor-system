@@ -1161,7 +1161,15 @@ class ETFTechnicalAnalyzer:
         regime_ok_mm200 = True
         if p['mm200_filter'] and sma200_v is not None:
             regime_ok_mm200 = current > sma200_v
-        allineamento  = price_ema_ok and ema_sma50_ok and regime_ok_mm200
+
+        # Controllo distanza da SMA200: impedisce ingressi su ETF troppo estesi
+        dist_sma200_ok = True
+        if sma200_v is not None and sma200_v > 0:
+            dist_sma200 = 100 * (current - sma200_v) / sma200_v
+            max_dist = p.get('mm200_distance_max', 4.0)  # default 4% se non specificato
+            dist_sma200_ok = dist_sma200 <= max_dist
+
+        allineamento  = price_ema_ok and ema_sma50_ok and regime_ok_mm200 and dist_sma200_ok
 
         # 2. Persistenza: >= 3gg sopra EMA20 + slope EMA20 positivo
         persistenza   = days_above_ema20 >= p['days_above_ema'] and ema20_slope > 0
