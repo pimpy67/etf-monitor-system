@@ -15,6 +15,7 @@ import numpy as np
 from datetime import datetime
 from typing import Dict, List, Optional
 import yaml
+import math
 import os
 
 
@@ -744,7 +745,7 @@ class ETFTechnicalAnalyzer:
 
         # Normalizzazione su ATR
         atr_normalized = self._calculate_atr_normalized(high, low, close) if high is not None and low is not None else None
-        zscore = drawdown_pct / (atr_normalized * 100) if atr_normalized and atr_normalized > 0 else 0.0
+        zscore = drawdown_pct / (atr_normalized * math.sqrt(window)) if atr_normalized and atr_normalized > 0 else 0.0
 
         # Flash path valido se zscore > soglia (default 4.0 deviazioni)
         zscore_threshold = regime_params.get('flash_crash_zscore_threshold', 4.0)
@@ -878,6 +879,21 @@ class ETFTechnicalAnalyzer:
         # Leggi nuovi parametri L0 pragmatici da l0_entry
         l0_entry_params = self.p.get('l0_entry', {})
         l0_enabled = l0_entry_params.get('enabled', False)
+        
+        # Whitelist check: L0 solo su famiglie autorizzate
+        global_params = self.p.get('global_params', {}) if hasattr(self, 'p') else {}
+        l0_whitelist = global_params.get('l0_whitelist', [])
+        l0_blacklist = global_params.get('l0_blacklist', [])
+        
+        familia_name = self.familia
+        if l0_whitelist and familia_name not in l0_whitelist:
+            l0_enabled = False
+            result['reason_codes'] = ['L0_DISABLED_NOT_IN_WHITELIST']
+            return result
+        if l0_blacklist and familia_name in l0_blacklist:
+            l0_enabled = False
+            result['reason_codes'] = ['L0_DISABLED_BLACKLISTED']
+            return result
         l0_dd_threshold = l0_entry_params.get('dd_threshold', 0.15)  # Default 15% per backward compat
         l0_rsi_max = l0_entry_params.get('rsi_max', 35)  # Default 35 per backward compat
         l0_recovery_min = l0_entry_params.get('recovery_min_pct', 0.01)  # Soglia micro-breakout: 1% (non 1.5%)  # Default 1.5%

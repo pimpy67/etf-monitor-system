@@ -1,6 +1,14 @@
 global_params:
   squeeze_percentile_threshold: 20
   volume_ratio_threshold: 1.2
+  l0_whitelist:
+  - equity_sviluppati
+  - settoriali_difensivi
+  - real_estate_reit
+  l0_blacklist:
+  - leva_single_stock
+  - crypto_digital_assets
+  - mercati_emergenti
 l2_readiness:
   threshold_enter: 70
   threshold_exit: 60
@@ -18,7 +26,7 @@ l2_readiness:
     days_above_ema_partial: 0.1
 families:
   equity_sviluppati:
-    description: "Equity sviluppati \u2014 Large cap, ACWI, All-World"
+    description: Equity sviluppati — Large cap, ACWI, All-World
     entry_mode: STANDARD
     use_smart_6_7_macd: false
     rsi_entry_low: 45
@@ -78,7 +86,7 @@ families:
       slope_window: 3
       slope_sensitivity: 0.15
   mercati_emergenti:
-    description: "Mercati emergenti \u2014 EM globale, Asia, LatAm, EMEA"
+    description: Mercati emergenti — EM globale, Asia, LatAm, EMEA
     rsi_entry_low: 40
     rsi_entry_high: 58
     rsi_exit_min: 38
@@ -138,7 +146,7 @@ families:
       slope_window: 3
       slope_sensitivity: 0.12
   settoriali_growth:
-    description: "Settoriali crescita \u2014 Tech, AI, Semi, Nasdaq, Digitale"
+    description: Settoriali crescita — Tech, AI, Semi, Nasdaq, Digitale
     rsi_entry_low: 48
     rsi_entry_high: 60
     rsi_exit_min: 38
@@ -198,7 +206,7 @@ families:
       slope_window: 3
       slope_sensitivity: 0.12
   settoriali_difensivi:
-    description: "Settoriali difensivi \u2014 Salute, Utilities, Insurance, Food"
+    description: Settoriali difensivi — Salute, Utilities, Insurance, Food
     rsi_entry_low: 42
     rsi_entry_high: 50
     rsi_exit_min: 38
@@ -258,7 +266,7 @@ families:
       slope_window: 4
       slope_sensitivity: 0.18
   bond_governativi:
-    description: "Bond governativi EUR/USD \u2014 BTP, Bund, UST, Gov Euro, IL"
+    description: Bond governativi EUR/USD — BTP, Bund, UST, Gov Euro, IL
     rsi_entry_low: 38
     rsi_entry_high: 48
     rsi_exit_min: 42
@@ -318,7 +326,7 @@ families:
       slope_window: 5
       slope_sensitivity: 0.2
   bond_corp_hy_em:
-    description: "Bond corporate / HY / EM \u2014 Corp EUR/USD, HY, EM bond"
+    description: Bond corporate / HY / EM — Corp EUR/USD, HY, EM bond
     rsi_entry_low: 42
     rsi_entry_high: 52
     rsi_exit_min: 38
@@ -378,7 +386,7 @@ families:
       slope_window: 4
       slope_sensitivity: 0.18
   commodities:
-    description: "Commodities broad \u2014 Bloomberg Comm, GSCI, Agri, Energia"
+    description: Commodities broad — Bloomberg Comm, GSCI, Agri, Energia
     rsi_entry_low: 40
     rsi_entry_high: 55
     rsi_exit_min: 38
@@ -438,7 +446,7 @@ families:
       slope_window: 4
       slope_sensitivity: 0.15
   oro_metalli_preziosi:
-    description: "Oro e metalli preziosi \u2014 Oro, Argento, Platino, Basket PM"
+    description: Oro e metalli preziosi — Oro, Argento, Platino, Basket PM
     rsi_entry_low: 38
     rsi_entry_high: 52
     rsi_exit_min: 38
@@ -498,7 +506,7 @@ families:
       slope_window: 4
       slope_sensitivity: 0.14
   metalli_industriali:
-    description: "Metalli industriali \u2014 Rame, Alluminio, Zinco, Nichel, Battery"
+    description: Metalli industriali — Rame, Alluminio, Zinco, Nichel, Battery
     rsi_entry_low: 38
     rsi_entry_high: 50
     rsi_exit_min: 38
@@ -558,7 +566,7 @@ families:
       slope_window: 3
       slope_sensitivity: 0.13
   real_estate_reit:
-    description: "Real Estate / REIT \u2014 EPRA Europe, NAREIT Global, REIT"
+    description: Real Estate / REIT — EPRA Europe, NAREIT Global, REIT
     rsi_entry_low: 42
     rsi_entry_high: 52
     rsi_exit_min: 38
@@ -618,7 +626,7 @@ families:
       slope_window: 4
       slope_sensitivity: 0.16
   crypto_digital_assets:
-    description: "Crypto / asset digitali \u2014 Bitcoin, Ethereum, Solana, Basket"
+    description: Crypto / asset digitali — Bitcoin, Ethereum, Solana, Basket
     rsi_entry_low: 35
     rsi_entry_high: 52
     rsi_exit_min: 38
@@ -678,8 +686,7 @@ families:
       slope_window: 3
       slope_sensitivity: 0.08
   leva_single_stock:
-    description: "Leva / single stock / struct \u2014 ETP 3x long/short su singoli\
-      \ titoli"
+    description: Leva / single stock / struct — ETP 3x long/short su singoli titoli
     rsi_entry_low: 45
     rsi_entry_high: 58
     rsi_exit_min: 38
@@ -692,9 +699,7 @@ families:
     days_above_ema: 3
     mm200_filter: true
     hold_days_max: 30
-    min_buy_count: 8  # 2026-08-05: esclusa da L1 (backtest 3 anni: 10 perdenti su 12 trade,
-                      # -6.124EUR di impatto su 10k/trade). 8 = irraggiungibile su 7 condizioni,
-                      # blocca solo suggest_level() — resta monitorata in L0/L2/L3.
+    min_buy_count: 8
     ema20_slope_min: 0.5
     sl_initial_pct: 0.08
     sl_atr_multiplier: 2.5
@@ -742,7 +747,7 @@ families:
       slope_window: 2
       slope_sensitivity: 0.1
   private_equity_buffer:
-    description: "Private Equity / Buffer ETF \u2014 Listed PE, Buffer strategy"
+    description: Private Equity / Buffer ETF — Listed PE, Buffer strategy
     rsi_entry_low: 40
     rsi_entry_high: 55
     rsi_exit_min: 38
@@ -802,7 +807,7 @@ families:
       slope_window: 4
       slope_sensitivity: 0.17
   monetario_liquidita:
-    description: "Monetario / liquidit\xE0 \u2014 ETF overnight, short-term"
+    description: Monetario / liquidità — ETF overnight, short-term
     rsi_entry_low: null
     rsi_entry_high: null
     rsi_exit_min: 42
