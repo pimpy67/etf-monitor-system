@@ -339,7 +339,7 @@ L1 richiede **TUTTE e 7** le seguenti condizioni (oppure **6/7 con MACD obbligat
 
 | # | Condizione | Significato | Parametro |
 |---|-----------|-------------|-----------|
-| **1** | **Allineamento** | price > EMA20 > SMA50 (+ price > SMA200 se mm200_filter) | `allineamento_ok` |
+| **1** | **Allineamento** | price > EMA20 > SMA50 (+ price > SMA200 se mm200_filter) + distanza da SMA200 ≤ `mm200_distance_max` (per famiglia, dal 2026-08-06) | `allineamento_ok` |
 | **2** | **Persistenza** | giorni_sopra_EMA20 ≥ N + slope(EMA20) > 0 | `persistenza_ok` |
 | **3** | **RSI Ottimale** | rsi_entry_low ≤ RSI ≤ rsi_entry_high (per famiglia) | `rsi_ok` |
 | **4** | **Distanza EMA20** | 0% ≤ dist_EMA20 ≤ ema_dist_max (non troppo staccato) | `distance_ok` |
@@ -375,7 +375,8 @@ equity_sviluppati:
 5. **Efficienza su pezzature piccole**: +€2,599 netti anche a €5k/trade (6/7 puro andava in loss)
 
 **Fondamenta Irrinunciabili** (no eccezioni, verificate *dopo* il 6/7 o 7/7):
-- ✅ Regime BULL: `(EMA20 − SMA50) / SMA50 > lateral_band` (soglia per famiglia, calculate_regime()). Dal fix del 2026-08-04 è verificato **una sola volta qui** — prima era anche incorporato dentro la condizione 1 (Allineamento), rendendo la condizione 1 un doppio controllo mascherato; oggi la condizione 1 è puramente geometrica (price>EMA20>SMA50 [+SMA200]).
+- ✅ Regime BULL: `(EMA20 − SMA50) / SMA50 > lateral_band` (soglia per famiglia, calculate_regime()). Dal fix del 2026-08-04 è verificato **una sola volta qui** — prima era anche incorporato dentro la condizione 1 (Allineamento), rendendo la condizione 1 un doppio controllo mascherato.
+  > ⚠️ **Aggiornamento 2026-08-06**: la condizione 1 non è più "puramente geometrica" come scritto dal fix del 04/08 — è stato aggiunto `dist_sma200_ok` (parametro `mm200_distance_max`, per famiglia, blocca ingressi troppo estesi sopra SMA200). Motivato da Feature Extraction su 80 trade nativi 7/7 a 3 anni: gap −3.38pp tra vincenti (12.98% sopra SMA200) e perdenti (16.36%), il segnale più discriminante trovato. A/B test reale (RUN A senza filtro vs RUN B con filtro) conferma il filtro migliorativo: +€327 P&L netto, +2pp win rate su 3 anni. Vedi `technical_analysis.py:1178-1185`, commit `2deb026`/`e81ae75` e `memory/SESSION_2026_08_06_AB_TEST_DEPLOYMENT.md`.
 - ✅ Prezzo > SMA50 (allineamento assoluto)
 - ✅ No kill switch (calo giornaliero > -3%)
 - ✅ **TUTTE e 7 condizioni** (niente "6 su 7") — `min_buy_count: 7` per tutte le 14 famiglie in `config/etf_families.yaml`
@@ -430,8 +431,21 @@ Il sistema **non esegue mai ordini in automatico**. Il flusso reale è:
 
 ### L0 — Come Si Entra (Deep Recovery)
 
+> 🔴 **Gate di famiglia (aggiunto 2026-08-06 — controllato PRIMA di qualunque percorso)**:
+> `global_params.l0_whitelist`/`l0_blacklist` in `config/etf_families.yaml` restringono L0 a
+> **`equity_sviluppati` soltanto** — la whitelist contiene una sola famiglia, la blacklist
+> elenca esplicitamente le altre 13. `technical_analysis.py:890-903` esce subito con
+> `L0_DISABLED_NOT_IN_WHITELIST`/`L0_DISABLED_BLACKLISTED` se la famiglia non è
+> `equity_sviluppati`, prima di valutare drawdown/RSI/divergenza. Motivazione (commit
+> `e81ae75`): entrate L0 fallite su settori speculativi (INRG clean energy, BATE battery,
+> BTCN crypto) durante bear market strutturali — L0 è mean-reversion, funziona su indici
+> ciclici ampi, non su settori strutturalmente in calo. La tabella `l0_take_profit_pct` più
+> sotto resta il riferimento per tutte e 13 le famiglie storicamente attive, ma oggi solo la
+> riga `equity_sviluppati` è raggiungibile in pratica.
+
 `suggest_level_0()` ha **tre percorsi di ingresso**, non uno solo. I primi due (FAST/SLOW)
-hanno priorità; se nessuno scatta si valuta il terzo (PRAGMATIC_4CONDITIONS):
+hanno priorità; se nessuno scatta si valuta il terzo (PRAGMATIC_4CONDITIONS). Su tutti e tre,
+dal 2026-08-06, si aggiunge un **5° gate obbligatorio di regime**:
 
 1. **FAST** (flash crash): crollo rapido rilevato via z-score ATR su pochi giorni
 2. **SLOW** (bear sostenuto): giorni consecutivi sotto SMA200 + drawdown normalizzato
@@ -440,6 +454,10 @@ hanno priorità; se nessuno scatta si valuta il terzo (PRAGMATIC_4CONDITIONS):
    2. **RSI Ipervenduto:** RSI < rsi_max (es. 45 per equity)
    3. **Divergenza Rialzista:** Il prezzo fa un minimo più basso, ma RSI fa un minimo più alto
    4. **Segnale di Recupero:** RSI risorge > 40, OPPURE prezzo sale ≥ 1% su 5 giorni
+5. **Regime BULL** (nuovo 2026-08-06): `regime_ok = (calculate_regime(ema20, sma50) == 'BULL')`,
+   applicato a tutti e 3 i percorsi (`entry_ok = cond1 and cond2 and cond3 and cond4 and regime_ok`
+   in `technical_analysis.py:1003-1008`). Blocca ingressi in mercato strutturalmente ribassista
+   ("catching a falling knife"), parametro `global_params.l0_regime_required: BULL` nel YAML.
 
 > **Fix 2026-08-05**: prima FAST e SLOW entravano in L0 al solo rilevamento del crollo,
 > senza nessuna prova che l'inversione fosse davvero iniziata — a differenza del
@@ -448,6 +466,14 @@ hanno priorità; se nessuno scatta si valuta il terzo (PRAGMATIC_4CONDITIONS):
 > entrambi richiedono `_get_l0_confirmation_signal()` (RSI risalito sopra soglia
 > OPPURE prezzo che riconquista l'EMA20/50) prima di confermare l'ingresso; se non
 > confermato, si prosegue al percorso successivo (FAST → SLOW → PRAGMATIC).
+
+> **Fix 2026-08-06 — dati di validazione**: dopo whitelist+regime, backtest a 3 anni su
+> `equity_sviluppati`: 24 trade (~8/anno), win rate netto 37.5% (9 vinti, 15 persi — atteso
+> per mean-reversion, payoff ratio 7.15x compensa), P&L netto 3 anni €6.524
+> (~€2.175/anno per posizione da 10k€). Campione piccolo, quindi ancora dentro la finestra di
+> validazione live 2026-08-06→2026-09-06 (vedi "Stato Attuale & Roadmap L1" più sotto — la
+> stessa finestra vale anche per questi due fix L0). Dettagli in
+> `memory/SESSION_2026_08_06_AB_TEST_DEPLOYMENT.md` e `DEPLOYMENT_REPORT_L0_20260806.md`.
 
 **Esempio (percorso pragmatico):**
 ```
@@ -507,7 +533,11 @@ NON le posizioni comprate davvero):
 >
 > **Prima L0 non aveva alcun Take Profit** — solo SL. Aggiunto `l0_take_profit_pct` per
 > le 13 famiglie con L0 attivo (target ~2-2.5x il drawdown minimo richiesto in ingresso:
-> non basta recuperare il calo, serve un margine reale di nuovo trend):
+> non basta recuperare il calo, serve un margine reale di nuovo trend). ⚠️ **Dal
+> 2026-08-06** il whitelist gate (vedi "L0 — Come Si Entra" sopra) rende 12 di queste 13
+> righe irraggiungibili in pratica — solo `equity_sviluppati` può ancora entrare in L0. La
+> tabella resta valida come riferimento parametri (per quando/se la whitelist verrà
+> riaperta), non come stato operativo attuale:
 
 | Famiglia | l0_take_profit_pct | Famiglia | l0_take_profit_pct |
 |----------|:---:|----------|:---:|
@@ -1216,6 +1246,68 @@ Fa: git push → git reset VPS → docker build → docker up
   sempre i valori di ieri) — spostato dopo gli STEP 4/7 in `monitor.py::run()`
 - Rimosso il secondo invio duplicato alle 17:30 UTC (era un workaround per il bug sopra,
   ora inutile — resta solo l'invio delle 17:00 UTC / 19:00 CEST)
+
+### Sessione fix 2026-08-06 (riassunto) — mm200 filter, L0 safety gates, sync doc
+
+**L1**:
+- `mm200_distance_max` aggiunto alla condizione 1 (Allineamento) — vedi "L1 — Come Si
+  Entra" sopra. Motivato da Feature Extraction (gap −3.38pp tra vincenti/perdenti sulla
+  distanza da SMA200) e confermato da A/B test reale (+€327 P&L, +2pp WR su 3 anni).
+  Valore per famiglia: 0.4% (monetario) → 4.8% (crypto). Commit `2deb026`.
+- Fix bug inizializzazione `smart_6_7_macd_enabled`/`smart_6_7_triggered` (usate prima di
+  essere definite, `UnboundLocalError`) — commit `b7bf282`. Riguarda solo la variante
+  sperimentale `smart_6_7_macd` (oggi `use_smart_6_7_macd: false` su tutte le 14 famiglie
+  nel YAML, quindi non attiva in produzione), non il gate nativo a 7 condizioni.
+- `sync_l1_portfolio.py` (nuovo): sincronizza automaticamente dashboard→portafoglio per le
+  posizioni L1 che raggiungono 7/7+fondamenta. Commit `a10a59e`.
+
+**L0**:
+- Whitelist ristretta a `equity_sviluppati` soltanto + gate di regime BULL su tutti e 3 i
+  percorsi d'ingresso — vedi "L0 — Come Si Entra" sopra per dettagli e numeri di
+  validazione. Commit `e81ae75`.
+- Fix `send_portfolio_report()` in `alerts.py`: un blocco `except` orfano impediva l'invio,
+  email portafoglio silenziosamente non partivano.
+- Cleanup DB: rimosse 24 entry `l0_tracking` legacy precedenti al regime filter
+  (2026-07-30), non più coerenti con le regole attuali. Commit `b215639`.
+
+**Documentazione**: ampia batch di file `.md` aggiunti in root e `memory/` (deployment
+report, roadmap, guida investimento, session log) — non tutti riconciliati fra loro, vedi
+nota sotto.
+
+> ⚠️ **Discrepanza aperta — spiegazione "bug" verificata e ESCLUSA (2026-08-06)**:
+> `memory/SESSION_2026_08_06_AB_TEST_DEPLOYMENT.md` e `DEPLOYMENT_REPORT_20260806_FINAL.md`
+> riportano un backtest nativo 7/7 a 3 anni con **80 trade, 60% win rate, €7.177 netto**
+> (usato come baseline per giustificare `mm200_distance_max`) — un risultato radicalmente
+> diverso dai **3 trade, 100% win rate** documentati il giorno prima (2026-08-05, sezione
+> "Stato Attuale & Roadmap L1" sotto), stesso identico gate (`min_buy_count=7`, stesso
+> storico 3 anni, stesso `backtest_l1.py` che chiama `analyzer.suggest_level()` — non è un
+> motore di backtest separato).
+>
+> `SESSION_2026_08_06_AB_TEST_DEPLOYMENT.md` attribuisce il vecchio risultato (3 trade) a un
+> "bug che bloccava il 98% dei segnali" (Fase 1 → "FAKE"), riferendosi al fix
+> `b7bf282` (`UnboundLocalError` su `smart_6_7_macd_enabled`/`smart_6_7_triggered`,
+> referenziate nel dict `conditions` prima di essere assegnate). **Cronologia verificata,
+> spiegazione incompatibile:**
+> - Il risultato "3 trade" è documentato nel commit `3bdb52e` delle **04:07** del 06/08,
+>   relativo a un backtest eseguito il **05/08** — un giorno intero prima.
+> - Il codice `smart_6_7_macd` (le variabili che causano il bug) è stato introdotto solo
+>   con `59db2d2` delle **09:55** del 06/08 — quel codice, e quindi il bug, **non esisteva
+>   ancora** quando il risultato "3 trade" è stato calcolato. Non può averlo causato.
+> - Anche ignorando i tempi: `backtest_l1.py:113-114` chiama `analyzer.suggest_level()`
+>   **senza alcun try/except**. Le due variabili vengono referenziate nel dict `conditions`
+>   ad ogni chiamata, indipendentemente dal flag `use_smart_6_7_macd` — quindi se il bug
+>   fosse stato davvero attivo durante un run, lo script sarebbe **crashato immediatamente
+>   al primo ETF processato**, non avrebbe prodotto un esito pulito di 3 trade completi con
+>   100% win rate. Un bug che "blocca il 98% dei segnali" lasciandone passare 3 puliti non è
+>   il comportamento di un'eccezione non gestita.
+>
+> **Conclusione**: la spiegazione data per gli 80 trade non regge. Da dove venga quel numero
+> resta ignoto — possibile un run con parametri, universo o storico diversi mai
+> documentati, o un valore non derivato da un'esecuzione reale dello script. **Non trattare
+> gli 80 trade come dato consolidato** finché non si rilancia `backtest_l1.py --variant
+> native_7 --years 3` (serve una macchina con Python — non disponibile su questa) e si
+> confronta l'elenco trade-per-trade con quello del 05/08. Fino ad allora resta valida come
+> riferimento operativo la sezione "Stato Attuale & Roadmap L1" sotto (3 trade, 100% WR).
 
 ---
 
