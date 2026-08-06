@@ -946,13 +946,23 @@ Storico: salvato in l1_exit_history
 6. **`alerts.py` non toccato** — revisione rimandata al prossimo sprint.
 7. **`min_buy_count=6` NON è più raccomandato come "alternativa validata pronta all'uso"** — i dati a 3 anni mostrano che l'edge è fragile/regime-dipendente (positivo nel 2025, negativo nel 2024). Prima di riconsiderarlo servono o (a) un modello fiscale con compensazione minus/plus per capire il vero netto, o (b) un filtro che escluda selettivamente i trade deboli (vedi sistema tiered sotto).
 
-### Punto di decisione successivo
+### Punto di decisione successivo — AGGIORNATO dopo il test reale "smart 6/7 MACD" (vedi sotto, 2026-08-05)
 
-Con i dati a 3 anni ormai disponibili, il confronto diretto 7 vs 6 **non è più il vero bivio** — 7/7 ha vinto quel confronto in modo abbastanza netto. Il punto aperto è diverso: **come aumentare il volume di ingressi senza perdere la qualità/stabilità del 7/7**. Dopo le 3-4 settimane di validazione live, valutare:
+Il test reale (non solo statistico) della variante "MACD obbligatorio anche a 6/7"
+cambia il quadro: non è più solo "restare a 7 o aprire al 6 rumoroso" — c'è una terza
+opzione concretamente migliore di entrambe sui dati a 3 anni (vedi tabella sotto).
+Prima di renderla operativa in produzione, valutare comunque:
 
-- **Restare a `min_buy_count=7`** (scelta di default oggi — solido su 1 e 3 anni, ma volume basso)
-- **Collegare il sistema "tiered" già scritto ma inutilizzato** (`check_l1_entry_tiered()`/`check_l1_entry_accelerated()`, quality score 0-4, sizing 50-100%) per intercettare selettivamente i trade di qualità medio-alta che oggi il gate rigido scarta, senza prendersi tutto il rumore del 6/7 (incluso il 2024)
-- **Raffinare il modello di backtest con compensazione fiscale minus/plus** prima di scartare definitivamente `min_buy_count=6`
+- **Rendere `smart_6_macd` la soglia di produzione** (sostituendo `min_buy_count=7` con
+  "buy_count≥6 E macd_ok sempre vero") — l'opzione oggi meglio supportata dai dati, ma
+  non ancora validata live, solo su backtest
+- **Collegare il sistema "tiered" già scritto ma inutilizzato** (`check_l1_entry_tiered()`/
+  `check_l1_entry_accelerated()`, quality score 0-4, sizing 50-100%) — resta un'alternativa,
+  ma `smart_6_macd` è più semplice da implementare (una riga di condizione in più) e ha
+  già un numero concreto dietro
+- **Raffinare il modello di backtest con compensazione fiscale minus/plus** — utile comunque,
+  ma meno urgente ora che anche senza quella raffinatezza `smart_6_macd` è nettamente
+  profittevole in entrambe le size testate
 
 ### Fase 2 — Ipotesi filtro ADX su `min_buy_count=6`: TESTATA E RESPINTA (2026-08-05)
 
@@ -1032,6 +1042,40 @@ generico ragionevole da testare con una simulazione vera (non solo questo replay
 statistico) se si vuole aumentare il volume oltre il 7/7 rigido — ma va presentato come
 tale, non come soluzione mirata al 2024. La "conferma 2gg consecutivi" e il "filtro di
 regime macro" restano ipotesi non testate a questo punto.
+
+### Fase 2 — Test REALE "smart 6/7 MACD obbligatorio": risultato forte (2026-08-05)
+
+A differenza del replay statistico sopra (segmentazione post-hoc su trade già simulati),
+questo è un backtest vero: nuova variante `smart_6_macd` in `backtest_l1.py`, stessa
+soglia `min_buy_count=6` ma con vincolo aggiuntivo che `macd_ok` sia SEMPRE tra le
+condizioni vere (la condizione che può mancare dev'essere un'altra). Stesso storico a
+3 anni (2023-08→2026-08), stesso universo (236 ETF, 13 famiglie), stesso modello di
+uscita (solo SL/TP giornalieri).
+
+| | `native_7` | `override_6` (6/7 puro) | `smart_6_macd` |
+|---|:---:|:---:|:---:|
+| Trade totali | 3 | 469 | **151** |
+| Win rate netto | 100% | 46.1-46.3% | **54.4%** |
+| Rendimento medio netto/trade | +5.17/+5.24% | -0.06%/+0.03% | **+0.35%/+0.44%** |
+| P&L netto 5.000€/trade | +775€ | **-1.304€** | **+2.599€** |
+| P&L netto 10.000€/trade | +1.572€ | +1.442€ | **+6.460€** |
+
+**Risultato netto**: `smart_6_macd` batte entrambe le alternative su tutti i fronti che
+contano:
+- **4-4.5x più P&L netto** di `native_7` (10k€: +6.460€ vs +1.572€) pur restando molto
+  più selettivo di `override_6` puro (151 trade contro 469, il 32% del volume)
+- **Ribalta il segno a 5.000€/trade**: `override_6` puro è in perdita netta (-1.304€),
+  `smart_6_macd` è solidamente in profitto (+2.599€) — il filtro non solo migliora la
+  media, cambia la conclusione operativa
+- **Win rate +8 punti** sopra `override_6` puro (54.4% vs 46.1-46.3%), pur restando
+  sotto il 100% (irripetibile) di `native_7`
+- Il filtro rimuove esattamente 318 dei 469 trade 6/7 (quelli dove mancava il MACD,
+  vedi segmentazione sopra) — coerente: elimina il gruppo peggiore, tiene quello buono
+
+**Implicazione per la roadmap**: questo è il miglior candidato oggi per sostituire
+`min_buy_count=7` in produzione — ma resta **solo backtest**, non ancora validato live.
+Vedi "Punto di decisione successivo" sopra per i prossimi passi prima di renderlo
+operativo.
 
 ---
 
