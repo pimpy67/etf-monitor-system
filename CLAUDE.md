@@ -331,11 +331,11 @@ Ogni ETF è assegnato a un "livello" che dice cosa fare:
 | **L1** | Core Portfolio | COMPRA, è il momento | Compra ora, tieni la posizione |
 | **L0** | Deep Recovery | Il prezzo è crollato | Compra il crollo, aspetta recupero |
 
-### L1 — Come Si Entra (7 Condizioni TUTTE Obbligatorie)
+### L1 — Come Si Entra (7 Condizioni TUTTE Obbligatorie — Oppure Smart 6/7 MACD)
 
 **SPECIFICA CORRETTA** (dal Prompt di implementazione STEP 3 v4.0):
 
-L1 richiede **TUTTE e 7** le seguenti condizioni:
+L1 richiede **TUTTE e 7** le seguenti condizioni (oppure **6/7 con MACD obbligatorio** se `use_smart_6_7_macd: true`):
 
 | # | Condizione | Significato | Parametro |
 |---|-----------|-------------|-----------|
@@ -347,9 +347,34 @@ L1 richiede **TUTTE e 7** le seguenti condizioni:
 | **6** | **MACD Momentum** | histogram > 0 AND (rising OR dist_ema20 < 2%) | `macd_ok` |
 | **7** | **Spazio Residuo** | Resistenza > min_reward_pct OR ATR×mult > min_reward_pct | `space_residuo_ok` |
 
-**Regola**: Se **qualsiasi UNA è FALSE** → **INGRESSO BLOCCATO** (L2)
+**Regola standard (7/7)**: Se **qualsiasi UNA è FALSE** → **INGRESSO BLOCCATO** (L2)
 
-**Fondamenta Irrinunciabili** (no eccezioni, verificate *dopo* il 7/7):
+**Regola smart 6/7 MACD** (se abilitata per famiglia):
+- Se **buy_count = 6 E macd_ok = TRUE** → Accetta come ingresso L1
+- Se **buy_count = 6 E macd_ok = FALSE** → Blocca (MACD è gating condition)
+- Se **buy_count ≥ 7** → Ingresso L1 come sempre
+
+**Parametro di controllo**: `use_smart_6_7_macd` nel YAML (default: false per backward compatibility)
+```yaml
+equity_sviluppati:
+  use_smart_6_7_macd: false  # Metti true per usare la variante sperimentale
+```
+
+**Backtest Risultati (2023-2026, 3 anni)**:
+| Variante | Trade | Win Rate | P&L (€10k) | Note |
+|----------|:---:|:---:|:---:|---------|
+| 7/7 nativo | 3 | 100% | +€1,572 | Troppo selectivo, raro |
+| 6/7 puro | 469 | 46% | +€1,442 | Troppi falsi, costi enormi |
+| **smart 6/7 MACD** | **151** | **54.4%** | **+€6,460** | ✅ OTTIMALE: 4.1x 7/7, 4.6x 6/7 |
+
+**Perché smart 6/7 MACD vince**:
+1. **Operatività sostenibile**: ~50 trade/anno (~4/mese), non saturo
+2. **Qualità del segnale**: elimina 318 falsi segnali del 6/7 puro mantenendo solo i 151 migliori
+3. **Asimmetria payoff**: guadagno medio +4.68%, perdita media −4.10% → aspettativa positiva
+4. **Durata uniforme**: 33 giorni sia vincenti che perdenti → tempo fisiologico per trend
+5. **Efficienza su pezzature piccole**: +€2,599 netti anche a €5k/trade (6/7 puro andava in loss)
+
+**Fondamenta Irrinunciabili** (no eccezioni, verificate *dopo* il 6/7 o 7/7):
 - ✅ Regime BULL: `(EMA20 − SMA50) / SMA50 > lateral_band` (soglia per famiglia, calculate_regime()). Dal fix del 2026-08-04 è verificato **una sola volta qui** — prima era anche incorporato dentro la condizione 1 (Allineamento), rendendo la condizione 1 un doppio controllo mascherato; oggi la condizione 1 è puramente geometrica (price>EMA20>SMA50 [+SMA200]).
 - ✅ Prezzo > SMA50 (allineamento assoluto)
 - ✅ No kill switch (calo giornaliero > -3%)
