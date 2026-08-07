@@ -892,6 +892,13 @@ class ETFTechnicalAnalyzer:
         l0_whitelist = global_params.get('l0_whitelist', [])
         l0_blacklist = global_params.get('l0_blacklist', [])
 
+        # REGIME CHECK — L0 only allowed in BULL market (new 2026-08-06)
+        # Calcolato qui, PRIMA dei percorsi FAST/SLOW (che lo usano più sotto) — spostato
+        # dal fondo della funzione dove causava UnboundLocalError sui percorsi FAST/SLOW,
+        # eseguiti prima che regime_ok venisse assegnato (fix 2026-08-07).
+        l0_regime_required = global_params.get('l0_regime_required', 'BULL')
+        regime_ok = (regime_str == l0_regime_required)
+
         familia_name = self.famiglia
         if l0_whitelist and familia_name not in l0_whitelist:
             l0_enabled = False
@@ -1000,9 +1007,6 @@ class ETFTechnicalAnalyzer:
         result['micro_breakout'] = micro_brk
         result['recovery_pct'] = recovery_pct if 'recovery_pct' in locals() else 0.0
 
-        # REGIME CHECK — L0 only allowed in BULL market (new 2026-08-06)
-        l0_regime_required = global_params.get('l0_regime_required', 'BULL')
-        regime_ok = (regime_str == l0_regime_required)
         result['regime_ok_for_l0'] = regime_ok
 
         entry_ok = cond1 and cond2 and cond3 and cond4 and regime_ok
