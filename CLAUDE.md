@@ -1359,6 +1359,69 @@ nota sotto.
 > già a 0 trade in ogni versione precedente), ma non riverificato. Un rerun con l'universo
 > pienamente aggiornato non è ancora stato fatto.
 
+### Grid Search `smart_6_macd` — pilota 2026-08-07 (`optimize_hyperparameters.py`)
+
+**Obiettivo**: trovare parametri ottimali per L1 su `smart_6_macd` (non `native_7`, troppo
+raro — vedi baseline sopra) via sensitivity analysis, con split In-Sample/Out-of-Sample per
+evitare overfitting temporale, su 3 cluster raggruppati per `sl_initial_pct` reale (non nomi
+di famiglia arbitrari — vedi tabella sotto) per portare N a livelli statisticamente utili.
+
+**Infrastruttura costruita** (tutta committata, `202db3f`/`509b4d3`):
+- `technical_analysis.py::suggest_level()` — nuovo parametro opzionale `precomputed` per
+  ricevere EMA/SMA/RSI/ADX/MACD/ATR già calcolati invece di ricalcolarli da zero a ogni
+  giorno del walk-forward (era il costo O(n²) per ticker dominante). Stesso comportamento
+  identico quando `precomputed=None` (default), zero rischio per i chiamanti esistenti.
+- `backtest_l1.py::simulate()` — `precomputed_full` (taglia le serie precalcolate giorno per
+  giorno) + `macd_skip_mask` (skip certo, non euristico: quando `require_macd=True`, `macd_ok`
+  è obbligatorio, quindi nei giorni in cui è già falso l'ingresso è impossibile a prescindere
+  dalle altre 6 condizioni — salta la chiamata a `suggest_level()` invece di scartarne il
+  risultato dopo). `redirect_stdout` aperto una volta sola fuori dal loop invece che a ogni
+  giorno.
+- **Validazione incrociata obbligatoria PRIMA di fidarsi dei numeri** (`--validate`): (1) motore
+  veloce vs originale, 480 check, 0 discrepanze; (2) `simulate()` con vs senza `macd_skip_mask`,
+  liste di trade identiche. Entrambe PASS.
+- **Multiprocessing scartato**: la VPS ha **1 solo vCPU** (verificato con `nproc`), quindi
+  parallelizzare per core non dà alcun guadagno qui — anzi rischierebbe di far competere per
+  RAM (3.8GB totali, spesso <200MB liberi con Postgres+Flask già attivi) con la produzione
+  live sulla stessa macchina. L'unica leva reale su singolo core è ridurre il lavoro totale
+  (skip-mask), non distribuirlo.
+
+**Cluster per volatilità reale** (criterio: `sl_initial_pct` dallo YAML, non nomi):
+
+| Cluster | Famiglie | sl_initial_pct | N ticker |
+|---|---|---|---|
+| difensivo | bond_governativi, bond_corp_hy_em, settoriali_difensivi, real_estate_reit, private_equity_buffer | 2.5–4.0% | 58 |
+| core | equity_sviluppati, oro_metalli_preziosi, mercati_emergenti, settoriali_growth, metalli_industriali | 5.0–6.0% | 153 |
+| speculativo | commodities, leva_single_stock, crypto_digital_assets | 7.0–12.0% | 16 |
+
+**Griglia pilota**: `mm200_delta` ∈ {-1.0, 0.0, +1.0} × `adx_delta` ∈ {-4, 0, +4} = 9 combinazioni
+per cluster (27 totali), applicate come **delta sulla baseline di ciascuna famiglia**, non
+come valore assoluto condiviso. Split: In-Sample 2023-08-05→2025-08-05, Out-of-Sample
+2025-08-05→2026-08-05. **Tempo reale: 90.5 minuti** (core ~400s/combo, difensivo ~155s/combo,
+speculativo ~45s/combo — proporzionale al numero di ticker, non c'è overhead nascosto).
+
+**Risultato — nessuna combinazione ha raggiunto N≥30 in-sample, in nessun cluster:**
+
+| Cluster | N in-sample (range sulle 9 combo) | Note |
+|---|---|---|
+| core | 6–22 | Unico cluster con segnale, ma sotto soglia |
+| speculativo | **0 su tutte e 9 le combinazioni** | Nessun trade `smart_6_macd`, mai |
+| difensivo | 2–3 | **Win rate in-sample 0% su ogni singola combinazione** — ogni trade perdente |
+
+⚠️ **Discrepanza aperta, NON risolta**: sommando tutti i cluster alla combinazione base
+(mm200_delta=0, adx_delta=0) si ottengono **~26 trade totali su un arco di 3 anni**
+(11+11 core, 0+0 speculativo, 3+1 difensivo), contro i **151 trade** che lo stesso
+`smart_6_macd` aveva prodotto il 05/08 sull'intero universo nello stesso arco temporale.
+Un divario troppo grande per essere spiegato solo dal rumore dati (adjusted-close Yahoo)
+già documentato altrove in questo file — quel meccanismo spiega scarti tipo 3→1, non 151→26.
+Le due validazioni incrociate fatte (motore veloce, skip-mask MACD) confermano la correttezza
+**giorno per giorno** delle decisioni, ma non escludono un problema più a monte: copertura
+temporale del train/test split, costruzione dell'universo per cluster, o altro non ancora
+identificato. **Non trattare i risultati del pilota come conclusivi finché questo gap non è
+spiegato.** Prossimo passo naturale: rilanciare `backtest_l1.py --compare-min-buy 6` (il
+percorso originale che aveva prodotto 151) sullo stesso Golden Dataset e stesso periodo, e
+confrontare trade-per-trade con l'output del pilota per isolare dove si perdono i trade.
+
 ### Sessione fix 2026-08-07 (riassunto) — bug regime_ok, 10 ticker delistati, chiusura discrepanza 80 vs 3
 
 - **Fix `UnboundLocalError: regime_ok`** in `suggest_level_0()`: la variabile veniva letta ai
@@ -1393,6 +1456,11 @@ nota sotto.
   ISIN `LU1954152853` di `UST.PA`, già tracciato), `3LIS.MI`/`3LUC.MI`/`3MBS.MI`
   (GraniteShares 3x Intesa/UniCredit/-3x FTSE MIB — nessun listing vivo trovato su Yahoo
   sotto nessun suffisso borsa comune). Universo sceso da 240 a 236 righe in Excel.
+- **Grid search `smart_6_macd` (`optimize_hyperparameters.py`)**: infrastruttura completa
+  (motore vettorizzato validato a 0 discrepanze, cluster per `sl_initial_pct`, split
+  in/out-of-sample) — vedi sezione dedicata sopra. Pilota di 27 combinazioni eseguito
+  (90.5 min): nessuna combinazione raggiunge N≥30, e c'è una discrepanza aperta (~26 vs 151
+  trade totali) non ancora spiegata. Risultati del pilota non conclusivi, da riprendere.
 - **Nota**: `/root/etf_monitor_system/etf_monitoraggio.xlsx` è un **bind mount** diretto in
   `/app/etf_monitoraggio.xlsx` (non `COPY` in build) — modifiche al file sull'host sono
   visibili nel container **senza restart**. Utile per fix rapidi ai dati (ticker, borsa,
