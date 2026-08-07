@@ -880,6 +880,8 @@ family_detection:
 - pattern:
   - monetario
   - liquidita
+  - liquidit  # 2026-08-07: 'liquidita' (senza accento) non matchava 'Liquidità' (con
+              # accento) come substring — 'liquidit' e' sicuro in entrambi i casi.
   - money market
   family: monetario_liquidita
 - pattern:
@@ -900,11 +902,13 @@ family_detection:
   family: settoriali_difensivi
 - pattern:
   - obbligazionari - governativi
+  - obbligazionari governo  # 2026-08-07: categoria reale senza trattino, non matchava
   - obbligazionari - globali
   - obbligazionari - inflation
   family: bond_governativi
 - pattern:
   - obbligazionari - corporate
+  - obbligazionari corporate  # 2026-08-07: categoria reale senza trattino, non matchava
   - obbligazionari - high yield
   - obbligazionari - emergenti
   - obbligazionari - aggregati
@@ -932,6 +936,14 @@ family_detection:
   - leva singolo
   - volatilita
   - strutturati
+  - azionari alternativi  # 2026-08-07: LVO.MI (Amundi VIX Futures Enhanced Roll) cadeva
+                          # nel default equity_sviluppati — un ETF sui futures VIX decade
+                          # strutturalmente (contango) e non risponde a mean-reversion/
+                          # trend-following azionario classico. leva_single_stock e' gia'
+                          # in blacklist L0 (equity_sviluppati e' l'unica whitelisted),
+                          # quindi questa riclassificazione lo esclude automaticamente da
+                          # L0 e gli applica soglie L1 calibrate per alta volatilita'
+                          # invece di quelle (troppo strette) dell'azionario normale.
   family: leva_single_stock
 - pattern:
   - private equity
