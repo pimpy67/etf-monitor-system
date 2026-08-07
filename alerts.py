@@ -381,25 +381,25 @@ class AlertSystem:
         - SL Suggerito (formula ibrida calcolata da STEP 4)
         - SG Suggerito (target dinamico calcolato da STEP 4)
 
-        **IMPORTANTE**: Mostra solo gli ETF che sono sia nel portafoglio personale
-        CHE nei veri livelli L1/L0 del monitor (etf_l1_tracking, etf_l0_tracking).
+        Mostra TUTTE le posizioni attive del portafoglio personale, indipendentemente dalla
+        classificazione L1/L2/L3 corrente sul dashboard (fix 2026-08-07: prima filtrava per
+        appartenenza a etf_l1_tracking/etf_l0_tracking — le tabelle di classificazione del
+        dashboard, da cui un ISIN esce quando il *dashboard* lo declassa L1→L2/L3, es. per
+        regola B/C/E o downgrade regime, eventi che NON sono vendite reali, vedi CLAUDE.md
+        "L1 — Come Si Esce"). Una posizione reale resta valida ed esce SOLO al tocco di
+        SL/TP: filtrarla via dalla mail perché il dashboard l'ha riclassificata la faceva
+        sparire dal resoconto anche se ancora attivamente detenuta — bug verificato in
+        produzione il 2026-08-07 (tutte e 4 le posizioni attive escluse).
         """
         try:
             from database import db
 
-            # Leggi posizioni dal database + verifica livello vero dal monitor
+            # Leggi il portafoglio personale — nessun filtro sulla classificazione dashboard,
+            # solo lo status reale della posizione.
             conn = db._get_connection()
             if not conn:
                 return True  # No DB connection available
             cur = conn.cursor()
-
-            # Ottieni i veri L1 e L0 dal monitor
-            cur.execute("SELECT DISTINCT isin FROM etf_l1_tracking")
-            real_l1_isins = {row[0] for row in cur.fetchall()}
-            cur.execute("SELECT DISTINCT isin FROM etf_l0_tracking")
-            real_l0_isins = {row[0] for row in cur.fetchall()}
-
-            # Leggi il portafoglio personale
             cur.execute("""
                 SELECT pe.id, pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
                        pe.portafoglio, pe.sl_suggerito, pe.sg_suggerito
@@ -413,9 +413,8 @@ class AlertSystem:
             if not positions:
                 return True  # No positions, no email needed
 
-            # Filtra: mostra solo ETF che sono SIA nel portafoglio CHE nei veri livelli
-            l1_positions = [p for p in positions if p[1] in real_l1_isins]  # isin at index 1
-            l0_positions = [p for p in positions if p[1] in real_l0_isins]  # isin at index 1
+            l1_positions = [p for p in positions if p[5] == 'L1']  # portafoglio at index 5
+            l0_positions = [p for p in positions if p[5] == 'L0']  # portafoglio at index 5
 
             # ── SEZIONE L1 ──────────────────────────────────────────────────
             l1_rows = []
