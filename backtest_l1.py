@@ -110,7 +110,7 @@ def make_analyzer(famiglia, min_buy_override=None):
 
 
 def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, require_macd=False,
-             precomputed_full=None):
+             precomputed_full=None, macd_skip_mask=None):
     """Ingresso via suggest_level() (7/7 o 6/7). Uscita: SOLO SL o TP, ricalcolati e
     controllati una volta al giorno sul Close (come il monitor reale). Nessuna regola B/C/E/F.
 
@@ -127,7 +127,15 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, 
     da zero a suggest_level() a ogni giorno (era il costo O(n^2) dominante per ticker — vedi
     CLAUDE.md). Nessuna logica duplicata: e' lo stesso suggest_level(), solo alimentato con
     indicatori pre-tagliati invece che ricalcolati — i valori risultanti sono identici
-    (indicatori causali, stesso valore sia a finestra crescente sia a serie intera tagliata)."""
+    (indicatori causali, stesso valore sia a finestra crescente sia a serie intera tagliata).
+
+    macd_skip_mask (2026-08-07, per optimize_hyperparameters.py): Series booleana allineata
+    a hist_index, True dove macd_ok e' vero quel giorno. Usata SOLO se require_macd=True: in
+    quel caso macd_ok e' una condizione obbligatoria (vedi sopra), quindi nei giorni in cui e'
+    falsa l'ingresso e' impossibile a prescindere dalle altre 6 — si salta la chiamata a
+    suggest_level() invece di scartarne il risultato dopo (stesso esito, meno lavoro). E' uno
+    skip certo (non un'euristica): se require_macd=False il parametro viene ignorato, perche'
+    in quel caso macd_ok puo' essere la condizione mancante e saltare sarebbe scorretto."""
     holding = False
     entry_price = None
     entry_date = None
@@ -137,87 +145,91 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, 
     trades = []
 
     quiet = io.StringIO()
-    for d in test_dates:
-        pos = hist_index.get_loc(d)
-        close_slice = close_full.iloc[:pos + 1]
-        high_slice = high_full.iloc[:pos + 1] if high_full is not None else None
-        low_slice = low_full.iloc[:pos + 1] if low_full is not None else None
-        close_today = float(close_slice.iloc[-1])
+    with redirect_stdout(quiet):  # silenzia i print [L1-CHECK] della libreria — una volta sola,
+                                   # non a ogni giorno del loop
+        for d in test_dates:
+            pos = hist_index.get_loc(d)
+            close_slice = close_full.iloc[:pos + 1]
+            high_slice = high_full.iloc[:pos + 1] if high_full is not None else None
+            low_slice = low_full.iloc[:pos + 1] if low_full is not None else None
+            close_today = float(close_slice.iloc[-1])
 
-        if not holding:
-            precomputed_today = None
-            if precomputed_full is not None:
-                precomputed_today = {
-                    k: v.iloc[:pos + 1] for k, v in precomputed_full.items() if k != 'macd_histogram'
-                }
-                precomputed_today['macd'] = {'histogram': precomputed_full['macd_histogram'].iloc[:pos + 1]}
-            with redirect_stdout(quiet):  # silenzia i print [L1-CHECK] della libreria
+            if not holding:
+                if require_macd and macd_skip_mask is not None and not bool(macd_skip_mask.iloc[pos]):
+                    continue  # macd_ok obbligatorio e falso oggi: ingresso impossibile, skip certo
+                precomputed_today = None
+                if precomputed_full is not None:
+                    precomputed_today = {
+                        k: v.iloc[:pos + 1] for k, v in precomputed_full.items() if k != 'macd_histogram'
+                    }
+                    precomputed_today['macd'] = {'histogram': precomputed_full['macd_histogram'].iloc[:pos + 1]}
                 result = analyzer.suggest_level(close_slice, current_level=3,
                                                  high=high_slice, low=low_slice,
                                                  precomputed=precomputed_today)
-            if result.get('suggested_level') == 1:
-                c = result.get('conditions', {})
-                if require_macd and not c.get('macd_ok', False):
-                    continue  # smart 6/7: la condizione mancante non puo' essere il MACD
-                holding = True
-                entry_price = close_today
-                entry_date = d.date().isoformat()
-                entry_buy_count = result.get('buy_count')
-                entry_missing = [k for k in CONDITION_KEYS if not c.get(k, True)]
-                # Feature extraction (2026-08-05): valori numerici assoluti all'ingresso,
-                # gia' calcolati da suggest_level() e presenti in 'conditions' — nessuna
-                # modifica al motore reale, solo cattura di dati gia' esistenti per poter
-                # confrontare dopo le "impronte digitali" di trade vincenti vs perdenti.
-                sma200_v = c.get('sma200_current')
-                entry_features = {
-                    'adx':            c.get('adx'),
-                    'rsi':            c.get('rsi'),
-                    'ema20_slope':    c.get('ema20_slope'),
-                    'dist_ema20':     c.get('dist_ema20'),
-                    'dist_sma200':    round(100 * (close_today - sma200_v) / sma200_v, 2)
-                                      if sma200_v else None,
-                    'atr_normalized': c.get('atr_normalized'),
-                }
-        else:
-            # Stesse funzioni e stessa logica di monitor.py::_update_portfolio_l1_suggerito()
-            # dopo il fix 2026-08-05: SL = calculate_sl_suggerito_l1, TP = calculate_stop_gain_dynamic
-            # (unica funzione TP usata in produzione — calculate_sg_suggerito_l1 non e' piu'
-            # collegata a nessuna decisione reale). Check una volta al giorno sul Close, come
-            # fa il monitor (non intraday su High/Low: il sistema valuta una volta al giorno).
-            ema20_series = analyzer._ema(close_slice, 20).tail(10)
-            ema20_today = float(ema20_series.iloc[-1])
+                if result.get('suggested_level') == 1:
+                    c = result.get('conditions', {})
+                    if require_macd and not c.get('macd_ok', False):
+                        continue  # smart 6/7: la condizione mancante non puo' essere il MACD
+                    holding = True
+                    entry_price = close_today
+                    entry_date = d.date().isoformat()
+                    entry_buy_count = result.get('buy_count')
+                    entry_missing = [k for k in CONDITION_KEYS if not c.get(k, True)]
+                    # Feature extraction (2026-08-05): valori numerici assoluti all'ingresso,
+                    # gia' calcolati da suggest_level() e presenti in 'conditions' — nessuna
+                    # modifica al motore reale, solo cattura di dati gia' esistenti per poter
+                    # confrontare dopo le "impronte digitali" di trade vincenti vs perdenti.
+                    sma200_v = c.get('sma200_current')
+                    entry_features = {
+                        'adx':            c.get('adx'),
+                        'rsi':            c.get('rsi'),
+                        'ema20_slope':    c.get('ema20_slope'),
+                        'dist_ema20':     c.get('dist_ema20'),
+                        'dist_sma200':    round(100 * (close_today - sma200_v) / sma200_v, 2)
+                                          if sma200_v else None,
+                        'atr_normalized': c.get('atr_normalized'),
+                    }
+                    continue
+            else:
+                # Stesse funzioni e stessa logica di monitor.py::_update_portfolio_l1_suggerito()
+                # dopo il fix 2026-08-05: SL = calculate_sl_suggerito_l1, TP = calculate_stop_gain_dynamic
+                # (unica funzione TP usata in produzione — calculate_sg_suggerito_l1 non e' piu'
+                # collegata a nessuna decisione reale). Check una volta al giorno sul Close, come
+                # fa il monitor (non intraday su High/Low: il sistema valuta una volta al giorno).
+                ema20_series = analyzer._ema(close_slice, 20).tail(10)
+                ema20_today = float(ema20_series.iloc[-1])
 
-            sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, close_today, ema20_today)
-            sl = sl_data.get('sl_suggerito')
+                sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, close_today, ema20_today)
+                sl = sl_data.get('sl_suggerito')
 
-            sg_data = analyzer.calculate_stop_gain_dynamic(entry_price, close_today, ema20_series, analyzer.p)
-            tp = entry_price * (1 + sg_data.get('target_pct', 0.0))
+                sg_data = analyzer.calculate_stop_gain_dynamic(entry_price, close_today, ema20_series, analyzer.p)
+                tp = entry_price * (1 + sg_data.get('target_pct', 0.0))
 
-            sl_hit = sl is not None and close_today <= sl
-            tp_hit = bool(sg_data.get('trigger'))
+                sl_hit = sl is not None and close_today <= sl
+                tp_hit = bool(sg_data.get('trigger'))
 
-            exit_price = None
-            exit_reason = None
-            if sl_hit:
-                exit_price = close_today
-                exit_reason = 'SL'
-            elif tp_hit:
-                exit_price = close_today
-                exit_reason = 'TP'
+                exit_price = None
+                exit_reason = None
+                if sl_hit:
+                    exit_price = close_today
+                    exit_reason = 'SL'
+                elif tp_hit:
+                    exit_price = close_today
+                    exit_reason = 'TP'
 
-            if exit_reason:
-                gross_pct = round((exit_price / entry_price - 1) * 100, 3)
-                trades.append({
-                    'entry_date': entry_date, 'entry_price': entry_price,
-                    'exit_date': d.date().isoformat(), 'exit_price': exit_price,
-                    'status': 'closed', 'gross_pct_gain': gross_pct,
-                    'exit_reason': exit_reason,
-                    'entry_buy_count': entry_buy_count, 'entry_missing': entry_missing,
-                    'entry_features': entry_features,
-                })
-                holding = False
-                entry_price = None
-                entry_date = None
+                if exit_reason:
+                    gross_pct = round((exit_price / entry_price - 1) * 100, 3)
+                    trades.append({
+                        'entry_date': entry_date, 'entry_price': entry_price,
+                        'exit_date': d.date().isoformat(), 'exit_price': exit_price,
+                        'status': 'closed', 'gross_pct_gain': gross_pct,
+                        'exit_reason': exit_reason,
+                        'entry_buy_count': entry_buy_count, 'entry_missing': entry_missing,
+                        'entry_features': entry_features,
+                    })
+                    holding = False
+                    entry_price = None
+                    entry_date = None
 
     if holding:
         last_price = float(close_full.iloc[-1])

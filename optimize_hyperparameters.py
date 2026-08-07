@@ -66,6 +66,12 @@ def precompute_ticker(analyzer, close_full, high_full, low_full):
     macd_d = analyzer._macd(close_full)
     atr_full = (analyzer._calculate_atr(high_full, low_full, close_full)
                 if high_full is not None and low_full is not None else None)
+    macd_h = macd_d['histogram']
+    macd_hp = macd_h.shift(1)
+    # Stessa formula esatta di suggest_level(): macd_positive AND macd_rising.
+    # Vettorizzata una volta sola sull'intera serie, usata come skip-mask certo in
+    # simulate() quando require_macd=True (vedi backtest_l1.py::simulate).
+    macd_ok = (macd_h > 0) & (macd_h > macd_hp)
     return {
         'ema10': analyzer._ema(close_full, analyzer.ema10_period),
         'ema20': analyzer._ema(close_full, analyzer.ema20_period),
@@ -73,8 +79,9 @@ def precompute_ticker(analyzer, close_full, high_full, low_full):
         'sma200': analyzer._sma(close_full, analyzer.sma200_period),
         'rsi': analyzer._rsi(close_full),
         'adx': _adx_series(analyzer, high_full, low_full, close_full),
-        'macd_histogram': macd_d['histogram'],
+        'macd_histogram': macd_h,
         'atr': atr_full,
+        'macd_ok': macd_ok,
     }
 
 
@@ -156,9 +163,11 @@ def run_combo(cluster_items, param_overrides, start_date, end_date):
                       if start_date <= d.date() < end_date]
         if not test_dates:
             continue
+        precomputed_series = {k: v for k, v in entry['precomputed'].items() if k != 'macd_ok'}
         trades = simulate(analyzer, entry['close_full'], entry['high_full'], entry['low_full'],
                            entry['hist_index'], test_dates, require_macd=True,
-                           precomputed_full=entry['precomputed'])
+                           precomputed_full=precomputed_series,
+                           macd_skip_mask=entry['precomputed']['macd_ok'])
         results.append({'ticker': entry['ticker'], 'famiglia': entry['famiglia'],
                          'variants': {'combo': {'n_trades': len(trades), 'trades': trades}}})
     return results
@@ -260,9 +269,80 @@ def validate_fast_path(n_tickers=8, n_dates=60, seed=42):
     print(f"Check totali: {total_checks}  |  Mismatch: {mismatches}")
     if mismatches == 0 and total_checks > 0:
         print("PASS — motore veloce identico al motore originale su tutti i check.")
-        return True
+        ok1 = True
     else:
         print("FAIL — NON procedere con lo sweep finche' non e' risolto.")
+        ok1 = False
+
+    ok2 = validate_macd_skip()
+    return ok1 and ok2
+
+
+def validate_macd_skip(n_tickers=8, seed=42):
+    """Confronta simulate() CON e SENZA macd_skip_mask sugli stessi ticker/parametri
+    (require_macd=True, come nello sweep). Criterio di blocco: liste di trade identiche
+    (stesse date/prezzi di entrata e uscita) — non solo lo stesso conteggio."""
+    print("\n" + "=" * 78)
+    print(f"VALIDAZIONE SKIP-MASK MACD — {n_tickers} ticker, require_macd=True")
+    print("=" * 78)
+
+    db = PriceDatabase()
+    universe = load_universe()
+    rnd = random.Random(seed)
+    sample = rnd.sample(universe, min(n_tickers, len(universe)))
+
+    mismatches = 0
+    checked = 0
+
+    for item in sample:
+        ticker, famiglia = item['ticker'], item['famiglia']
+        hist = db.get_frozen_ohlcv(ticker, DEFAULT_FROZEN_BATCH)
+        if hist.empty or len(hist) < 220:
+            continue
+
+        has_ohlc = all(c in hist.columns for c in ['Open', 'High', 'Low'])
+        close_full = hist['Close'].astype(float)
+        high_full = hist['High'].astype(float) if has_ohlc else None
+        low_full = hist['Low'].astype(float) if has_ohlc else None
+
+        analyzer_tmp = ETFTechnicalAnalyzer(famiglia=famiglia)
+        precomputed = precompute_ticker(analyzer_tmp, close_full, high_full, low_full)
+        precomputed_series = {k: v for k, v in precomputed.items() if k != 'macd_ok'}
+
+        test_dates = list(hist.index)
+
+        analyzer_a = ETFTechnicalAnalyzer(famiglia=famiglia)
+        analyzer_a.p = dict(analyzer_a.p)
+        analyzer_a.p['min_buy_count'] = 6
+        trades_with_mask = simulate(analyzer_a, close_full, high_full, low_full, hist.index,
+                                     test_dates, require_macd=True,
+                                     precomputed_full=precomputed_series,
+                                     macd_skip_mask=precomputed['macd_ok'])
+
+        analyzer_b = ETFTechnicalAnalyzer(famiglia=famiglia)
+        analyzer_b.p = dict(analyzer_b.p)
+        analyzer_b.p['min_buy_count'] = 6
+        trades_without_mask = simulate(analyzer_b, close_full, high_full, low_full, hist.index,
+                                        test_dates, require_macd=True,
+                                        precomputed_full=precomputed_series,
+                                        macd_skip_mask=None)
+
+        checked += 1
+        key = lambda t: (t['entry_date'], t['exit_date'], t['exit_price'], t['status'])
+        if [key(t) for t in trades_with_mask] != [key(t) for t in trades_without_mask]:
+            mismatches += 1
+            print(f"  [MISMATCH] {ticker}: con-mask {len(trades_with_mask)} trade, "
+                  f"senza-mask {len(trades_without_mask)} trade")
+            print(f"    con-mask:    {[key(t) for t in trades_with_mask]}")
+            print(f"    senza-mask:  {[key(t) for t in trades_without_mask]}")
+
+    print("-" * 78)
+    print(f"Ticker verificati: {checked}  |  Mismatch: {mismatches}")
+    if mismatches == 0 and checked > 0:
+        print("PASS — skip-mask MACD produce esattamente le stesse liste di trade.")
+        return True
+    else:
+        print("FAIL — NON usare macd_skip_mask finche' non e' risolto.")
         return False
 
 
