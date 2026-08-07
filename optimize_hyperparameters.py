@@ -153,6 +153,20 @@ def make_analyzer_for_combo(entry, param_overrides, min_buy_count=6):
     if 'sl_buffer_mult' in param_overrides and 'sl_buffer_wide' in p:
         p['sl_buffer_wide'] = p['sl_buffer_wide'] * param_overrides['sl_buffer_mult']
 
+    # l1_stop_gain_dynamic e' un dict ANNIDATO — copiarlo esplicitamente prima di scriverci,
+    # altrimenti 'p = dict(baseline_p)' (shallow copy) condivide lo stesso oggetto nested tra
+    # TUTTE le combinazioni e TUTTI i ticker di quella famiglia: mutarlo qui corromperebbe
+    # silenziosamente la baseline per ogni combo successiva.
+    if any(k in param_overrides for k in ('target_max_pct', 'target_floor_pct', 'slope_sensitivity_mult')):
+        sg = dict(p.get('l1_stop_gain_dynamic', {}))
+        if 'target_max_pct' in param_overrides:
+            sg['target_max_pct'] = param_overrides['target_max_pct']
+        if 'target_floor_pct' in param_overrides:
+            sg['target_floor_pct'] = param_overrides['target_floor_pct']
+        if 'slope_sensitivity_mult' in param_overrides and 'slope_sensitivity' in sg:
+            sg['slope_sensitivity'] = sg['slope_sensitivity'] * param_overrides['slope_sensitivity_mult']
+        p['l1_stop_gain_dynamic'] = sg
+
     analyzer.p = p
     return analyzer
 
@@ -351,6 +365,82 @@ def validate_macd_skip(n_tickers=8, seed=42):
         return False
 
 
+CORE_ENTRY_ZONE = {'mm200_absolute': 7.0, 'adx_delta': -4}  # Candidate Entry Zone, sweep ampio 2026-08-07
+
+
+def run_phase2_sweep(freeze_batch=DEFAULT_FROZEN_BATCH, out_path=None):
+    """Fase 2 — sweep dei parametri di USCITA (SL/TP), non di ingresso. Fissa la Candidate
+    Entry Zone del cluster core (mm200_distance_max=7.0%, adx baseline-4, vedi CLAUDE.md
+    2026-08-07) e fa variare solo sl_buffer_wide (moltiplicatore) e l1_stop_gain_dynamic
+    (target_max_pct/target_floor_pct assoluti, slope_sensitivity fissa alla baseline per
+    tenere la griglia gestibile — quarta dimensione rimandata a un giro successivo se serve).
+    Solo cluster 'core': e' l'unico con segnale d'ingresso utilizzabile da questa sessione."""
+    by_cluster = load_cluster_data(freeze_batch, cluster_name='core')
+    items = by_cluster.get('core', [])
+
+    sl_mult_grid = [1.0, 1.2, 1.5, 1.8]
+    target_max_grid = [0.10, 0.12, 0.15]
+    target_floor_grid = [0.03, 0.04, 0.05]
+    combos = list(itertools.product(sl_mult_grid, target_max_grid, target_floor_grid))
+
+    print(f"FASE 2 — sweep uscite su 'core' ({len(items)} ticker), Candidate Entry Zone fissa: "
+          f"mm200=7.0%% adxΔ=-4  |  {len(combos)} combinazioni")
+
+    all_rows = []
+    t0 = time.time()
+    for sl_mult, target_max, target_floor in combos:
+        overrides = dict(CORE_ENTRY_ZONE)
+        overrides['sl_buffer_mult'] = sl_mult
+        overrides['target_max_pct'] = target_max
+        overrides['target_floor_pct'] = target_floor
+        t_combo = time.time()
+
+        results_in = run_combo(items, overrides, TRAIN_START, TRAIN_END)
+        agg_in = aggregate(results_in, 'combo', 10000.0)
+        extra_in = extra_metrics(agg_in)
+
+        results_out = run_combo(items, overrides, TRAIN_END, TEST_END)
+        agg_out = aggregate(results_out, 'combo', 10000.0)
+        extra_out = extra_metrics(agg_out)
+
+        elapsed = time.time() - t_combo
+        row = {
+            'sl_mult': sl_mult, 'target_max_pct': target_max, 'target_floor_pct': target_floor,
+            'n_trades_in': agg_in['n_trades_closed'], 'win_rate_in': agg_in['win_rate_pct'],
+            'profit_factor_in': extra_in['profit_factor'], 'expectancy_in': extra_in['expectancy_pct'],
+            'max_dd_in': extra_in['max_drawdown_pct'],
+            'n_trades_out': agg_out['n_trades_closed'], 'win_rate_out': agg_out['win_rate_pct'],
+            'profit_factor_out': extra_out['profit_factor'], 'expectancy_out': extra_out['expectancy_pct'],
+            'max_dd_out': extra_out['max_drawdown_pct'],
+            'seconds': round(elapsed, 1),
+        }
+        all_rows.append(row)
+        print(f"  slMult={sl_mult:.1f}x TPmax={target_max:.0%} TPfloor={target_floor:.0%} | "
+              f"IN: N={row['n_trades_in']:3d} PF={row['profit_factor_in']} WR={row['win_rate_in']} "
+              f"MaxDD={row['max_dd_in']} | "
+              f"OUT: N={row['n_trades_out']:3d} PF={row['profit_factor_out']} WR={row['win_rate_out']} "
+              f"MaxDD={row['max_dd_out']} | {elapsed:.1f}s")
+
+    total_elapsed = time.time() - t0
+    print(f"\nTempo totale Fase 2: {total_elapsed / 60:.1f} minuti ({len(all_rows)} combinazioni)")
+
+    out_path = out_path or 'data/optimize_phase2_result.json'
+    with open(out_path, 'w') as f:
+        json.dump({'rows': all_rows, 'total_seconds': total_elapsed,
+                    'entry_zone': CORE_ENTRY_ZONE,
+                    'generated_at': datetime.now().isoformat()}, f, indent=2)
+    print(f"Salvato: {out_path}")
+
+    reportable = [r for r in all_rows if r['n_trades_in'] >= MIN_TRADES_REPORT]
+    reportable.sort(key=lambda r: (r['profit_factor_in'] if r['profit_factor_in'] not in (None, float('inf')) else -1),
+                     reverse=True)
+    print(f"\nTop combinazioni Fase 2 per Profit Factor In-Sample (N>={MIN_TRADES_REPORT}):")
+    for r in reportable[:10]:
+        print(f"  slMult={r['sl_mult']:.1f}x TPmax={r['target_max_pct']:.0%} TPfloor={r['target_floor_pct']:.0%} "
+              f"| IN: N={r['n_trades_in']} PF={r['profit_factor_in']} WR={r['win_rate_in']}% MaxDD={r['max_dd_in']}% "
+              f"| OUT: N={r['n_trades_out']} PF={r['profit_factor_out']} WR={r['win_rate_out']}%")
+
+
 def run_pilot(cluster_name=None, freeze_batch=DEFAULT_FROZEN_BATCH, wide_mm200=False,
               out_path=None):
     """wide_mm200=False: griglia pilota originale (mm200 come delta ±1pp attorno alla
@@ -436,6 +526,9 @@ def main():
     parser.add_argument('--wide', action='store_true',
                          help='griglia mm200_distance_max ampia (3/5/7/9%%/OFF) x adx_delta '
                               '(20 combo/cluster) — vedi CLAUDE.md 2026-08-07')
+    parser.add_argument('--phase2', action='store_true',
+                         help='sweep uscite (SL/TP) sul cluster core, Candidate Entry Zone fissa '
+                              '(mm200=7.0%%, adxΔ=-4) — vedi CLAUDE.md 2026-08-07')
     parser.add_argument('--cluster', default=None, choices=list(CLUSTERS.keys()),
                          help='limita a un solo cluster')
     parser.add_argument('--frozen-batch', default=DEFAULT_FROZEN_BATCH)
@@ -446,12 +539,16 @@ def main():
         ok = validate_fast_path()
         sys.exit(0 if ok else 1)
 
+    if args.phase2:
+        run_phase2_sweep(freeze_batch=args.frozen_batch, out_path=args.out)
+        return
+
     if args.pilot or args.wide:
         run_pilot(cluster_name=args.cluster, freeze_batch=args.frozen_batch,
                    wide_mm200=args.wide, out_path=args.out)
         return
 
-    print("Specifica --validate oppure --pilot (vedi docstring del file).")
+    print("Specifica --validate, --pilot, --wide oppure --phase2 (vedi docstring del file).")
 
 
 if __name__ == '__main__':
