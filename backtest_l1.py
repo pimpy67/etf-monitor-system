@@ -40,7 +40,7 @@ import pandas as pd
 
 from technical_analysis import ETFTechnicalAnalyzer
 from data_fetcher import ETFDataFetcher
-from database import Database
+from database import PriceDatabase
 
 # Default: tutti i backtest leggono dal Golden Dataset congelato (etf_price_history_frozen),
 # non da Yahoo Finance live — vedi CLAUDE.md "L1 -- Come Si Esce" per il perche' (indagine
@@ -56,7 +56,7 @@ class FrozenDataFetcher:
 
     def __init__(self, freeze_batch: str):
         self.freeze_batch = freeze_batch
-        self.db = Database()
+        self.db = PriceDatabase()
         self._live_fallback = ETFDataFetcher()
 
     def get_historical_data(self, ticker: str, days: int = 250) -> pd.DataFrame:

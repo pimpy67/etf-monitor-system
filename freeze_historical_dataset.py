@@ -17,7 +17,7 @@ from datetime import datetime
 import pandas as pd
 
 from data_fetcher import ETFDataFetcher
-from database import Database
+from database import PriceDatabase
 from technical_analysis import ETFTechnicalAnalyzer
 
 TARGET_FAMILIES = {
@@ -57,7 +57,7 @@ def main():
     print("=" * 78)
 
     fetcher = ETFDataFetcher()
-    db = Database()
+    db = PriceDatabase()
 
     ok, empty, err = 0, 0, 0
     for i, item in enumerate(universe, 1):
