@@ -1526,15 +1526,27 @@ parametri sweepati, è mancanza strutturale di segnale `smart_6_macd` a monte (v
 > soglia di significatività scelta (30) in-sample e sotto in out-of-sample. Resta un
 > **candidato backtestato**, non una modifica pronta per lo YAML.
 >
-> **Prossimo passo proposto (non ancora implementato)**: **Shadow Monitor** — durante il mese
-> di lockdown, calcolare ogni sera anche i segnali di CANDIDATE_MODEL_B (stesso pattern già
-> usato per `l1_seven_conditions`/`l1_tiered_entry`/`l1_accelerated_entry`, motori paralleli
-> già presenti in `monitor.py` che vengono calcolati ma non decidono il livello reale — vedi
-> "🎯 Flusso Completo di Monitoraggio" sopra), loggati/inviati separatamente senza toccare le
-> decisioni reali guidate da `native_7`. Al 06/09, confronto diretto native_7 vs Candidate
-> Model B su **dati forward reali**, non solo backtest — decisione di promozione basata su
-> quello, non su questo sweep da solo. Da scopeare con cura in una sessione dedicata (quali
-> ETF, dove loggare, se email separata o solo DB) — non improvvisato in coda a questa.
+> ✅ **Shadow Monitor IMPLEMENTATO E LIVE (2026-08-07, stessa sessione)**: `shadow_monitor.py`
+> (nuovo modulo) + `etf_shadow_positions` (migration `003`) + `database.py`
+> (`open_shadow_position`/`close_shadow_position`/`get_open_shadow_position`/
+> `get_shadow_positions`). Chiamato da `monitor.py::run()` come **STEP 8**, avvolto in
+> try/except (mai blocca il ciclo reale) — stesso pattern già usato per
+> `l1_seven_conditions`/`l1_tiered_entry`/`l1_accelerated_entry` (motori paralleli
+> informativi, non decisionali). Riusa la logica reale (`suggest_level()`,
+> `calculate_sl_suggerito_l1`, `calculate_stop_gain_dynamic`) con i soli parametri di
+> CANDIDATE_MODEL_B sovrascritti — nessuna duplicazione. **Solo le 5 famiglie di `core`**,
+> **nessuna email** (deciso esplicitamente il 2026-08-07) — solo log su
+> `etf_shadow_positions`, da estrarre manualmente al 06/09/2026 per il confronto native_7
+> vs candidato su dati forward reali. Verificato end-to-end su tutti i 155 ticker di `core`
+> senza errori (0 ingressi il primo giorno, coerente con la bassa frequenza attesa del
+> candidato — ~31 trade/2 anni sull'intero cluster). Commit `0be6673`.
+>
+> **Estrazione risultati a fine lockdown**:
+> ```sql
+> SELECT ticker, entry_date, exit_date, exit_reason, gross_pct_gain
+> FROM etf_shadow_positions WHERE model_name = 'candidate_model_b_20260807'
+> ORDER BY entry_date;
+> ```
 
 ### Sessione fix 2026-08-07 (riassunto) — bug regime_ok, 10 ticker delistati, chiusura discrepanza 80 vs 3
 
@@ -1580,9 +1592,10 @@ parametri sweepati, è mancanza strutturale di segnale `smart_6_macd` a monte (v
   miglior target, oltre è rumore) → **CANDIDATE_MODEL_B_20260807** documentato e certificato
   (IN N=31 PF=1.45 WR=54.8%, OUT N=18 PF=1.62 WR=55.6%). **Non promosso in produzione** —
   lockdown fino al 06/09/2026, `smart_6_macd` mai attivato live, N ancora modesto. Prossimo
-  passo proposto: Shadow Monitor (calcola e logga i segnali del candidato in parallelo,
-  senza toccare le decisioni reali) durante il mese di lockdown, da scopeare in una sessione
-  dedicata — non ancora implementato.
+  Shadow Monitor **implementato e live** (`shadow_monitor.py`, STEP 8 in `monitor.py`,
+  tabella `etf_shadow_positions`) — traccia ogni giorno cosa avrebbe fatto il candidato
+  sulle 5 famiglie di `core`, zero email, zero impatto sulle decisioni reali. Verificato
+  end-to-end senza errori. Estrazione risultati al 06/09/2026.
 - **Nota**: `/root/etf_monitor_system/etf_monitoraggio.xlsx` è un **bind mount** diretto in
   `/app/etf_monitoraggio.xlsx` (non `COPY` in build) — modifiche al file sull'host sono
   visibili nel container **senza restart**. Utile per fix rapidi ai dati (ticker, borsa,
