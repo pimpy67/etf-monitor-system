@@ -156,6 +156,56 @@ class AlertSystem:
         )
         return self._send_email(subject, body_html)
 
+    def send_shadow_entries(self, new_entries: list) -> bool:
+        """Email inviata SOLO quando CANDIDATE_MODEL_B_20260807 (Shadow Monitor, cluster
+        core, solo L1 — non esiste una versione L0 del candidato) apre una nuova posizione
+        ipotetica. new_entries: lista di dict {ticker, isin, nome, famiglia, price}.
+        Nessun impatto sulle decisioni reali — puramente informativa, per seguire il
+        candidato durante il lockdown fino al 06/09/2026. Vedi CLAUDE.md
+        CANDIDATE_MODEL_B_20260807."""
+        if not new_entries:
+            return True
+        today = datetime.now().strftime('%d/%m/%Y')
+        n = len(new_entries)
+        subject = f'🟣 Shadow Monitor: {n} nuovo{"i" if n > 1 else ""} ingresso Candidate Model B — {today}'
+
+        rows = ''
+        for i, f in enumerate(new_entries):
+            bg = '#f9f9f9' if i % 2 else 'white'
+            rows += (
+                f'<tr style="background:{bg}">'
+                f'<td style="padding:8px;border:1px solid #ddd">'
+                f'<strong>{f.get("nome","")[:45]}</strong><br>'
+                f'<small style="color:#888">{f.get("ticker","")} · {f.get("isin","")}</small></td>'
+                f'<td style="padding:8px;border:1px solid #ddd;font-size:11px;color:#666">{f.get("famiglia","")}</td>'
+                f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:bold">'
+                f'{"€{:.4f}".format(f["price"]) if f.get("price") else "—"}</td>'
+                f'</tr>'
+            )
+
+        ts = datetime.now().strftime('%d/%m/%Y %H:%M')
+        body_html = (
+            f'<html><body style="{_BODY_STYLE}">'
+            f'<div style="background:linear-gradient(135deg,#8E44AD,#5B2C6F);color:white;padding:24px;text-align:center">'
+            f'<h1 style="margin:0;font-size:20px">🟣 SHADOW MONITOR — Candidate Model B</h1>'
+            f'<p style="margin:6px 0 0;opacity:.9;font-size:14px">{datetime.now().strftime("%A %d %B %Y")}</p>'
+            f'</div>'
+            f'<div style="padding:20px;background:white">'
+            f'<p style="color:#666;font-size:12px;margin:0 0 12px">'
+            f'Ingresso IPOTETICO (mm200_distance_max=7.0%, adx-4, smart_6_macd, TP=15%) — '
+            f'non è un acquisto reale, nessuna azione richiesta. Sistema live in lockdown '
+            f'parametri fino al 06/09/2026, decide sempre e solo con native_7.</p>'
+            f'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+            f'<thead><tr style="background:#8E44AD;color:white">'
+            f'<th style="padding:8px;border:1px solid #ddd;text-align:left">ETF</th>'
+            f'<th style="padding:8px;border:1px solid #ddd">Famiglia</th>'
+            f'<th style="padding:8px;border:1px solid #ddd">Prezzo ingresso</th>'
+            f'</tr></thead><tbody>{rows}</tbody></table>'
+            f'</div>'
+            f'{_FOOTER.format(ts=ts)}</body></html>'
+        )
+        return self._send_email(subject, body_html)
+
     # ── 2. Uscita L1 ──────────────────────────────────────────────────────
     def send_l1_exit(self, etf_info: dict) -> bool:
         """Email per uscita da L1: regola triggherata + risultato %."""

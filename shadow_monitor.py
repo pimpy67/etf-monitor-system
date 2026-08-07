@@ -54,10 +54,11 @@ def run_shadow_monitor(db, results: list, add_log=print):
     (analyze_etf() per ogni ETF) — riusata per evitare un secondo giro di fetch."""
     candidates = [r for r in results if r.get('etf_type') in CORE_FAMILIES]
     if not candidates:
-        return
+        return []
 
     today = date.today()
     opened, closed, checked = 0, 0, 0
+    new_entries = []
 
     for result in candidates:
         ticker = result.get('ticker')
@@ -121,6 +122,11 @@ def run_shadow_monitor(db, results: list, add_log=print):
                         db.open_shadow_position(MODEL_NAME, ticker, isin, famiglia,
                                                  today, current_price)
                         opened += 1
+                        new_entries.append({
+                            'ticker': ticker, 'isin': isin,
+                            'nome': result.get('nome', ticker),
+                            'famiglia': famiglia, 'price': current_price,
+                        })
                         add_log(f"    🟣 SHADOW ENTRY {ticker} @ {current_price:.2f} "
                                 f"({famiglia})")
         except Exception as e:
@@ -130,3 +136,5 @@ def run_shadow_monitor(db, results: list, add_log=print):
     if opened or closed:
         add_log(f"  Shadow Monitor ({MODEL_NAME}): {checked} controllati, "
                 f"{opened} nuovi ingressi, {closed} uscite")
+
+    return new_entries
