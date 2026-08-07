@@ -809,7 +809,8 @@ class ETFTechnicalAnalyzer:
 
     # ── L0 Deep Recovery ──────────────────────────────────────────────────────
 
-    def suggest_level_0(self, prices: pd.Series, high: pd.Series, low: pd.Series, current_level: int) -> Dict:
+    def suggest_level_0(self, prices: pd.Series, high: pd.Series, low: pd.Series, current_level: int,
+                         precomputed: dict = None) -> Dict:
         """
         Valuta le condizioni L0 'Deep Recovery'.
 
@@ -843,11 +844,21 @@ class ETFTechnicalAnalyzer:
             result['reason_codes'] = ['INSUFFICIENT_DATA']
             return result
 
-        rsi     = self._rsi(prices)
+        # 'precomputed' (opzionale, 2026-08-07): stesso pattern gia' validato su
+        # suggest_level() — RSI/EMA20/SMA50 gia' calcolati sull'intera serie e tagliati,
+        # invece di essere ricalcolati da zero qui a ogni giorno del walk-forward (usato da
+        # optimize_hyperparameters_l0.py per lo sweep). Indicatori causali: stesso valore
+        # sia a finestra crescente sia a serie intera tagliata, nessuna logica duplicata.
+        if precomputed is not None:
+            rsi   = precomputed['rsi']
+            ema20 = precomputed['ema20']
+            sma50 = precomputed['sma50']
+        else:
+            rsi   = self._rsi(prices)
+            ema20 = self._ema(prices, self.ema20_period)
+            sma50 = self._sma(prices, 50)
         rsi_val = float(rsi.dropna().iloc[-1]) if len(rsi.dropna()) > 0 else 50.0
-        ema20   = self._ema(prices, self.ema20_period)
         ema20_v = self._fval(ema20)
-        sma50   = self._sma(prices, 50)
         sma50_v = self._fval(sma50)
         # Ensure current price is valid
         curr_price = prices.iloc[-1]
