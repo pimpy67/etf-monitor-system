@@ -1424,6 +1424,52 @@ una minore — il pilota lo faceva variare solo di ±1pp attorno alla baseline (
 quando la baseline stessa può azzerare tutti i trade). Un prossimo pilota deve usare un range
 molto più ampio su questo parametro specifico (es. 3–10%, non baseline±1).
 
+### Grid Search `smart_6_macd` — sweep ampio 2026-08-07 (`--wide`), risultati
+
+Rilanciato con `mm200_distance_max` **assoluto** ∈ {3%, 5%, 7%, 9%, OFF} (non più delta ±1pp
+sulla baseline) × `adx_entry` delta ∈ {-4, 0, +4} — 15 combinazioni/cluster, 45 totali,
+**44.9 minuti** (motore con skip-mask MACD attivo, ~3.3x più veloce del pilota precedente,
+confermato: `speculativo` 44s→13s/combo).
+
+**Core (153 ticker) — unico cluster con segnale utilizzabile**, 5 combinazioni superano N≥30
+in-sample:
+
+| mm200 | adxΔ | IN: N / PF / WR | OUT: N / PF / WR | Nota |
+|---|---|---|---|---|
+| **7.0%** | **-4** | 33 / 1.18 / 57.6% | 25 / **1.65** / **68.0%** | Out-of-sample **migliora** l'in-sample — opposto dell'overfitting, il candidato migliore |
+| OFF | +4 | 39 / 1.25 / 56.4% | 57 / 1.23 / 54.4% | PF quasi identico nei due periodi, molto stabile |
+| 9.0% | -4 | 41 / 0.99 / 51.2% | 30 / 1.61 / 66.7% | In-sample sostanzialmente in pareggio (PF<1), il buon OOS è sospetto |
+| OFF | -4 | 89 / 0.92 / 48.3% | 103 / 1.18 / 53.4% | N enorme ma PF appena sopra 1 in entrambi i periodi |
+| OFF | +0 | 57 / 0.92 / 49.1% | 76 / 1.45 / 59.2% | Simile al precedente |
+
+**Candidate Entry Zone per `core`**: `mm200_distance_max=7.0%, adx_entry` baseline-4 —
+migliore combinazione rischio/robustezza (l'unica dove l'anno nascosto è andato meglio
+dell'in-sample, non peggio), anche se N=25 out-of-sample resta appena sotto la soglia di
+30 presa come riferimento. `mm200=OFF, adxΔ=+4` è l'alternativa più prudente (N più alto,
+comportamento quasi identico nei due periodi). **Non ancora promosso in produzione** —
+resta un candidato da backtest, il sistema live è in lockdown parametri fino al 06/09/2026.
+
+**Difensivo (58 ticker)**: anche con `mm200_distance_max` completamente disattivato, N
+massimo resta 9 e il win rate in-sample è 0–33% su quasi tutte le combinazioni. Non è un
+problema di `mm200_distance_max` per questo cluster — bond/settoriali difensivi/REIT/PE si
+muovono troppo poco perché `macd_ok` (histogram positivo E in accelerazione) scatti spesso.
+`smart_6_macd` semplicemente non è adatto a questo cluster, a prescindere dai parametri
+d'ingresso sweepati qui.
+
+**Speculativo (16 ticker)**: 0 trade su tutte le 12 combinazioni con `mm200_distance_max`
+attivo (3–9%), 1 trade solo disattivandolo del tutto. Stesso verdetto: il collo di bottiglia
+non è `mm200_distance_max` per questo cluster, è altrove (probabilmente `macd_ok` o la
+finestra RSI/ADX, non ancora isolato).
+
+**Prossimo passo naturale (Fase 2, non ancora fatto)**: fissata la Candidate Entry Zone di
+`core`, sweep dei parametri di **uscita** (`sl_buffer_wide` per lo Stop Loss,
+`l1_stop_gain_dynamic.{target_max_pct,target_floor_pct,slope_sensitivity}` per il Take
+Profit dinamico) attorno a quella configurazione d'ingresso — deliberatamente escluso da
+questo primo giro per tenere gestibile la validazione. Stesso pattern di override sicuro già
+usato per `mm200_distance_max`/`adx_entry`, nessun lavoro di validazione aggiuntivo previsto
+oltre a confermare che l'override di `analyzer.p['l1_stop_gain_dynamic']` (dict annidato,
+non uno scalare) si propaga correttamente.
+
 ### Sessione fix 2026-08-07 (riassunto) — bug regime_ok, 10 ticker delistati, chiusura discrepanza 80 vs 3
 
 - **Fix `UnboundLocalError: regime_ok`** in `suggest_level_0()`: la variabile veniva letta ai
