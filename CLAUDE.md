@@ -1470,6 +1470,72 @@ usato per `mm200_distance_max`/`adx_entry`, nessun lavoro di validazione aggiunt
 oltre a confermare che l'override di `analyzer.p['l1_stop_gain_dynamic']` (dict annidato,
 non uno scalare) si propaga correttamente.
 
+### Fase 2 + micro-sweep TP (2026-08-07) — CANDIDATE_MODEL_B_20260807
+
+**Fase 2** (`--phase2`, 36 combinazioni, 69 min, solo cluster `core`, Candidate Entry Zone
+fissa mm200=7.0%/adxΔ=-4): sweep di `sl_buffer_wide` (moltiplicatore 1.0–1.8x) ×
+`l1_stop_gain_dynamic.target_max_pct` (10–15%) × `target_floor_pct` (3–5%, mai il vincolo
+attivo — dimensione senza effetto misurabile, i tre valori danno risultati identici a parità
+degli altri due parametri).
+
+**Risultato più importante: allargare lo Stop Loss peggiora tutto.** Profit Factor
+in-sample migliore per moltiplicatore: 1.0x→**1.45**, 1.2x→1.32, 1.5x→1.07, 1.8x→0.96 — e il
+Max Drawdown esplode in parallelo: 32.5% → 34.5% → 57–65% → 59–66%. Allargare lo SL non
+riduce le uscite premature, lascia solo correre più a lungo le perdite. **SL alla baseline di
+famiglia (moltiplicatore 1.0x) è l'unica scelta sostenibile** in questo range.
+
+**Micro-sweep TP** (`--tp-micro`, 5 combinazioni, 9.9 min, SL fisso a baseline): esteso il
+target fino al 25% per vedere se il trend crescente della Fase 2 (10%→1.27, 12%→1.32,
+15%→1.45) continuava. **Non continua**: 18%→1.30 (cala), 20%→1.33, 22%→1.36, 25%→1.36 — zona
+piatta/rumorosa tra 15% e 25%, non un massimo più alto. N e win rate restano identici (31
+trade, 54.8%) su tutto il range: il TP non cambia mai quali trade avvengono, solo dove
+escono. **15% resta il miglior punto trovato**, non l'inizio di una salita — bene non essere
+andati oltre a inseguire rumore statistico.
+
+**CANDIDATE_MODEL_B_20260807** (solo cluster `core`: `equity_sviluppati`,
+`oro_metalli_preziosi`, `mercati_emergenti`, `settoriali_growth`, `metalli_industriali`;
+`smart_6_macd`, non `native_7`):
+
+| Parametro | Valore |
+|---|---|
+| `mm200_distance_max` | 7.0% (assoluto, sostituisce il valore per-famiglia) |
+| `adx_entry` | baseline di famiglia − 4 |
+| `sl_buffer_wide` | invariato (baseline di famiglia) |
+| `l1_stop_gain_dynamic.target_max_pct` | 15% (0.15) |
+| `l1_stop_gain_dynamic.target_floor_pct` | irrilevante, mai il vincolo attivo |
+| min_buy_count | 6 (con `macd_ok` sempre obbligatorio) |
+
+**Metriche certificate** (Golden Dataset, batch `2026-08-07`, split
+2023-08-05→2025-08-05 / 2025-08-05→2026-08-05):
+
+| | In-Sample | Out-of-Sample |
+|---|---|---|
+| N trade | 31 | 18 |
+| Profit Factor | 1.45 | 1.62 |
+| Win Rate | 54.8% | 55.6% |
+| Max Drawdown | 32.5% | 19.1% |
+
+**Cluster `difensivo` e `speculativo`: esclusi da questo candidato** — non è un problema dei
+parametri sweepati, è mancanza strutturale di segnale `smart_6_macd` a monte (vedi sopra).
+
+> ⚠️ **NON promosso in produzione.** Tre motivi, non uno: (1) il sistema è in lockdown
+> parametri fino al 06/09/2026, deciso esplicitamente in questa sessione; (2) `smart_6_macd`
+> non è mai stato attivo in produzione (`use_smart_6_7_macd: false` su tutte le famiglie) —
+> promuovere questi parametri significherebbe anche decidere di attivarlo, una scelta
+> distinta mai presa esplicitamente; (3) N=31/18 resta un campione modesto, appena sopra la
+> soglia di significatività scelta (30) in-sample e sotto in out-of-sample. Resta un
+> **candidato backtestato**, non una modifica pronta per lo YAML.
+>
+> **Prossimo passo proposto (non ancora implementato)**: **Shadow Monitor** — durante il mese
+> di lockdown, calcolare ogni sera anche i segnali di CANDIDATE_MODEL_B (stesso pattern già
+> usato per `l1_seven_conditions`/`l1_tiered_entry`/`l1_accelerated_entry`, motori paralleli
+> già presenti in `monitor.py` che vengono calcolati ma non decidono il livello reale — vedi
+> "🎯 Flusso Completo di Monitoraggio" sopra), loggati/inviati separatamente senza toccare le
+> decisioni reali guidate da `native_7`. Al 06/09, confronto diretto native_7 vs Candidate
+> Model B su **dati forward reali**, non solo backtest — decisione di promozione basata su
+> quello, non su questo sweep da solo. Da scopeare con cura in una sessione dedicata (quali
+> ETF, dove loggare, se email separata o solo DB) — non improvvisato in coda a questa.
+
 ### Sessione fix 2026-08-07 (riassunto) — bug regime_ok, 10 ticker delistati, chiusura discrepanza 80 vs 3
 
 - **Fix `UnboundLocalError: regime_ok`** in `suggest_level_0()`: la variabile veniva letta ai
@@ -1506,11 +1572,17 @@ non uno scalare) si propaga correttamente.
   sotto nessun suffisso borsa comune). Universo sceso da 240 a 236 righe in Excel.
 - **Grid search `smart_6_macd` (`optimize_hyperparameters.py`)**: infrastruttura completa
   (motore vettorizzato validato a 0 discrepanze, cluster per `sl_initial_pct`, split
-  in/out-of-sample) — vedi sezione dedicata sopra. Pilota di 27 combinazioni eseguito
-  (90.5 min): nessuna combinazione raggiunge N≥30. Discrepanza ~26 vs 151 trade totali
-  **risolta** via diff-debug su `CHIP.MI`: causa `mm200_distance_max` (aggiunto il 06/08,
-  dopo il run da 151), non un bug — motore dello sweep confermato corretto. Prossimo pilota
-  deve variare `mm200_distance_max` su un range ampio (3–10%), non ±1pp attorno alla baseline.
+  in/out-of-sample) — vedi sezioni dedicate sopra. Percorso completo in un solo giorno:
+  pilota (27 combo, N<30 ovunque) → discrepanza 26 vs 151 trade risolta (causa
+  `mm200_distance_max`, non un bug) → sweep ampio (45 combo, Candidate Entry Zone trovata
+  per `core`: mm200=7.0%/adxΔ=-4) → Fase 2 uscite (36 combo: allargare lo SL peggiora tutto,
+  SL alla baseline è l'unica scelta sostenibile) → micro-sweep TP (5 combo: 15% resta il
+  miglior target, oltre è rumore) → **CANDIDATE_MODEL_B_20260807** documentato e certificato
+  (IN N=31 PF=1.45 WR=54.8%, OUT N=18 PF=1.62 WR=55.6%). **Non promosso in produzione** —
+  lockdown fino al 06/09/2026, `smart_6_macd` mai attivato live, N ancora modesto. Prossimo
+  passo proposto: Shadow Monitor (calcola e logga i segnali del candidato in parallelo,
+  senza toccare le decisioni reali) durante il mese di lockdown, da scopeare in una sessione
+  dedicata — non ancora implementato.
 - **Nota**: `/root/etf_monitor_system/etf_monitoraggio.xlsx` è un **bind mount** diretto in
   `/app/etf_monitoraggio.xlsx` (non `COPY` in build) — modifiche al file sull'host sono
   visibili nel container **senza restart**. Utile per fix rapidi ai dati (ticker, borsa,
