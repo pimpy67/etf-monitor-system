@@ -1408,19 +1408,21 @@ speculativo ~45s/combo — proporzionale al numero di ticker, non c'è overhead 
 | speculativo | **0 su tutte e 9 le combinazioni** | Nessun trade `smart_6_macd`, mai |
 | difensivo | 2–3 | **Win rate in-sample 0% su ogni singola combinazione** — ogni trade perdente |
 
-⚠️ **Discrepanza aperta, NON risolta**: sommando tutti i cluster alla combinazione base
-(mm200_delta=0, adx_delta=0) si ottengono **~26 trade totali su un arco di 3 anni**
-(11+11 core, 0+0 speculativo, 3+1 difensivo), contro i **151 trade** che lo stesso
-`smart_6_macd` aveva prodotto il 05/08 sull'intero universo nello stesso arco temporale.
-Un divario troppo grande per essere spiegato solo dal rumore dati (adjusted-close Yahoo)
-già documentato altrove in questo file — quel meccanismo spiega scarti tipo 3→1, non 151→26.
-Le due validazioni incrociate fatte (motore veloce, skip-mask MACD) confermano la correttezza
-**giorno per giorno** delle decisioni, ma non escludono un problema più a monte: copertura
-temporale del train/test split, costruzione dell'universo per cluster, o altro non ancora
-identificato. **Non trattare i risultati del pilota come conclusivi finché questo gap non è
-spiegato.** Prossimo passo naturale: rilanciare `backtest_l1.py --compare-min-buy 6` (il
-percorso originale che aveva prodotto 151) sullo stesso Golden Dataset e stesso periodo, e
-confrontare trade-per-trade con l'output del pilota per isolare dove si perdono i trade.
+✅ **Discrepanza 26 vs 151 RISOLTA (2026-08-07, stessa sera)**: sommando tutti i cluster alla
+combinazione base si ottengono ~26 trade totali contro i 151 del run 05/08 — diff-debug
+mirato su `CHIP.MI` (4 trade `smart_6_macd` nel run originale) isola la causa in modo netto:
+`backtest_l1.py` originale invariato e il motore ottimizzato di `optimize_hyperparameters.py`
+danno **entrambi 0 trade** su CHIP.MI con il codice di oggi (confermando che il motore dello
+sweep è corretto, nessun bug) — ma **disattivando `mm200_distance_max`** (settato a 999)
+tornano **esattamente i 4 trade originali**, stesse date. Causa: `mm200_distance_max`
+(aggiunto il 06/08, commit `2deb026`, **dopo** il run da 151 trade) taglia sistematicamente
+gli ingressi troppo estesi sopra SMA200 — per `equity_sviluppati` la soglia e' 3.0%, e
+TUTTI e 4 i trade storici di CHIP.MI la superavano. Stessa dinamica già vista su `native_7`
+(3→1 trade), qui semplicemente più marcata. Non un bug: codice cambiato tra le due misure.
+**Implicazione per la griglia**: `mm200_distance_max` è la leva dominante dello sweep, non
+una minore — il pilota lo faceva variare solo di ±1pp attorno alla baseline (troppo stretto
+quando la baseline stessa può azzerare tutti i trade). Un prossimo pilota deve usare un range
+molto più ampio su questo parametro specifico (es. 3–10%, non baseline±1).
 
 ### Sessione fix 2026-08-07 (riassunto) — bug regime_ok, 10 ticker delistati, chiusura discrepanza 80 vs 3
 
@@ -1459,8 +1461,10 @@ confrontare trade-per-trade con l'output del pilota per isolare dove si perdono 
 - **Grid search `smart_6_macd` (`optimize_hyperparameters.py`)**: infrastruttura completa
   (motore vettorizzato validato a 0 discrepanze, cluster per `sl_initial_pct`, split
   in/out-of-sample) — vedi sezione dedicata sopra. Pilota di 27 combinazioni eseguito
-  (90.5 min): nessuna combinazione raggiunge N≥30, e c'è una discrepanza aperta (~26 vs 151
-  trade totali) non ancora spiegata. Risultati del pilota non conclusivi, da riprendere.
+  (90.5 min): nessuna combinazione raggiunge N≥30. Discrepanza ~26 vs 151 trade totali
+  **risolta** via diff-debug su `CHIP.MI`: causa `mm200_distance_max` (aggiunto il 06/08,
+  dopo il run da 151), non un bug — motore dello sweep confermato corretto. Prossimo pilota
+  deve variare `mm200_distance_max` su un range ampio (3–10%), non ±1pp attorno alla baseline.
 - **Nota**: `/root/etf_monitor_system/etf_monitoraggio.xlsx` è un **bind mount** diretto in
   `/app/etf_monitoraggio.xlsx` (non `COPY` in build) — modifiche al file sull'host sono
   visibili nel container **senza restart**. Utile per fix rapidi ai dati (ticker, borsa,
