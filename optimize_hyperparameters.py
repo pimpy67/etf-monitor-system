@@ -139,6 +139,11 @@ def make_analyzer_for_combo(entry, param_overrides, min_buy_count=6):
 
     if 'mm200_delta' in param_overrides:
         p['mm200_distance_max'] = max(0.1, p.get('mm200_distance_max', 4.0) + param_overrides['mm200_delta'])
+    if 'mm200_absolute' in param_overrides:
+        # None = disattivato (nessun tetto di estensione da SMA200) — stesso trucco usato
+        # nel diff-debug su CHIP.MI (999 = praticamente mai vincolante).
+        val = param_overrides['mm200_absolute']
+        p['mm200_distance_max'] = 999.0 if val is None else val
     if 'adx_delta' in param_overrides:
         p['adx_entry'] = max(1, p.get('adx_entry', 20) + param_overrides['adx_delta'])
     if 'rsi_low_delta' in param_overrides:
@@ -346,19 +351,33 @@ def validate_macd_skip(n_tickers=8, seed=42):
         return False
 
 
-def run_pilot(cluster_name=None, freeze_batch=DEFAULT_FROZEN_BATCH):
+def run_pilot(cluster_name=None, freeze_batch=DEFAULT_FROZEN_BATCH, wide_mm200=False,
+              out_path=None):
+    """wide_mm200=False: griglia pilota originale (mm200 come delta ±1pp attorno alla
+    baseline di famiglia — range troppo stretto, vedi CLAUDE.md 2026-08-07).
+    wide_mm200=True: mm200_distance_max come valore ASSOLUTO su range ampio (la leva
+    dominante confermata via diff-debug su CHIP.MI), adx_entry resta delta relativo
+    (le famiglie hanno baseline troppo diverse — 12 per i bond, 28 per crypto — per un
+    valore assoluto condiviso)."""
     by_cluster = load_cluster_data(freeze_batch, cluster_name)
 
-    mm200_grid = [-1.0, 0.0, 1.0]
-    adx_grid = [-4, 0, 4]
-    combos = list(itertools.product(mm200_grid, adx_grid))
+    if wide_mm200:
+        mm200_grid = [3.0, 5.0, 7.0, 9.0, None]
+        adx_grid = [-4, 0, 4]
+        combos = list(itertools.product(mm200_grid, adx_grid))
+        mm200_key = 'mm200_absolute'
+    else:
+        mm200_grid = [-1.0, 0.0, 1.0]
+        adx_grid = [-4, 0, 4]
+        combos = list(itertools.product(mm200_grid, adx_grid))
+        mm200_key = 'mm200_delta'
 
     all_rows = []
     t0 = time.time()
     for cluster, items in by_cluster.items():
         print(f"\n{'=' * 78}\nCLUSTER: {cluster} ({len(items)} ticker)\n{'=' * 78}")
-        for mm200_delta, adx_delta in combos:
-            overrides = {'mm200_delta': mm200_delta, 'adx_delta': adx_delta}
+        for mm200_val, adx_delta in combos:
+            overrides = {mm200_key: mm200_val, 'adx_delta': adx_delta}
             t_combo = time.time()
 
             results_in = run_combo(items, overrides, TRAIN_START, TRAIN_END)
@@ -370,8 +389,9 @@ def run_pilot(cluster_name=None, freeze_batch=DEFAULT_FROZEN_BATCH):
             extra_out = extra_metrics(agg_out)
 
             elapsed = time.time() - t_combo
+            mm200_label = 'OFF' if mm200_val is None else f"{mm200_val:.1f}%"
             row = {
-                'cluster': cluster, 'mm200_delta': mm200_delta, 'adx_delta': adx_delta,
+                'cluster': cluster, mm200_key: mm200_val, 'adx_delta': adx_delta,
                 'n_trades_in': agg_in['n_trades_closed'], 'win_rate_in': agg_in['win_rate_pct'],
                 'profit_factor_in': extra_in['profit_factor'], 'expectancy_in': extra_in['expectancy_pct'],
                 'max_dd_in': extra_in['max_drawdown_pct'],
@@ -381,16 +401,16 @@ def run_pilot(cluster_name=None, freeze_batch=DEFAULT_FROZEN_BATCH):
                 'seconds': round(elapsed, 1),
             }
             all_rows.append(row)
-            print(f"  mm200Δ={mm200_delta:+.1f} adxΔ={adx_delta:+d} | "
+            print(f"  mm200={mm200_label:>5s} adxΔ={adx_delta:+d} | "
                   f"IN: N={row['n_trades_in']:3d} WR={row['win_rate_in']} PF={row['profit_factor_in']} | "
                   f"OUT: N={row['n_trades_out']:3d} WR={row['win_rate_out']} PF={row['profit_factor_out']} | "
                   f"{elapsed:.1f}s")
 
     total_elapsed = time.time() - t0
-    print(f"\nTempo totale pilota: {total_elapsed / 60:.1f} minuti "
+    print(f"\nTempo totale: {total_elapsed / 60:.1f} minuti "
           f"({len(all_rows)} combinazioni)")
 
-    out_path = 'data/optimize_pilot_result.json'
+    out_path = out_path or 'data/optimize_pilot_result.json'
     with open(out_path, 'w') as f:
         json.dump({'rows': all_rows, 'total_seconds': total_elapsed,
                     'generated_at': datetime.now().isoformat()}, f, indent=2)
@@ -401,7 +421,10 @@ def run_pilot(cluster_name=None, freeze_batch=DEFAULT_FROZEN_BATCH):
                      reverse=True)
     print(f"\nTop combinazioni per Profit Factor In-Sample (N>={MIN_TRADES_REPORT}):")
     for r in reportable[:10]:
-        print(f"  {r['cluster']:12s} mm200Δ={r['mm200_delta']:+.1f} adxΔ={r['adx_delta']:+d} "
+        mm200_disp = r[mm200_key]
+        mm200_disp = 'OFF' if mm200_disp is None else (
+            f"{mm200_disp:+.1f}" if mm200_key == 'mm200_delta' else f"{mm200_disp:.1f}%")
+        print(f"  {r['cluster']:12s} mm200={mm200_disp} adxΔ={r['adx_delta']:+d} "
               f"| IN: N={r['n_trades_in']} PF={r['profit_factor_in']} WR={r['win_rate_in']}% "
               f"| OUT: N={r['n_trades_out']} PF={r['profit_factor_out']} WR={r['win_rate_out']}%")
 
@@ -410,17 +433,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--validate', action='store_true', help='cross-check motore veloce vs originale')
     parser.add_argument('--pilot', action='store_true', help='griglia pilota (9 combo/cluster)')
+    parser.add_argument('--wide', action='store_true',
+                         help='griglia mm200_distance_max ampia (3/5/7/9%%/OFF) x adx_delta '
+                              '(20 combo/cluster) — vedi CLAUDE.md 2026-08-07')
     parser.add_argument('--cluster', default=None, choices=list(CLUSTERS.keys()),
                          help='limita a un solo cluster')
     parser.add_argument('--frozen-batch', default=DEFAULT_FROZEN_BATCH)
+    parser.add_argument('--out', default=None, help='path del JSON di output')
     args = parser.parse_args()
 
     if args.validate:
         ok = validate_fast_path()
         sys.exit(0 if ok else 1)
 
-    if args.pilot:
-        run_pilot(cluster_name=args.cluster, freeze_batch=args.frozen_batch)
+    if args.pilot or args.wide:
+        run_pilot(cluster_name=args.cluster, freeze_batch=args.frozen_batch,
+                   wide_mm200=args.wide, out_path=args.out)
         return
 
     print("Specifica --validate oppure --pilot (vedi docstring del file).")
