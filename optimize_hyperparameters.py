@@ -441,6 +441,65 @@ def run_phase2_sweep(freeze_batch=DEFAULT_FROZEN_BATCH, out_path=None):
               f"| OUT: N={r['n_trades_out']} PF={r['profit_factor_out']} WR={r['win_rate_out']}%")
 
 
+def run_tp_micro_sweep(freeze_batch=DEFAULT_FROZEN_BATCH, out_path=None):
+    """Micro-sweep 1D su target_max_pct — tutto il resto fisso (Candidate Entry Zone +
+    slMult=1.0x, cioe' SL invariato: la Fase 2 ha mostrato che allargarlo peggiora sia PF
+    che Max Drawdown). Cerca il punto in cui il Profit Factor smette di salire con
+    target_max_pct, dopo che la Fase 2 aveva mostrato un trend ancora crescente a 15%
+    (limite superiore testato allora)."""
+    by_cluster = load_cluster_data(freeze_batch, cluster_name='core')
+    items = by_cluster.get('core', [])
+
+    target_max_grid = [0.15, 0.18, 0.20, 0.22, 0.25]
+
+    print(f"MICRO-SWEEP TP — 'core' ({len(items)} ticker), fisso: mm200=7.0% adxΔ=-4 slMult=1.0x "
+          f"| {len(target_max_grid)} combinazioni")
+
+    all_rows = []
+    t0 = time.time()
+    for target_max in target_max_grid:
+        overrides = dict(CORE_ENTRY_ZONE)
+        overrides['sl_buffer_mult'] = 1.0
+        overrides['target_max_pct'] = target_max
+        overrides['target_floor_pct'] = 0.03  # irrilevante, mai il vincolo attivo (vedi Fase 2)
+        t_combo = time.time()
+
+        results_in = run_combo(items, overrides, TRAIN_START, TRAIN_END)
+        agg_in = aggregate(results_in, 'combo', 10000.0)
+        extra_in = extra_metrics(agg_in)
+
+        results_out = run_combo(items, overrides, TRAIN_END, TEST_END)
+        agg_out = aggregate(results_out, 'combo', 10000.0)
+        extra_out = extra_metrics(agg_out)
+
+        elapsed = time.time() - t_combo
+        row = {
+            'target_max_pct': target_max,
+            'n_trades_in': agg_in['n_trades_closed'], 'win_rate_in': agg_in['win_rate_pct'],
+            'profit_factor_in': extra_in['profit_factor'], 'expectancy_in': extra_in['expectancy_pct'],
+            'max_dd_in': extra_in['max_drawdown_pct'],
+            'n_trades_out': agg_out['n_trades_closed'], 'win_rate_out': agg_out['win_rate_pct'],
+            'profit_factor_out': extra_out['profit_factor'], 'expectancy_out': extra_out['expectancy_pct'],
+            'max_dd_out': extra_out['max_drawdown_pct'],
+            'seconds': round(elapsed, 1),
+        }
+        all_rows.append(row)
+        print(f"  TPmax={target_max:.0%} | IN: N={row['n_trades_in']:3d} PF={row['profit_factor_in']} "
+              f"WR={row['win_rate_in']} MaxDD={row['max_dd_in']} | "
+              f"OUT: N={row['n_trades_out']:3d} PF={row['profit_factor_out']} WR={row['win_rate_out']} "
+              f"MaxDD={row['max_dd_out']} | {elapsed:.1f}s")
+
+    total_elapsed = time.time() - t0
+    print(f"\nTempo totale micro-sweep: {total_elapsed / 60:.1f} minuti ({len(all_rows)} combinazioni)")
+
+    out_path = out_path or 'data/optimize_tp_micro_result.json'
+    with open(out_path, 'w') as f:
+        json.dump({'rows': all_rows, 'total_seconds': total_elapsed,
+                    'entry_zone': CORE_ENTRY_ZONE,
+                    'generated_at': datetime.now().isoformat()}, f, indent=2)
+    print(f"Salvato: {out_path}")
+
+
 def run_pilot(cluster_name=None, freeze_batch=DEFAULT_FROZEN_BATCH, wide_mm200=False,
               out_path=None):
     """wide_mm200=False: griglia pilota originale (mm200 come delta ±1pp attorno alla
@@ -529,6 +588,9 @@ def main():
     parser.add_argument('--phase2', action='store_true',
                          help='sweep uscite (SL/TP) sul cluster core, Candidate Entry Zone fissa '
                               '(mm200=7.0%%, adxΔ=-4) — vedi CLAUDE.md 2026-08-07')
+    parser.add_argument('--tp-micro', action='store_true',
+                         help='micro-sweep 1D su target_max_pct (15/18/20/22/25%%), tutto il resto '
+                              'fisso — vedi CLAUDE.md 2026-08-07')
     parser.add_argument('--cluster', default=None, choices=list(CLUSTERS.keys()),
                          help='limita a un solo cluster')
     parser.add_argument('--frozen-batch', default=DEFAULT_FROZEN_BATCH)
@@ -538,6 +600,10 @@ def main():
     if args.validate:
         ok = validate_fast_path()
         sys.exit(0 if ok else 1)
+
+    if args.tp_micro:
+        run_tp_micro_sweep(freeze_batch=args.frozen_batch, out_path=args.out)
+        return
 
     if args.phase2:
         run_phase2_sweep(freeze_batch=args.frozen_batch, out_path=args.out)
