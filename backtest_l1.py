@@ -109,7 +109,8 @@ def make_analyzer(famiglia, min_buy_override=None):
     return analyzer
 
 
-def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, require_macd=False):
+def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, require_macd=False,
+             precomputed_full=None):
     """Ingresso via suggest_level() (7/7 o 6/7). Uscita: SOLO SL o TP, ricalcolati e
     controllati una volta al giorno sul Close (come il monitor reale). Nessuna regola B/C/E/F.
 
@@ -117,7 +118,16 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, 
     richiede che macd_ok sia SEMPRE tra le condizioni vere — la condizione che puo'
     mancare deve essere un'altra. Test per verificare se rendere il MACD obbligatorio
     anche sotto 7/7 migliora la qualita' dei trade (ipotesi emersa dalla segmentazione
-    win-rate per condizione mancante, vedi CLAUDE.md)."""
+    win-rate per condizione mancante, vedi CLAUDE.md).
+
+    precomputed_full (2026-08-07, per optimize_hyperparameters.py): dict opzionale con le
+    serie EMA10/EMA20/SMA50/SMA200/RSI/ADX/MACD/ATR gia' calcolate UNA VOLTA sull'intero
+    storico (chiavi: 'ema10','ema20','sma50','sma200','rsi','adx','macd','atr'). Se fornito,
+    simulate() taglia la fetta giornaliera da queste serie invece di far ricalcolare tutto
+    da zero a suggest_level() a ogni giorno (era il costo O(n^2) dominante per ticker — vedi
+    CLAUDE.md). Nessuna logica duplicata: e' lo stesso suggest_level(), solo alimentato con
+    indicatori pre-tagliati invece che ricalcolati — i valori risultanti sono identici
+    (indicatori causali, stesso valore sia a finestra crescente sia a serie intera tagliata)."""
     holding = False
     entry_price = None
     entry_date = None
@@ -135,9 +145,16 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, 
         close_today = float(close_slice.iloc[-1])
 
         if not holding:
+            precomputed_today = None
+            if precomputed_full is not None:
+                precomputed_today = {
+                    k: v.iloc[:pos + 1] for k, v in precomputed_full.items() if k != 'macd_histogram'
+                }
+                precomputed_today['macd'] = {'histogram': precomputed_full['macd_histogram'].iloc[:pos + 1]}
             with redirect_stdout(quiet):  # silenzia i print [L1-CHECK] della libreria
                 result = analyzer.suggest_level(close_slice, current_level=3,
-                                                 high=high_slice, low=low_slice)
+                                                 high=high_slice, low=low_slice,
+                                                 precomputed=precomputed_today)
             if result.get('suggested_level') == 1:
                 c = result.get('conditions', {})
                 if require_macd and not c.get('macd_ok', False):

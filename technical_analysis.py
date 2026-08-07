@@ -1031,7 +1031,8 @@ class ETFTechnicalAnalyzer:
     # ── L1 Trend Sicuro (5 condizioni) ────────────────────────────────────────
 
     def suggest_level(self, prices: pd.Series, current_level: int = 3,
-                      high: pd.Series = None, low: pd.Series = None) -> Dict:
+                      high: pd.Series = None, low: pd.Series = None,
+                      precomputed: dict = None) -> Dict:
         """
         Suggerisce L1/L2/L3.
 
@@ -1092,29 +1093,46 @@ class ETFTechnicalAnalyzer:
             }
         current = float(curr_val)
 
-        ema10  = self._ema(close, self.ema10_period)
-        ema20  = self._ema(close, self.ema20_period)
-        sma50  = self._sma(close, self.sma50_period) if len(close) >= self.sma50_period else None
-        sma200 = self._sma(close, self.sma200_period) if len(close) >= self.sma200_period else None
+        # 'precomputed' (opzionale, 2026-08-07): permette al chiamante di passare EMA/SMA/
+        # RSI/ADX/MACD gia' calcolati sull'intera serie (tagliati alla stessa lunghezza di
+        # 'close') invece di ricalcolarli qui da zero — usato da optimize_hyperparameters.py
+        # per evitare il costo O(n^2) di un walk-forward giorno-per-giorno su grandi griglie
+        # di parametri. Stessa identica logica sotto in entrambi i casi, nessuna duplicazione:
+        # gli indicatori sono causali (dipendono solo dal passato), quindi calcolarli una
+        # volta sull'intera serie e tagliarli da' esattamente gli stessi valori di calcolarli
+        # ogni giorno su una finestra crescente.
+        if precomputed is not None:
+            ema10  = precomputed['ema10']
+            ema20  = precomputed['ema20']
+            sma50  = precomputed['sma50']
+            sma200 = precomputed['sma200']
+            rsi    = precomputed['rsi']
+            adx_s  = precomputed['adx']
+            macd_d = precomputed['macd']
+        else:
+            ema10  = self._ema(close, self.ema10_period)
+            ema20  = self._ema(close, self.ema20_period)
+            sma50  = self._sma(close, self.sma50_period) if len(close) >= self.sma50_period else None
+            sma200 = self._sma(close, self.sma200_period) if len(close) >= self.sma200_period else None
+            rsi    = self._rsi(close)
+            # ADX: usa OHLC se disponibili, altrimenti Close-only
+            if high is not None and low is not None and len(high) == len(close):
+                adx_s = self._adx(high.astype(float), low.astype(float), close)
+            else:
+                adx_s = self._adx_close_only(close)
+            macd_d = self._macd(close)
 
         ema10_v  = self._fval(ema10)
         ema20_v  = self._fval(ema20)
         sma50_v  = self._fval(sma50) if sma50 is not None else None
         sma200_v = self._fval(sma200) if sma200 is not None else None
 
-        rsi     = self._rsi(close)
         rsi_val = self._fval(rsi)
         rsi_c   = rsi.dropna()
         rsi_prev = float(rsi_c.iloc[-2]) if len(rsi_c) >= 2 else rsi_val
 
-        # ADX: usa OHLC se disponibili, altrimenti Close-only
-        if high is not None and low is not None and len(high) == len(close):
-            adx_s   = self._adx(high.astype(float), low.astype(float), close)
-        else:
-            adx_s   = self._adx_close_only(close)
         adx_val = self._fval(adx_s)
 
-        macd_d  = self._macd(close)
         macd_h  = self._fval(macd_d['histogram'])
         macd_hp = float(macd_d['histogram'].iloc[-2]) if len(macd_d['histogram']) >= 2 and pd.notna(macd_d['histogram'].iloc[-2]) else None
 
@@ -1206,8 +1224,14 @@ class ETFTechnicalAnalyzer:
         macd_ok        = macd_positive and macd_rising
 
         # 7️⃣ NUOVA: Spazio Residuo Minimo (resistenza OR volatilità ATR)
+        if precomputed is not None and high is not None and low is not None:
+            atr_for_space = self._fval(precomputed['atr'])
+        elif high is not None and low is not None:
+            atr_for_space = self._fval(self._calculate_atr(high, low, close))
+        else:
+            atr_for_space = None
         space_residuo_check = self.l1_check_space_residuo_minimo(current, high, low,
-                                                                  self._fval(self._calculate_atr(high, low, close)) if high is not None and low is not None else None,
+                                                                  atr_for_space,
                                                                   None,
                                                                   None) if high is not None and low is not None else {'valid': False}
         space_ok       = space_residuo_check.get('valid', False)
