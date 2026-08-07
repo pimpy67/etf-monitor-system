@@ -589,6 +589,88 @@ class PriceDatabase:
         finally:
             conn.close()
 
+    def get_open_shadow_position(self, model_name: str, ticker: str) -> Optional[dict]:
+        """Restituisce la posizione ombra aperta per questo ticker/modello, o None."""
+        conn = self._get_connection()
+        if not conn:
+            return None
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT id, ticker, isin, famiglia, entry_date, entry_price
+                    FROM etf_shadow_positions
+                    WHERE model_name = %s AND ticker = %s AND status = 'open'
+                """, (model_name, ticker))
+                row = cur.fetchone()
+                return dict(row) if row else None
+        except Exception as e:
+            logging.error(f"Errore get_open_shadow_position {ticker}: {e}")
+            return None
+        finally:
+            conn.close()
+
+    def open_shadow_position(self, model_name: str, ticker: str, isin: str, famiglia: str,
+                              entry_date, entry_price: float) -> bool:
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO etf_shadow_positions
+                        (model_name, ticker, isin, famiglia, entry_date, entry_price, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'open')
+                    ON CONFLICT (model_name, ticker, entry_date) DO NOTHING
+                """, (model_name, ticker, isin, famiglia, entry_date, entry_price))
+                conn.commit()
+            return True
+        except Exception as e:
+            logging.error(f"Errore open_shadow_position {ticker}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def close_shadow_position(self, position_id: int, exit_date, exit_price: float,
+                               exit_reason: str, gross_pct_gain: float) -> bool:
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE etf_shadow_positions
+                    SET status = 'closed', exit_date = %s, exit_price = %s,
+                        exit_reason = %s, gross_pct_gain = %s, updated_at = now()
+                    WHERE id = %s
+                """, (exit_date, exit_price, exit_reason, gross_pct_gain, position_id))
+                conn.commit()
+            return True
+        except Exception as e:
+            logging.error(f"Errore close_shadow_position {position_id}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def get_shadow_positions(self, model_name: str) -> list:
+        conn = self._get_connection()
+        if not conn:
+            return []
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT ticker, isin, famiglia, entry_date, entry_price,
+                           exit_date, exit_price, exit_reason, status, gross_pct_gain
+                    FROM etf_shadow_positions
+                    WHERE model_name = %s
+                    ORDER BY entry_date
+                """, (model_name,))
+                return [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            logging.error(f"Errore get_shadow_positions: {e}")
+            return []
+        finally:
+            conn.close()
+
     def get_ohlcv(self, ticker: str, days: int = 200) -> pd.DataFrame:
         """
         Recupera lo storico OHLCV per un ETF

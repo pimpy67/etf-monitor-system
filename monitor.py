@@ -1078,6 +1078,18 @@ class ETFMonitor:
             add_log(f"⚠️  Errore aggiornamento L0 suggerito: {e}")
             add_log(traceback.format_exc())
 
+        # STEP 8 — Shadow Monitor CANDIDATE_MODEL_B_20260807 (2026-08-07): traccia
+        # posizioni ipotetiche sul cluster 'core' con i parametri del candidato
+        # (mm200_distance_max=7.0%, adx-4, smart_6_macd, TP=15%) senza toccare NESSUNA
+        # decisione reale — solo log su etf_shadow_positions per il confronto
+        # native_7 vs candidato a fine lockdown (06/09/2026). Nessuna email. Vedi
+        # CLAUDE.md "CANDIDATE_MODEL_B_20260807".
+        try:
+            from shadow_monitor import run_shadow_monitor
+            run_shadow_monitor(self.db, results, add_log=add_log)
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor (non bloccante): {e}")
+
         # 7. Invia resoconto portafoglio — DOPO l'aggiornamento SL/TP (fix 2026-08-05:
         # prima veniva inviato PRIMA degli STEP 4/7 sopra, quindi l'email mostrava
         # sempre i valori SL/TP del giorno precedente invece di quelli appena calcolati
