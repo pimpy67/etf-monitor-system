@@ -888,7 +888,20 @@ class ETFTechnicalAnalyzer:
         l0_enabled = l0_entry_params.get('enabled', False)
         
         # Whitelist check: L0 solo su famiglie autorizzate
-        global_params = self.p.get('global_params', {}) if hasattr(self, 'p') else {}
+        # FIX 2026-08-07: 'global_params' e' una chiave YAML di primo livello (sorella di
+        # 'families:'), MAI presente dentro self.p (che e' solo il sotto-dizionario della
+        # singola famiglia — vedi __init__, self.p = _FAMILIES_CONFIG['families'][famiglia]).
+        # self.p.get('global_params', {}) ha sempre restituito {} per QUALUNQUE famiglia,
+        # quindi l0_whitelist/l0_blacklist erano sempre liste vuote e il gate sotto veniva
+        # sempre saltato (bug silenzioso dal commit e81ae75 del 06/08 che introduceva questo
+        # controllo — mai stato realmente attivo). Confermato in produzione: 6 ETF in L0 al
+        # momento della scoperta, zero equity_sviluppati (leva_single_stock, commodities,
+        # mercati_emergenti x3, oro_metalli_preziosi) — esattamente i settori speculativi che
+        # la whitelist doveva escludere. Ora legge dalla config di classe, non da self.p.
+        global_params = (
+            self._FAMILIES_CONFIG.get('global_params', {})
+            if getattr(self, '_FAMILIES_CONFIG', None) else {}
+        )
         l0_whitelist = global_params.get('l0_whitelist', [])
         l0_blacklist = global_params.get('l0_blacklist', [])
 
