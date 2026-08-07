@@ -492,6 +492,103 @@ class PriceDatabase:
         finally:
             conn.close()
 
+    def save_frozen_ohlcv_bulk(self, ticker: str, isin: str, df: pd.DataFrame,
+                                freeze_batch: str) -> int:
+        """
+        Salva uno storico OHLCV nel Golden Dataset congelato (etf_price_history_frozen).
+
+        A differenza di save_ohlcv_bulk(), scrive in una tabella separata e mai toccata
+        dal monitor live — pensata per essere popolata UNA VOLTA da un backfill dedicato
+        (freeze_historical_dataset.py) e poi letta sempre invariata dai backtest, per
+        avere risultati riproducibili al 100% run dopo run. Vedi CLAUDE.md.
+
+        Args:
+            ticker: Ticker dell'ETF
+            isin: ISIN dell'ETF (puo' essere vuoto)
+            df: DataFrame con colonne Open, High, Low, Close, Volume e index=Date
+            freeze_batch: etichetta dello snapshot (es. '2026-08-07')
+
+        Returns:
+            Numero di record salvati
+        """
+        conn = self._get_connection()
+        if not conn:
+            return 0
+
+        saved = 0
+        try:
+            with conn.cursor() as cur:
+                for date_idx, row in df.iterrows():
+                    date_str = date_idx.strftime('%Y-%m-%d') if hasattr(date_idx, 'strftime') else str(date_idx)
+                    try:
+                        cur.execute("""
+                            INSERT INTO etf_price_history_frozen
+                                (freeze_batch, ticker, isin, date, open, high, low, close, volume)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (freeze_batch, ticker, date)
+                            DO UPDATE SET open = EXCLUDED.open, high = EXCLUDED.high,
+                                          low = EXCLUDED.low, close = EXCLUDED.close,
+                                          volume = EXCLUDED.volume, isin = EXCLUDED.isin
+                        """, (freeze_batch, ticker, isin or None, date_str,
+                              float(row.get('Open', 0)) if pd.notna(row.get('Open')) else None,
+                              float(row.get('High', 0)) if pd.notna(row.get('High')) else None,
+                              float(row.get('Low', 0)) if pd.notna(row.get('Low')) else None,
+                              float(row['Close']),
+                              int(row.get('Volume', 0)) if pd.notna(row.get('Volume')) else None))
+                        saved += 1
+                    except Exception:
+                        continue
+                conn.commit()
+        except Exception as e:
+            print(f"Errore salvataggio frozen bulk {ticker}: {e}")
+        finally:
+            conn.close()
+
+        return saved
+
+    def get_frozen_ohlcv(self, ticker: str, freeze_batch: str) -> pd.DataFrame:
+        """
+        Recupera lo storico OHLCV congelato per un ticker da uno specifico snapshot.
+
+        Returns:
+            DataFrame con colonne ['Open','High','Low','Close','Volume'] e index=Date,
+            ordinato cronologicamente, oppure DataFrame vuoto se non presente nel batch.
+        """
+        conn = self._get_connection()
+        if not conn:
+            return pd.DataFrame()
+
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT date, open, high, low, close, volume
+                    FROM etf_price_history_frozen
+                    WHERE ticker = %s AND freeze_batch = %s
+                    ORDER BY date ASC
+                """, (ticker, freeze_batch))
+                rows = cur.fetchall()
+
+                if rows:
+                    df = pd.DataFrame(rows)
+                    df['date'] = pd.to_datetime(df['date'])
+                    for col in ['open', 'high', 'low', 'close']:
+                        df[col] = df[col].astype(float)
+                    result = pd.DataFrame({
+                        'Open':   df['open'].values,
+                        'High':   df['high'].values,
+                        'Low':    df['low'].values,
+                        'Close':  df['close'].values,
+                        'Volume': df['volume'].values,
+                    }, index=df['date'])
+                    result.index.name = 'Date'
+                    return result
+                return pd.DataFrame()
+        except Exception as e:
+            logging.error(f"Errore recupero frozen OHLCV {ticker}/{freeze_batch}: {e}")
+            return pd.DataFrame()
+        finally:
+            conn.close()
+
     def get_ohlcv(self, ticker: str, days: int = 200) -> pd.DataFrame:
         """
         Recupera lo storico OHLCV per un ETF

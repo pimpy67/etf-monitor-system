@@ -40,6 +40,32 @@ import pandas as pd
 
 from technical_analysis import ETFTechnicalAnalyzer
 from data_fetcher import ETFDataFetcher
+from database import Database
+
+# Default: tutti i backtest leggono dal Golden Dataset congelato (etf_price_history_frozen),
+# non da Yahoo Finance live — vedi CLAUDE.md "L1 -- Come Si Esce" per il perche' (indagine
+# 3 vs 80 vs 1 trade, 2026-08-07: stesso codice+parametri, rifetch live = risultati diversi
+# ogni run). Usa --live per il vecchio comportamento (fetch Yahoo diretto).
+DEFAULT_FROZEN_BATCH = '2026-08-07'
+
+
+class FrozenDataFetcher:
+    """Legge OHLCV dal Golden Dataset congelato invece che da Yahoo Finance live.
+    Stessa interfaccia di ETFDataFetcher.get_historical_data() cosi' backtest_ticker()
+    non deve sapere quale fetcher sta usando."""
+
+    def __init__(self, freeze_batch: str):
+        self.freeze_batch = freeze_batch
+        self.db = Database()
+        self._live_fallback = ETFDataFetcher()
+
+    def get_historical_data(self, ticker: str, days: int = 250) -> pd.DataFrame:
+        df = self.db.get_frozen_ohlcv(ticker, self.freeze_batch)
+        if df.empty:
+            print(f"    [!] {ticker}: assente dal batch congelato '{self.freeze_batch}' "
+                  f"— fallback su fetch live (risultato non riproducibile per questo ticker)")
+            return self._live_fallback.get_historical_data(ticker, days=days)
+        return df.tail(days) if days else df
 
 TARGET_FAMILIES = {
     'equity_sviluppati', 'mercati_emergenti', 'settoriali_growth',
@@ -358,6 +384,11 @@ def main():
                          help='se fornito, esegue anche una simulazione con min_buy_count forzato a questo valore')
     parser.add_argument('--position-sizes', default='5000,10000',
                          help='capitali ipotetici per trade (EUR, separati da virgola), per costi/tasse in valore assoluto')
+    parser.add_argument('--live', action='store_true',
+                         help='usa fetch Yahoo Finance live invece del Golden Dataset congelato '
+                              '(risultati NON riproducibili run-to-run, vedi CLAUDE.md)')
+    parser.add_argument('--frozen-batch', default=DEFAULT_FROZEN_BATCH,
+                         help=f'quale snapshot congelato usare (default: {DEFAULT_FROZEN_BATCH})')
     args = parser.parse_args()
     position_sizes = [float(x) for x in args.position_sizes.split(',')]
 
@@ -375,12 +406,16 @@ def main():
     print(f"Famiglie: {', '.join(sorted(TARGET_FAMILIES))}")
     print(f"Varianti: {[v[0] for v in variants]}  |  Position sizes: {position_sizes}EUR  |  "
           f"Costi Directa: {DIRECTA_FEE_BUY}+{DIRECTA_FEE_SELL}EUR  |  Tax: {TAX_RATE:.0%}")
+    if args.live:
+        print("Fonte dati: Yahoo Finance LIVE — risultati NON riproducibili run-to-run")
+    else:
+        print(f"Fonte dati: Golden Dataset congelato, batch '{args.frozen_batch}' — riproducibile")
     print("=" * 78)
 
     universe = load_universe()
     print(f"ETF nell'universo target: {len(universe)}\n")
 
-    fetcher = ETFDataFetcher()
+    fetcher = ETFDataFetcher() if args.live else FrozenDataFetcher(args.frozen_batch)
     results, errors = [], []
 
     for i, item in enumerate(universe, 1):

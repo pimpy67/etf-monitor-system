@@ -1301,13 +1301,71 @@ nota sotto.
 >   100% win rate. Un bug che "blocca il 98% dei segnali" lasciandone passare 3 puliti non è
 >   il comportamento di un'eccezione non gestita.
 >
-> **Conclusione**: la spiegazione data per gli 80 trade non regge. Da dove venga quel numero
-> resta ignoto — possibile un run con parametri, universo o storico diversi mai
-> documentati, o un valore non derivato da un'esecuzione reale dello script. **Non trattare
-> gli 80 trade come dato consolidato** finché non si rilancia `backtest_l1.py --variant
-> native_7 --years 3` (serve una macchina con Python — non disponibile su questa) e si
-> confronta l'elenco trade-per-trade con quello del 05/08. Fino ad allora resta valida come
-> riferimento operativo la sezione "Stato Attuale & Roadmap L1" sotto (3 trade, 100% WR).
+> **Conclusione (2026-08-06)**: la spiegazione data per gli 80 trade non regge. Da dove venga
+> quel numero resta ignoto — possibile un run con parametri, universo o storico diversi mai
+> documentati, o un valore non derivato da un'esecuzione reale dello script.
+
+> ✅ **RISOLTO — causa reale identificata (2026-08-07)**: rilanciato `backtest_l1.py` sul
+> commit esatto `3bdb52e` (stesso codice, stessi parametri `--start 2023-08-05`, stesso
+> universo di 236 ETF del run del 05/08 che aveva prodotto i 3 trade), in un worktree git
+> isolato copiato dentro il container per non toccare `/app` in produzione. **Risultato: 1
+> trade solo** (`WLDC.PA`, +5.19% lordo/+3.77% netto, 54gg) — `CEC.PA` e `LGQM.DE` (gli altri
+> due trade del 05/08) risultano oggi entrambi `native_7: 0 trade`, senza alcun errore di
+> fetch: vengono scaricati e analizzati normalmente, semplicemente non soddisfano più le 7
+> condizioni sui dati odierni.
+>
+> **Causa**: `backtest_l1.py` non legge da uno storico congelato — ad ogni esecuzione
+> riscarica OHLCV **live da Yahoo Finance** via `yfinance`. Yahoo rivede retroattivamente gli
+> adjusted close (dividendi, split, ricalcoli), e la finestra "fino a oggi" si sposta di
+> qualche giorno a ogni run: bastano micro-variazioni su un valore storico borderline (es.
+> ADX a 22.01 che diventa 21.98) per far scattare o non scattare una condizione delle 7, e
+> quindi l'intero trade, da un giorno all'altro. **Stesso identico codice + stessi parametri
+> + 2 soli giorni di differenza tra i due run → 3 trade vs 1 trade.** Questo conferma che
+> `backtest_l1.py` **non è riproducibile run-to-run** con lo stato attuale (fetch live), a
+> prescindere dal codice — quindi confrontare conteggi di trade fatti in giorni diversi (3 vs
+> 80 vs 1) non è mai stato un confronto valido like-for-like. Non prova che 80 fosse
+> "corretto", ma esclude definitivamente sia il bug `regime_ok`/`smart_6_7_macd` (già escluso
+> il 06/08 per cronologia) sia qualunque altra spiegazione basata sul codice: il rumore viene
+> dai dati sorgente, non dalla logica.
+>
+> **Implicazione pratica**: nessun numero di trade/P&L da un singolo run di `backtest_l1.py`
+> va più trattato come definitivo finché lo script continua a rifetchare dati live — vale per
+> tutti i risultati storici citati in questo documento (3, 469, 151, 80, 1...), non solo per
+> l'80. Per backtest scientificamente ripetibili servirebbe uno storico OHLCV congelato
+> (snapshot fisso, es. su tabella Postgres o file locale) da cui il backtest legge sempre gli
+> stessi dati, lasciando il fetch live solo al monitor giornaliero (che necessita solo
+> dell'ultima candela). Non ancora implementato — proposto il 2026-08-07, in attesa di via libera per lo
+> sviluppo.
+
+### Sessione fix 2026-08-07 (riassunto) — bug regime_ok, 10 ticker delistati, chiusura discrepanza 80 vs 3
+
+- **Fix `UnboundLocalError: regime_ok`** in `suggest_level_0()`: la variabile veniva letta ai
+  percorsi FAST/SLOW (righe 948/968 dell'epoca) prima di essere calcolata (riga 1005) —
+  introdotto dal gate regime BULL del 06/08 (`e81ae75`), mai emerso prima perché nessun run
+  precedente aveva loggato l'errore come tale. Impatto reale: **48 ETF su 240 (20%
+  dell'universo)**, tutti gli `equity_sviluppati` che superano il whitelist gate L0, venivano
+  scartati a ogni run con `data_status='no_data'` — sembravano "senza dati" ma avevano
+  storico regolare in DB (verificato: 638-640gg per un campione). Fix: spostato il calcolo di
+  `regime_ok` subito dopo `global_params`, prima di qualunque uso. Commit `988a5bd`.
+- **10 ticker Yahoo Finance delistati** (`WSML.DE`, `IWMO.DE`, `IWQU.DE`, `MVOL.DE`,
+  `IGLN.MI`, `BITC.MI`, `ETHE.MI`, `SLNC.MI`, `BTCE.MI`, `BDAS.MI`) — genuinamente "0 giorni
+  per sempre", non nuovi ETF in accumulo. Rimappati per ISIN (non per nome, per evitare falsi
+  positivi su varianti hedged/Advanced) a ticker vivi verificati via `yfinance`:
+  `WSML.L`/`IWMO.L`/`IWQU.L`/`MVOL.L`/`IGLN.L` (Londra, USD), `BITC.SW`/`ETHE.SW`/`SLNC.SW`
+  (Swiss SIX, CHF), `BTCE.DE` (Xetra, EUR), `DA21.DE` (Xetra, USD — unico caso di cambio
+  ticker root, non solo suffisso: `BDAS` non esiste più su nessuna borsa). Commit `1ea0771`.
+  Dopo entrambi i fix: `no_data` sceso da 58 a 0 su 240 ETF.
+- **Chiusa l'indagine sulla discrepanza 80 vs 3 trade nativi 7/7** aperta il 06/08 — non con
+  la conferma sperata ("3 è giusto, 80 è sbagliato"), ma con l'identificazione della causa
+  reale: `backtest_l1.py` non è riproducibile run-to-run perché rifetcha OHLCV live da Yahoo
+  a ogni esecuzione. Vedi nota sopra in "L1 — Come Si Esce" per il dettaglio completo
+  (rerun a codice identico, 2 giorni dopo → 3 trade diventano 1).
+- **Nota**: `/root/etf_monitor_system/etf_monitoraggio.xlsx` è un **bind mount** diretto in
+  `/app/etf_monitoraggio.xlsx` (non `COPY` in build) — modifiche al file sull'host sono
+  visibili nel container **senza restart**. Utile per fix rapidi ai dati (ticker, borsa,
+  valuta) senza rischiare di uccidere processi in background nel container (es. un backtest
+  lungo lanciato con `docker exec -d`, che un `docker compose up -d --force-recreate`
+  ucciderebbe).
 
 ---
 
