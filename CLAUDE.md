@@ -1359,6 +1359,54 @@ nota sotto.
 > già a 0 trade in ogni versione precedente), ma non riverificato. Un rerun con l'universo
 > pienamente aggiornato non è ancora stato fatto.
 
+### 🔴 FIX CRITICO 2026-08-07 — whitelist/blacklist L0 non è mai stata attiva
+
+**Scoperto indagando un'anomalia nel nuovo progetto L0** (vedi sezione sotto), non durante
+un controllo di sicurezza dedicato — buona ragione per prendere sul serio le anomalie anche
+quando sembrano solo un dettaglio del backtest.
+
+`global_params` è una chiave YAML di **primo livello** (sorella di `families:`, non annidata
+dentro nessuna famiglia). Ma `self.p` (riga ~105 di `technical_analysis.py`, in `__init__`)
+viene assegnato **solo** al sotto-dizionario della singola famiglia
+(`_FAMILIES_CONFIG['families'][famiglia]`) — non contiene mai `global_params`. Di
+conseguenza `self.p.get('global_params', {})` dentro `suggest_level_0()` ha **sempre**
+restituito `{}` per qualunque famiglia, quindi `l0_whitelist`/`l0_blacklist` erano **sempre**
+liste vuote, e il controllo whitelist introdotto dal commit `e81ae75` (06/08) per
+restringere L0 a `equity_sviluppati` (vedi sopra "L0 — Come Si Entra") **non ha mai
+funzionato realmente**, nonostante fosse documentato in questo stesso file come attivo dal
+06/08.
+
+**Confermato con dati di produzione al momento della scoperta**: dashboard con **6 ETF
+classificati L0, zero `equity_sviluppati`** — `IUSB.DE` (leva_single_stock), `COMH.MI`
+(commodities), `LHKG.DE`/`ASI.PA`/`INDO.PA` (mercati_emergenti), `PHAU.L`
+(oro_metalli_preziosi). Esattamente il tipo di ingresso speculativo che la whitelist doveva
+prevenire (motivazione originale del 06/08: fallimenti L0 su INRG/BATE/BTCN durante bear
+market strutturali) — probabilmente accaduto in silenzio per tutto il mese. Nessuna
+posizione reale del portafoglio coinvolta (verificato contro `etf_portfolio_entries`).
+
+**Fix**: legge `global_params` da `self._FAMILIES_CONFIG` (config di classe, condivisa) invece
+che da `self.p`. Verificato: `mercati_emergenti` ora blocca correttamente
+(`L0_DISABLED_NOT_IN_WHITELIST`), `equity_sviluppati` valuta le condizioni normalmente. Dopo
+il deploy: L0 sceso da 6 a **0** (nessun `equity_sviluppati` soddisfa le condizioni in
+questo momento — corretto, non un effetto collaterale). Commit `600f51b`.
+
+### Bug minori di classificazione trovati nello stesso giro (`family_detection`)
+
+- `'Obbligazionari Governo'`/`'Obbligazionari Corporate'` (categorie Excel reali, **senza
+  trattino**) non matchavano i pattern esistenti (`'obbligazionari - governativi'`/
+  `'- corporate'`, **con trattino**) → 2 ETF governativi + 1 corporate cadevano nel default
+  `equity_sviluppati`, con soglie RSI/ADX/`mm200_distance_max` sbagliate per un bond.
+- `'Liquidità'` (con accento) non matchava `'liquidita'` (senza accento) come substring →
+  stesso problema per 1 ETF di liquidità. Fix: aggiunto pattern `'liquidit'` (sicuro in
+  entrambi i casi).
+- `'Azionari Alternativi'` (**`LVO.MI`**, *Amundi S&P 500 VIX Futures Enhanced Roll UCITS
+  ETF*) cadeva nello stesso default. Non è un ETF azionario normale: un prodotto sui futures
+  VIX decade strutturalmente per contango (-82% in 4 anni nello storico, giornate di ±15-17%)
+  e non risponde a mean-reversion/trend-following classico — generava 25 trade spuri nel
+  backtest L0 di oggi contro 0-8 di ogni altro ticker. Riclassificato `leva_single_stock`:
+  automaticamente escluso da L0 (blacklist, ora davvero attiva — vedi sopra) e soglie L1 più
+  adatte all'alta volatilità. Commit `564de92`.
+
 ### Grid Search `smart_6_macd` — pilota 2026-08-07 (`optimize_hyperparameters.py`)
 
 **Obiettivo**: trovare parametri ottimali per L1 su `smart_6_macd` (non `native_7`, troppo
