@@ -1334,8 +1334,30 @@ nota sotto.
 > l'80. Per backtest scientificamente ripetibili servirebbe uno storico OHLCV congelato
 > (snapshot fisso, es. su tabella Postgres o file locale) da cui il backtest legge sempre gli
 > stessi dati, lasciando il fetch live solo al monitor giornaliero (che necessita solo
-> dell'ultima candela). Non ancora implementato — proposto il 2026-08-07, in attesa di via libera per lo
-> sviluppo.
+> dell'ultima candela).
+>
+> ✅ **IMPLEMENTATO (2026-08-07)**: `etf_price_history_frozen` (migration `002`), popolata da
+> `freeze_historical_dataset.py` (229/236 ticker, 219.268 righe, 2022-02-15→2026-08-07, batch
+> `'2026-08-07'`). `backtest_l1.py` ora legge da lì **di default** (`FrozenDataFetcher`), con
+> `--live` per il vecchio comportamento fetch-live quando serve. `database.py`:
+> `save_frozen_ohlcv_bulk()` / `get_frozen_ohlcv()`.
+>
+> **BASELINE_OFFICIAL_20260807** (native_7, `--start 2023-08-05`, batch congelato
+> `2026-08-07`, codice HEAD di oggi = con fix `regime_ok` + filtro `mm200_distance_max`):
+> **1 trade** — `WLDC.PA` (equity_sviluppati), entry 2025-08-15 @15.606, exit TP 2025-10-08
+> @16.416, 54gg, +5.19% lordo. Netto: 5.000€/trade → +3.69% (+184,64€); 10.000€/trade →
+> +3.77% (+376,68€). Win rate 100% (su 1 trade — non conclusivo, resta il problema di sempre:
+> il gate 7/7 nativo è estremamente selettivo). Questo è ora il numero di riferimento per
+> qualunque confronto futuro sullo stesso codice — riproducibile all'infinito finché si usa
+> lo stesso `--frozen-batch`. Non è direttamente confrontabile con i 3 trade del 05/08 o gli
+> 80 mai spiegati: quelli usavano codice precedente (senza `mm200_distance_max`) e dati non
+> congelati.
+>
+> **Gap noto**: questo run ha usato l'universo Excel di **prima** degli ultimi 3 fix ticker
+> (`USHYC`→`USHYC.MI`, `PHAU.MI`→`PHAU.L`, `3LMS.MI`→`3LMS.L`, vedi sotto) — quei 3 ticker
+> compaiono ancora come "storico insufficiente" nel run. Impatto atteso trascurabile (erano
+> già a 0 trade in ogni versione precedente), ma non riverificato. Un rerun con l'universo
+> pienamente aggiornato non è ancora stato fatto.
 
 ### Sessione fix 2026-08-07 (riassunto) — bug regime_ok, 10 ticker delistati, chiusura discrepanza 80 vs 3
 
@@ -1360,6 +1382,17 @@ nota sotto.
   reale: `backtest_l1.py` non è riproducibile run-to-run perché rifetcha OHLCV live da Yahoo
   a ogni esecuzione. Vedi nota sopra in "L1 — Come Si Esce" per il dettaglio completo
   (rerun a codice identico, 2 giorni dopo → 3 trade diventano 1).
+- **Golden Dataset**: implementato lo storico OHLCV congelato (`etf_price_history_frozen`)
+  per rendere i backtest riproducibili — vedi nota sopra in "L1 — Come Si Esce" per schema,
+  script di backfill e la prima **BASELINE_OFFICIAL_20260807** (1 trade, `WLDC.PA`).
+- **7 ticker aggiuntivi corretti/rimossi** durante il backfill del Golden Dataset (emersi
+  come "0 righe" nel fetch storico completo, non nel semplice check giornaliero del
+  monitor): `USHYC`→`USHYC.MI` (mancava il suffisso borsa), `PHAU.MI`→`PHAU.L` (WisdomTree
+  Physical Gold, migrato a Londra), `3LMS.MI`→`3LMS.L` (GraniteShares 3x Long Microsoft,
+  migrato a Londra). Rimossi invece 4 ticker senza soluzione: `NDXH2.PA` (duplicato — stesso
+  ISIN `LU1954152853` di `UST.PA`, già tracciato), `3LIS.MI`/`3LUC.MI`/`3MBS.MI`
+  (GraniteShares 3x Intesa/UniCredit/-3x FTSE MIB — nessun listing vivo trovato su Yahoo
+  sotto nessun suffisso borsa comune). Universo sceso da 240 a 236 righe in Excel.
 - **Nota**: `/root/etf_monitor_system/etf_monitoraggio.xlsx` è un **bind mount** diretto in
   `/app/etf_monitoraggio.xlsx` (non `COPY` in build) — modifiche al file sull'host sono
   visibili nel container **senza restart**. Utile per fix rapidi ai dati (ticker, borsa,
