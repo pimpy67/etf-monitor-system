@@ -1169,7 +1169,8 @@ class PriceDatabase:
                     SELECT isin, fund_name, entry_date, entry_price,
                            exit_date, exit_price, status,
                            is_partial, partial_exit_date, partial_exit_price,
-                           portfolio_type, stop_loss_l0_suggested
+                           portfolio_type, stop_loss_l0_suggested,
+                           sl_suggerito, sg_suggerito, stop_loss_inserted, stop_gain_target
                     FROM etf_portfolio_entries
                     WHERE status = 'active'
                     ORDER BY entry_date DESC
@@ -1193,7 +1194,8 @@ class PriceDatabase:
                     SELECT isin, fund_name, entry_date, entry_price,
                            exit_date, exit_price, status,
                            is_partial, partial_exit_date, partial_exit_price,
-                           portfolio_type, stop_loss_l0_suggested
+                           portfolio_type, stop_loss_l0_suggested,
+                           sl_suggerito, sg_suggerito, stop_loss_inserted, stop_gain_target
                     FROM etf_portfolio_entries
                     WHERE portfolio_type = %s
                     ORDER BY entry_date DESC

@@ -1410,14 +1410,16 @@ function renderPortfolioTable(portfolioData, portfolioType) {
     </tr>
     <tr class="sl-row" id="pf-sl-${isin}" style="background:rgba(88,166,255,0.04);">
       <td colspan="10" style="padding:12px;">
-        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:16px;font-size:0.85em;align-items:end;">
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:16px;font-size:0.85em;align-items:end;">
           <div><strong>Pr. Carico</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;">€${prAcq}</span></div>
-          <div><strong>SL Suggerito${portfolioType === 'L0' ? ' (dinamico)' : ''}</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;" id="sl-sugg-${isin}">${portfolioType === 'L0' && p.stop_loss_l0_suggested ? '€' + parseFloat(p.stop_loss_l0_suggested).toFixed(4) : '—'}</span></div>
+          <div><strong>Prezzo Stop</strong>${p.stop_tightened ? ' 🔶' : ''}<br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;" id="sl-sugg-${isin}">${p.prezzo_stop ? '€' + parseFloat(p.prezzo_stop).toFixed(4) : '—'}</span></div>
+          <div><strong>Prezzo Limite (Stop)</strong><br><span style="font-family:monospace;font-size:1.1em;color:#58a6ff;">${p.prezzo_limite_stop ? '€' + parseFloat(p.prezzo_limite_stop).toFixed(4) : '—'}</span></div>
           <div><strong>SL Personale</strong><br><input type="text" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#58a6ff;" id="sl-pers-${isin}" placeholder="Inserisci SL" oninput="updatePortfolioP_L('${isin}',${prAcq})"></div>
-          <div><strong>TP Suggerito</strong><br><span style="font-family:monospace;font-size:1.1em;color:#3fb950;" id="tp-sugg-${isin}">${p.sg_suggested ? '€' + parseFloat(p.sg_suggested).toFixed(4) : '—'}</span></div>
+          <div><strong>Prezzo Limite (TP)</strong><br><span style="font-family:monospace;font-size:1.1em;color:#3fb950;" id="tp-sugg-${isin}">${p.prezzo_limite_tp ? '€' + parseFloat(p.prezzo_limite_tp).toFixed(4) : '—'}</span></div>
           <div><strong>TP Personale</strong><br><input type="text" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#3fb950;" id="tp-pers-${isin}" placeholder="Inserisci TP" value="${p.tp_inserted ? parseFloat(p.tp_inserted).toFixed(4) : ''}"></div>
           <div><button class="btn-pf-save" onclick="savePortfolioSL_TP('${isin}')" style="background:#238636;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:600;">💾 Salva</button></div>
         </div>
+        <div style="margin-top:8px;font-size:0.75em;color:#8b949e;">Prezzo Limite (TP) va piazzato come ordine <strong>Limite</strong> separato (non Stop) — Directa non ha un take profit condizionato al rialzo. 🔶 = Stop stretto perché il prezzo è entro il 3% dal TP.</div>
       </td>
     </tr>
     <tr class="history-row" id="pf-hist-${isin}" style="display:none;">

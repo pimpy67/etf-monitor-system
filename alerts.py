@@ -443,6 +443,7 @@ class AlertSystem:
         """
         try:
             from database import db
+            from order_pricing import compute_order_prices
 
             # Leggi il portafoglio personale — nessun filtro sulla classificazione dashboard,
             # solo lo status reale della posizione.
@@ -511,9 +512,16 @@ class AlertSystem:
                     else:
                         date_str = str(price_date)[:5]
 
-                    # Formatta SL/SG suggerito se disponibile
-                    sl_sug_str = f'€{float(sl_sug):.2f}' if sl_sug else '—'
-                    sg_sug_str = f'€{float(sg_sug):.2f}' if sg_sug else '—'
+                    # Prezzi pronti per l'ordine Directa (Stop/Limite per lo SL,
+                    # Limite semplice per il TP — Directa non ha un ordine "Take
+                    # Profit"). Si stringe automaticamente lo Stop se il prezzo è
+                    # vicino al TP — vedi order_pricing.py.
+                    op = compute_order_prices(current_price, sl_sug and float(sl_sug),
+                                               sg_sug and float(sg_sug))
+                    stop_str = f'€{op["prezzo_stop"]:.2f}' if op['prezzo_stop'] else '—'
+                    lim_sl_str = f'€{op["prezzo_limite_stop"]:.2f}' if op['prezzo_limite_stop'] else '—'
+                    lim_tp_str = f'€{op["prezzo_limite_tp"]:.2f}' if op['prezzo_limite_tp'] else '—'
+                    tighten_flag = ' 🔶' if op['tightened'] else ''
 
                     # Indicatore status
                     status_icon = '⚠️' if pct_change < -2 else ('✓' if pct_change >= 0 else '◆')
@@ -525,8 +533,9 @@ class AlertSystem:
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{entry_price:.2f}</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{current_price:.2f}</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:{color}"><strong>{status_icon} {sign}{pct_change:.1f}%</strong></td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{sl_sug_str}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{sg_sug_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{stop_str}{tighten_flag}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{lim_sl_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{lim_tp_str}</td>'
                         f'</tr>'
                     )
                 except Exception as e:
@@ -558,9 +567,13 @@ class AlertSystem:
                     color = '#28a745' if pct_change >= 0 else '#dc3545'
                     sign = '+' if pct_change >= 0 else ''
 
-                    # SL/TP suggeriti per L0
-                    sl_sug_str = f'€{float(sl_sug):.2f}' if sl_sug else '—'
-                    tp_sug_str = f'€{float(sg_sug):.2f}' if sg_sug else '—'
+                    # Prezzi pronti per l'ordine Directa — stessa logica della sezione L1
+                    op = compute_order_prices(current_price, sl_sug and float(sl_sug),
+                                               sg_sug and float(sg_sug))
+                    stop_str = f'€{op["prezzo_stop"]:.2f}' if op['prezzo_stop'] else '—'
+                    lim_sl_str = f'€{op["prezzo_limite_stop"]:.2f}' if op['prezzo_limite_stop'] else '—'
+                    lim_tp_str = f'€{op["prezzo_limite_tp"]:.2f}' if op['prezzo_limite_tp'] else '—'
+                    tighten_flag = ' 🔶' if op['tightened'] else ''
 
                     l0_rows.append(
                         f'<tr style="background:{"#f8f9fa" if len(l0_rows) % 2 == 0 else "white"}">'
@@ -569,8 +582,9 @@ class AlertSystem:
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{entry_price:.2f}</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{current_price:.2f}</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:{color}"><strong>{sign}{pct_change:.1f}%</strong></td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{sl_sug_str}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{tp_sug_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{stop_str}{tighten_flag}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{lim_sl_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{lim_tp_str}</td>'
                         f'</tr>'
                     )
                 except Exception as e:
@@ -589,8 +603,9 @@ class AlertSystem:
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Carico</th>'
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo</th>'
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Perf</th>'
-                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">SL Sug.</th>'
-                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">SG Sug.</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Stop</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Limite (Stop)</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Limite (TP)</th>'
                     f'</tr>'
                     f'{"".join(l1_rows)}'
                     f'</table>'
@@ -609,8 +624,9 @@ class AlertSystem:
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Carico</th>'
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo</th>'
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Perf</th>'
-                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">SL Sug.</th>'
-                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">TP Sug.</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Stop</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Limite (Stop)</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Limite (TP)</th>'
                     f'</tr>'
                     f'{"".join(l0_rows)}'
                     f'</table>'
@@ -639,12 +655,15 @@ class AlertSystem:
                 f'{table_html}'
                 f'<hr style="border:none;border-top:1px solid #ccc;margin:20px 0">'
                 f'<p style="margin:12px 0;font-size:11px;color:#666">'
-                f'<strong>📌 Legenda:</strong><br>'
-                f'• <strong>SL Sug.</strong> = Stop Loss suggerito (L1: formula ibrida, largo &lt;2%, stretto ≥2% — L0: trailing progressivo)<br>'
-                f'• <strong>SG/TP Sug.</strong> = L1: Stop Gain dinamico (target ravvicinato, si adatta al momentum) — L0: Take Profit fisso di famiglia (target ampio, medio-lungo periodo)<br>'
+                f'<strong>📌 Legenda — prezzi pronti per Directa:</strong><br>'
+                f'• <strong>Prezzo Stop</strong> = trigger dell\'ordine Stop di vendita (L1: formula ibrida — L0: trailing progressivo; si stringe automaticamente 🔶 se il prezzo è vicino al TP)<br>'
+                f'• <strong>Prezzo Limite (Stop)</strong> = da inserire nel campo "Prezzo limite" dello stesso ordine Stop (margine 1% sotto il trigger, per garantire l\'esecuzione anche in caso di gap)<br>'
+                f'• <strong>Prezzo Limite (TP)</strong> = ordine separato di tipo <strong>Limite</strong> (NON Stop — Directa non ha un take profit condizionato al rialzo), da piazzare fin da subito: si esegue da solo quando il prezzo lo raggiunge<br>'
+                f'• <strong>🔶</strong> = Stop stretto perché il prezzo è entro il 3% dal TP — valuta di aggiornare l\'ordine su Directa<br>'
                 f'• <strong>⚠️</strong> = Performance &lt; -2% (attenzione)<br>'
                 f'• <strong>✓</strong> = In profitto<br>'
-                f'• <strong>◆</strong> = In perdita ma &gt; -2%</p>'
+                f'• <strong>◆</strong> = In perdita ma &gt; -2%<br>'
+                f'• Se il Limite TP si esegue, ricordati di <strong>cancellare l\'ordine Stop</strong> residuo (i due ordini non sono collegati su Directa).</p>'
                 f'</div>'
                 f'{_FOOTER.format(ts=ts)}</body></html>'
             )

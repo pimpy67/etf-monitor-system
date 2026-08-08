@@ -16,6 +16,7 @@ import monitor_lock
 from pdf_generator import generate_parameters_pdf
 from pdf_generator_complete import generate_complete_pdf
 from technical_analysis import ETFTechnicalAnalyzer
+from order_pricing import compute_order_prices
 
 app = Flask(__name__)
 db  = PriceDatabase()
@@ -715,6 +716,11 @@ def get_portfolio():
 
         sl_suggerito = entry.get('sl_suggerito')
         sg_suggerito = entry.get('sg_suggerito')
+        order_prices = compute_order_prices(
+            current_price,
+            float(sl_suggerito) if sl_suggerito else None,
+            float(sg_suggerito) if sg_suggerito else None,
+        )
         entry_confidence = entry.get('entry_confidence', 1.0)
         accumulated_pcts_str = entry.get('accumulated_pcts', '[]')
         accumulated_dates_str = entry.get('accumulated_dates', '[]')
@@ -748,6 +754,10 @@ def get_portfolio():
             'etf_type':            analysis.get('etf_type', ''),
             'sl_suggerito':        float(sl_suggerito) if sl_suggerito else None,
             'sg_suggerito':        float(sg_suggerito) if sg_suggerito else None,
+            'prezzo_stop':         order_prices['prezzo_stop'],
+            'prezzo_limite_stop':  order_prices['prezzo_limite_stop'],
+            'prezzo_limite_tp':    order_prices['prezzo_limite_tp'],
+            'stop_tightened':      order_prices['tightened'],
             'entry_confidence':    float(entry_confidence) if entry_confidence else None,
             'entry_mode':          entry.get('entry_mode', 'STANDARD'),
             'portfolio_type':      entry.get('portfolio_type', 'L1'),
