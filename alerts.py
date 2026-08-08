@@ -453,7 +453,7 @@ class AlertSystem:
             cur = conn.cursor()
             cur.execute("""
                 SELECT pe.id, pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
-                       pe.portafoglio, pe.sl_suggerito, pe.sg_suggerito
+                       pe.portafoglio, pe.sl_suggerito, pe.sg_suggerito, pe.broker
                 FROM etf_portfolio_entries pe
                 WHERE pe.status = 'active'
                 ORDER BY pe.entry_date DESC
@@ -472,7 +472,7 @@ class AlertSystem:
             l1_total_gain = 0
             l1_total_notional = 0
 
-            for entry_id, isin, entry_price, entry_date, fund_name, portafoglio, sl_sug, sg_sug in l1_positions:
+            for entry_id, isin, entry_price, entry_date, fund_name, portafoglio, sl_sug, sg_sug, broker in l1_positions:
                 try:
                     entry_price = float(entry_price) if entry_price else 0
                     if entry_price <= 0:
@@ -512,12 +512,13 @@ class AlertSystem:
                     else:
                         date_str = str(price_date)[:5]
 
-                    # Prezzi pronti per l'ordine Directa (Stop/Limite per lo SL,
-                    # Limite semplice per il TP — Directa non ha un ordine "Take
-                    # Profit"). Si stringe automaticamente lo Stop se il prezzo è
-                    # vicino al TP — vedi order_pricing.py.
+                    # Prezzi pronti per l'ordine sul broker reale (Stop/Limite per
+                    # lo SL, Limite semplice per il TP). Su Directa lo Stop si
+                    # stringe automaticamente se il prezzo è vicino al TP (non si
+                    # può tenere il Limite TP in parallelo); su broker con OCO
+                    # (es. Webank) entrambi si piazzano subito — vedi order_pricing.py.
                     op = compute_order_prices(current_price, sl_sug and float(sl_sug),
-                                               sg_sug and float(sg_sug))
+                                               sg_sug and float(sg_sug), broker)
                     stop_str = f'€{op["prezzo_stop"]:.2f}' if op['prezzo_stop'] else '—'
                     lim_sl_str = f'€{op["prezzo_limite_stop"]:.2f}' if op['prezzo_limite_stop'] else '—'
                     lim_tp_str = f'€{op["prezzo_limite_tp"]:.2f}' if op['prezzo_limite_tp'] else '—'
@@ -529,7 +530,7 @@ class AlertSystem:
                     l1_rows.append(
                         f'<tr style="background:{"#f8f9fa" if len(l1_rows) % 2 == 0 else "white"}">'
                         f'<td style="padding:8px;border:1px solid #ddd"><strong>{fund_name[:35]}</strong><br>'
-                        f'<small style="color:#888">{isin}</small></td>'
+                        f'<small style="color:#888">{isin} · {broker or "Directa"}</small></td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{entry_price:.2f}</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{current_price:.2f}</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:{color}"><strong>{status_icon} {sign}{pct_change:.1f}%</strong></td>'
@@ -544,7 +545,7 @@ class AlertSystem:
 
             # ── SEZIONE L0 ──────────────────────────────────────────────────
             l0_rows = []
-            for entry_id, isin, entry_price, entry_date, fund_name, portafoglio, sl_sug, sg_sug in l0_positions:
+            for entry_id, isin, entry_price, entry_date, fund_name, portafoglio, sl_sug, sg_sug, broker in l0_positions:
                 try:
                     entry_price = float(entry_price) if entry_price else 0
                     if entry_price <= 0:
@@ -567,9 +568,9 @@ class AlertSystem:
                     color = '#28a745' if pct_change >= 0 else '#dc3545'
                     sign = '+' if pct_change >= 0 else ''
 
-                    # Prezzi pronti per l'ordine Directa — stessa logica della sezione L1
+                    # Prezzi pronti per l'ordine sul broker reale — stessa logica della sezione L1
                     op = compute_order_prices(current_price, sl_sug and float(sl_sug),
-                                               sg_sug and float(sg_sug))
+                                               sg_sug and float(sg_sug), broker)
                     stop_str = f'€{op["prezzo_stop"]:.2f}' if op['prezzo_stop'] else '—'
                     lim_sl_str = f'€{op["prezzo_limite_stop"]:.2f}' if op['prezzo_limite_stop'] else '—'
                     lim_tp_str = f'€{op["prezzo_limite_tp"]:.2f}' if op['prezzo_limite_tp'] else '—'
@@ -578,7 +579,7 @@ class AlertSystem:
                     l0_rows.append(
                         f'<tr style="background:{"#f8f9fa" if len(l0_rows) % 2 == 0 else "white"}">'
                         f'<td style="padding:8px;border:1px solid #ddd"><strong>{fund_name[:35]}</strong><br>'
-                        f'<small style="color:#888">{isin}</small></td>'
+                        f'<small style="color:#888">{isin} · {broker or "Directa"}</small></td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{entry_price:.2f}</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{current_price:.2f}</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:{color}"><strong>{sign}{pct_change:.1f}%</strong></td>'

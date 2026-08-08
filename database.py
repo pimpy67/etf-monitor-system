@@ -1170,7 +1170,8 @@ class PriceDatabase:
                            exit_date, exit_price, status,
                            is_partial, partial_exit_date, partial_exit_price,
                            portfolio_type, stop_loss_l0_suggested,
-                           sl_suggerito, sg_suggerito, stop_loss_inserted, stop_gain_target
+                           sl_suggerito, sg_suggerito, stop_loss_inserted, stop_gain_target,
+                           broker
                     FROM etf_portfolio_entries
                     WHERE status = 'active'
                     ORDER BY entry_date DESC
@@ -1195,7 +1196,8 @@ class PriceDatabase:
                            exit_date, exit_price, status,
                            is_partial, partial_exit_date, partial_exit_price,
                            portfolio_type, stop_loss_l0_suggested,
-                           sl_suggerito, sg_suggerito, stop_loss_inserted, stop_gain_target
+                           sl_suggerito, sg_suggerito, stop_loss_inserted, stop_gain_target,
+                           broker
                     FROM etf_portfolio_entries
                     WHERE portfolio_type = %s
                     ORDER BY entry_date DESC
@@ -1224,7 +1226,8 @@ class PriceDatabase:
 
     def add_portfolio_entry(self, isin: str, entry_date: str,
                             entry_price: float, fund_name: str = '',
-                            portfolio_type: str = 'L1', stop_loss_l0_suggested: float = None) -> bool:
+                            portfolio_type: str = 'L1', stop_loss_l0_suggested: float = None,
+                            broker: str = 'Directa') -> bool:
         """Aggiunge un ETF al portafoglio (L1 o L0) con opzionali stop loss L0.
 
         Fix 2026-08-05: la tabella ha DUE colonne per lo stesso concetto —
@@ -1241,8 +1244,8 @@ class PriceDatabase:
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO etf_portfolio_entries (isin, fund_name, entry_date, entry_price, status, portfolio_type, portafoglio, stop_loss_l0_suggested)
-                    VALUES (%s, %s, %s, %s, 'active', %s, %s, %s)
+                    INSERT INTO etf_portfolio_entries (isin, fund_name, entry_date, entry_price, status, portfolio_type, portafoglio, stop_loss_l0_suggested, broker)
+                    VALUES (%s, %s, %s, %s, 'active', %s, %s, %s, %s)
                     ON CONFLICT (isin) DO UPDATE
                         SET entry_date = EXCLUDED.entry_date,
                             entry_price = EXCLUDED.entry_price,
@@ -1251,13 +1254,33 @@ class PriceDatabase:
                             portfolio_type = EXCLUDED.portfolio_type,
                             portafoglio = EXCLUDED.portafoglio,
                             stop_loss_l0_suggested = EXCLUDED.stop_loss_l0_suggested,
+                            broker = EXCLUDED.broker,
                             exit_date = NULL,
                             exit_price = NULL
-                """, (isin, fund_name, entry_date, entry_price, portfolio_type, portfolio_type, stop_loss_l0_suggested))
+                """, (isin, fund_name, entry_date, entry_price, portfolio_type, portfolio_type, stop_loss_l0_suggested, broker))
                 conn.commit()
                 return True
         except Exception as e:
             logging.error(f"Errore add_portfolio_entry {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def update_portfolio_broker(self, isin: str, broker: str) -> bool:
+        """Aggiorna il broker (Directa/Webank/...) di una posizione esistente —
+        determina quale guida SL/TP mostrare in email/dashboard (vedi
+        order_pricing.py e CLAUDE.md 'Esecuzione ordini reali su Directa')."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE etf_portfolio_entries SET broker = %s WHERE isin = %s",
+                            (broker, isin))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore update_portfolio_broker {isin}: {e}")
             return False
         finally:
             conn.close()

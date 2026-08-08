@@ -716,10 +716,12 @@ def get_portfolio():
 
         sl_suggerito = entry.get('sl_suggerito')
         sg_suggerito = entry.get('sg_suggerito')
+        broker = entry.get('broker') or 'Directa'
         order_prices = compute_order_prices(
             current_price,
             float(sl_suggerito) if sl_suggerito else None,
             float(sg_suggerito) if sg_suggerito else None,
+            broker,
         )
         entry_confidence = entry.get('entry_confidence', 1.0)
         accumulated_pcts_str = entry.get('accumulated_pcts', '[]')
@@ -754,10 +756,12 @@ def get_portfolio():
             'etf_type':            analysis.get('etf_type', ''),
             'sl_suggerito':        float(sl_suggerito) if sl_suggerito else None,
             'sg_suggerito':        float(sg_suggerito) if sg_suggerito else None,
+            'broker':              broker,
             'prezzo_stop':         order_prices['prezzo_stop'],
             'prezzo_limite_stop':  order_prices['prezzo_limite_stop'],
             'prezzo_limite_tp':    order_prices['prezzo_limite_tp'],
             'stop_tightened':      order_prices['tightened'],
+            'order_parallel_ok':   order_prices['parallel_ok'],
             'entry_confidence':    float(entry_confidence) if entry_confidence else None,
             'entry_mode':          entry.get('entry_mode', 'STANDARD'),
             'portfolio_type':      entry.get('portfolio_type', 'L1'),
@@ -802,11 +806,13 @@ def add_to_portfolio():
         sl_buffer = profilo.get('sl_buffer_wide', 0.02)
         stop_loss_l0_suggested = entry_price * (1 - sl_buffer)
     
+    broker = (data.get('broker') or 'Directa').strip() or 'Directa'
     ok = db.add_portfolio_entry(isin, entry_date, entry_price, fund_name,
                                 portfolio_type=portfolio_type,
-                                stop_loss_l0_suggested=stop_loss_l0_suggested)
+                                stop_loss_l0_suggested=stop_loss_l0_suggested,
+                                broker=broker)
     if ok:
-        return jsonify({'status': 'ok', 'isin': isin, 'portfolio_type': portfolio_type})
+        return jsonify({'status': 'ok', 'isin': isin, 'portfolio_type': portfolio_type, 'broker': broker})
     return jsonify({'error': 'Errore salvataggio'}), 503
 
 
@@ -833,6 +839,9 @@ def update_portfolio_entry_route(isin):
     except (ValueError, TypeError):
         return jsonify({'error': 'entry_price deve essere un numero'}), 400
     ok = db.update_portfolio_entry(isin, entry_date, entry_price, fund_name)
+    broker = data.get('broker')
+    if ok and broker:
+        db.update_portfolio_broker(isin, broker.strip())
     if ok:
         return jsonify({'status': 'ok', 'isin': isin})
     return jsonify({'error': 'Errore aggiornamento'}), 503
