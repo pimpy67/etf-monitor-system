@@ -551,6 +551,72 @@ NON le posizioni comprate davvero):
 
 ---
 
+## Esecuzione ordini reali su Directa (2026-08-08)
+
+> Sezione operativa, non un parametro del sistema — riguarda come tradurre gli SL/TP
+> calcolati (email + dashboard) in ordini reali sul broker. Emersa da un caso reale
+> (posizione L1 su Amundi MSCI Water, 70 quote) durante una sessione di gestione
+> portafoglio, non da un'analisi preventiva.
+>
+> ⚠️ **Specifica di Directa, non universale**: l'utente opera anche su **Webank** (es. la
+> posizione DJIA, FR0007056841) — confermato che Webank supporta Stop Loss e Take Profit
+> **contemporaneamente attivi** (verosimilmente un vero OCO), a differenza del vincolo
+> Directa descritto sotto. `order_pricing.py` calcola comunque gli stessi tre prezzi per
+> ogni posizione indipendentemente dal broker — su Webank si possono piazzare
+> `prezzo_stop`/`prezzo_limite_stop` E `prezzo_limite_tp` come due ordini separati fin da
+> subito, senza la danza cancella-e-sostituisci richiesta da Directa. Il sistema non
+> traccia ancora il broker per posizione (nessuna colonna dedicata in
+> `etf_portfolio_entries`) — email e dashboard mostrano lo stesso messaggio "vale per
+> Directa" a tutte le posizioni; l'utente deve applicare la distinzione a mente per ora.
+
+**Directa non ha un ordine "Take Profit"**: lo Stop di vendita accetta solo un trigger
+verso il basso (`Prezzo Stop ≤ X` → esegue un ordine Limite a un prezzo Y sotto il
+trigger, per garantire il fill anche in caso di gap). Per catturare un target al rialzo
+serve un ordine Limite separato, senza trigger.
+
+**Scoperta critica, verificata in produzione**: su un conto cash Directa (nessun short
+selling) **non è possibile tenere attivi Stop e Limite in parallelo sulle stesse quote**.
+Un secondo ordine di vendita per l'intera posizione viene rifiutato con l'errore
+`"Quantità titolo superiore alla disponibilità in portafoglio o titolo non vendibile allo
+scoperto"` — lo Stop già impegna tutte le quote disponibili, un Limite per lo stesso
+quantitativo supererebbe quanto realmente posseduto. Confermato piazzando lo Stop
+aggiornato su Water (70/70 quote, Trigger 71,77€/Prezzo 71,05€, "Immesso") e poi provando
+a piazzare in parallelo il Limite TP a 73,57€: rifiutato.
+
+**Conseguenza pratica**: un solo ordine di vendita può essere attivo alla volta per
+l'intera posizione.
+- **Default**: tenere lo Stop attivo (protezione del capitale/guadagno accumulato — è
+  la priorità, coerente con la filosofia "nessun automatismo, ma protezione sempre
+  presente" del resto del sistema).
+- **Quando il prezzo si avvicina al TP**: cancellare manualmente lo Stop e piazzare il
+  Limite (o vendere) in quel momento — non è automatizzabile con due ordini paralleli.
+
+**`order_pricing.py`** (`compute_order_prices()`) traduce gli SL/TP calcolati in tre
+valori mostrati in email e dashboard:
+- `prezzo_stop` / `prezzo_limite_stop` — la coppia per l'ordine Stop attivo (margine 1%
+  tra i due, per garantire l'esecuzione anche in caso di gap)
+- `prezzo_limite_tp` — **target di riferimento**, non un ordine piazzabile in parallelo
+  (vedi sopra)
+
+**Euristica di avvicinamento al TP** (decisa con l'utente 2026-08-08, non backtestata
+come le formule SL/TP — riguarda solo come si formula l'ordine, mai quando uscire): lo
+Stop si stringe automaticamente verso il prezzo corrente quando ci si avvicina al target,
+segnalato con 🔶 in email/dashboard:
+```
+distanza_da_TP% = (TP − prezzo_attuale) / prezzo_attuale
+se distanza_da_TP < 1.5%: Stop = prezzo_attuale × 0.99
+se distanza_da_TP < 3.0%: Stop = prezzo_attuale × 0.985
+altrimenti: Stop = sl_suggerito (valore "ufficiale", invariato)
+```
+Lo Stop stretto non scende mai sotto il valore già suggerito dalla formula ufficiale
+(`max(sl_suggerito, tightened)`) — l'euristica stringe, non allarga mai la protezione.
+
+**Non ancora fatto**: un alert email dedicato quando una posizione entra nella zona di
+stringimento (oggi è solo un flag 🔶 nel resoconto quotidiano, facile da perdere con più
+posizioni attive) — proposto, non richiesto esplicitamente.
+
+---
+
 ## 🎯 Flusso Completo di Monitoraggio (End-to-End)
 
 ### Come il Sistema Decide il Livello di un ETF — Passo per Passo

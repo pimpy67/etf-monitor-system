@@ -7,7 +7,17 @@ trigger "Prezzo Stop ≤ X" (verso il basso) — per catturare un target al
 rialzo serve un normale ordine LIMITE (nessun trigger, un solo prezzo). Lo
 Stop stesso è sempre una coppia Prezzo Stop + Prezzo Limite (il secondo con
 un margine sotto il primo, per garantire l'esecuzione anche in caso di gap).
-Vedi CLAUDE.md, sezione "Esecuzione ordini reali su Directa" (2026-08-08).
+
+IMPORTANTE (verificato in produzione 2026-08-08): su un conto cash Directa
+NON è possibile tenere attivi Stop e Limite in parallelo sulle stesse quote
+— un secondo ordine di vendita per l'intera posizione viene rifiutato
+("quantità superiore alla disponibilità in portafoglio o titolo non
+vendibile allo scoperto"), perché lo Stop già impegna tutte le quote. Il
+prezzo_limite_tp calcolato qui è quindi un TARGET DI RIFERIMENTO da tenere
+d'occhio, non un ordine piazzabile fin da subito in parallelo: quando il
+prezzo si avvicina, l'azione reale è cancellare lo Stop e piazzare il
+Limite (o vendere) in quel momento. Vedi CLAUDE.md, sezione "Esecuzione
+ordini reali su Directa" (2026-08-08).
 
 A differenza delle formule in technical_analysis.py (tutte backtestate,
 determinano QUANDO uscire), le costanti qui sotto sono un'euristica di sola

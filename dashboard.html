@@ -1419,7 +1419,7 @@ function renderPortfolioTable(portfolioData, portfolioType) {
           <div><strong>TP Personale</strong><br><input type="text" style="width:100%;font-family:monospace;padding:4px;border:1px solid #444;border-radius:3px;background:#0d1117;color:#3fb950;" id="tp-pers-${isin}" placeholder="Inserisci TP" value="${p.tp_inserted ? parseFloat(p.tp_inserted).toFixed(4) : ''}"></div>
           <div><button class="btn-pf-save" onclick="savePortfolioSL_TP('${isin}')" style="background:#238636;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:600;">💾 Salva</button></div>
         </div>
-        <div style="margin-top:8px;font-size:0.75em;color:#8b949e;">Prezzo Limite (TP) va piazzato come ordine <strong>Limite</strong> separato (non Stop) — Directa non ha un take profit condizionato al rialzo. 🔶 = Stop stretto perché il prezzo è entro il 3% dal TP.</div>
+        <div style="margin-top:8px;font-size:0.75em;color:#8b949e;">Prezzo Limite (TP) = target per un ordine <strong>Limite</strong> (non Stop) — su Directa NON può restare attivo in parallelo allo Stop (stesse quote impegnate, ordine rifiutato). Quando il prezzo si avvicina: cancella lo Stop e piazza il Limite. Su broker con OCO nativo (es. Webank) puoi piazzare entrambi subito. 🔶 = Stop stretto perché il prezzo è entro il 3% dal TP.</div>
       </td>
     </tr>
     <tr class="history-row" id="pf-hist-${isin}" style="display:none;">
