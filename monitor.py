@@ -1090,6 +1090,19 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor (non bloccante): {e}")
 
+        # STEP 8b — Shadow Monitor CANDIDATE_MODEL_L0_20260808 (2026-08-08): stesso
+        # principio dello Shadow Monitor L1 sopra, ma per L0 — traccia posizioni
+        # ipotetiche su equity_sviluppati (unica famiglia raggiungibile da L0) con
+        # regime_min_days_below_sma200=5 invece del baseline YAML=10, senza toccare
+        # NESSUNA decisione reale. Solo log su etf_shadow_positions per il confronto
+        # a fine lockdown (06/09/2026). Nessuna email. Vedi CLAUDE.md
+        # "CANDIDATE_MODEL_L0_20260808".
+        try:
+            from shadow_monitor_l0 import run_shadow_monitor_l0
+            run_shadow_monitor_l0(self.db, results, add_log=add_log)
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor L0 (non bloccante): {e}")
+
         # 7. Invia resoconto portafoglio — DOPO l'aggiornamento SL/TP (fix 2026-08-05:
         # prima veniva inviato PRIMA degli STEP 4/7 sopra, quindi l'email mostrava
         # sempre i valori SL/TP del giorno precedente invece di quelli appena calcolati

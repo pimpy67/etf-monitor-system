@@ -1651,6 +1651,96 @@ parametri sweepati, è mancanza strutturale di segnale `smart_6_macd` a monte (v
   lungo lanciato con `docker exec -d`, che un `docker compose up -d --force-recreate`
   ucciderebbe).
 
+### Grid Search L0 — `optimize_l0.py` + `optimize_l0_regime.py` (2026-08-07/08) — CANDIDATE_MODEL_L0_20260808
+
+Stesso approccio già usato per `smart_6_macd` su L1 (Golden Dataset congelato, split
+in/out-of-sample, motore vettorizzato con `precomputed`), applicato per la prima volta a L0.
+
+**Infrastruttura**: `backtest_l0_v2.py` (commit `72d4c04`) — motore pulito che riusa le
+funzioni di produzione reali (`suggest_level_0()`, `calculate_sl_suggerito_l0()`,
+`calculate_tp_suggerito_l0()`). Non riusa `backtest_l0.py`/`backtest_l0_full.py`/
+`backtest_l0_rigorous.py` preesistenti: quelli avevano una copia manuale della formula SL con
+soglie sbagliate (2%/5% invece di 5%/15% reali) e saltavano whitelist/regime/divergenza —
+**non fidarsi di quei file**. `suggest_level_0()` ha guadagnato un parametro opzionale
+`precomputed` (RSI/EMA20/SMA50), stesso pattern di `suggest_level()`, validato a 0
+discrepanze (320 check).
+
+**Due bug di produzione reali trovati per caso investigando un'anomalia nei dati** (non
+un audit dedicato — vedi sopra "FIX CRITICO 2026-08-07" per il dettaglio completo): whitelist
+L0 mai davvero attiva (`600f51b`) e un ETF VIX futures mal classificato che generava 25 trade
+spuri (`564de92`, `LVO.MI`→`leva_single_stock`). Correggere `564de92` ha cambiato la baseline
+a 3 anni (equity_sviluppati, parametri nativi) da 216 a 184 trade e il rendimento medio/trade
+da un +17.4% palesemente gonfiato a un +3.04% credibile — quest'ultimo è il numero da citare.
+
+**Sweep 1 — `optimize_l0.py --sweep` (PRAGMATIC, 108 combo, 179.7 min, 2026-08-07/08)**:
+`dd_threshold`/`rsi_max`/`recovery_min_pct` risultano **completamente non discriminanti** —
+N identico (146 IN / 44 OUT) su ogni combinazione dd/rsi/recovery testata. Causa (non un bug,
+verificato leggendo `technical_analysis.py:972-1041`): `suggest_level_0()` prova prima FAST e
+SLOW, che non leggono affatto questi 3 parametri — solo se entrambi falliscono si arriva a
+PRAGMATIC. Su `equity_sviluppati`, che ha `l0_regime` configurato, il 100% dei trade entra via
+FAST/SLOW, PRAGMATIC non viene mai raggiunto. L'unico parametro che conta in questo sweep è
+`l0_take_profit_pct`: PF 2.11→3.18 IN e 3.97→4.51 OUT man mano che tp va da 10% a 16%,
+monotono, nessun segno di picco prima del 16% (grid non testata oltre). **TP=16% confermato
+come miglior valore trovato** — è già il valore in produzione per `equity_sviluppati` (vedi
+tabella `l0_take_profit_pct` sopra), quindi questo sweep conferma il default, non lo cambia.
+
+**Sweep 2 — `optimize_l0_regime.py` (FAST/SLOW, 28 combo, ~2h totali, 2026-08-08)**: sweep
+mirato ai soli 4 parametri che davvero governano l'ingresso FAST/SLOW (verificato leggendo
+`_analyze_l0_fast_path`/`_analyze_l0_slow_path`): `flash_crash_window_days` +
+`flash_crash_zscore_threshold` (FAST), `regime_min_days_below_sma200` + `dd_min_duration_days`
+(SLOW). `capitulation_volume_multiplier`/`reclaim_ema_fast_period`/`reclaim_ema_slow_period`
+sono morti nel codice (periodi EMA-reclaim sono hardcoded 20/50, non letti dal YAML);
+`dd_threshold_atr_multiple` è letto ma solo per un campo diagnostico, non gating.
+
+- **FAST (12 combo, 54.9 min)**: non discriminante — la FAST path contribuisce solo 0-2 trade
+  su ~146-148 totali in ogni combinazione, dominata quasi totalmente da SLOW. PF migliore
+  resta 3.18 (tp=0.16), stesso tetto dello Sweep 1. Nessun parametro FAST vale la pena di
+  toccare.
+- **SLOW (16 combo, 73.3 min)**: qui c'è segnale reale. Baseline YAML `equity_sviluppati`
+  (`regime_min_days_below_sma200=10, dd_min_duration_days=4`, confermato in
+  `config/etf_families.yaml:70-78`) → IN N=146 PF=3.18 WR=42.5% | OUT N=44 PF=4.51 WR=50.0%
+  (stessi identici trade dello Sweep 1, come atteso). Migliore combinazione trovata, stessa
+  disciplina di sempre (preferire OOS che tiene/migliora rispetto a IN, non solo IN alto):
+  **`regime_min_days_below_sma200=5, dd_min_duration_days=4`** → IN N=152 PF=**3.38** WR=44.1%
+  | OUT N=62 PF=**4.84** WR=51.6% — batte il baseline su IN *e* OUT, con N più alto in
+  entrambi i periodi, non un episodio isolato. Runner-up con N ancora più ampio:
+  `min_days=5, dd_min=3` → IN N=169 PF=3.38 WR=43.8% | OUT N=72 PF=4.42 WR=48.6%. **Scartata**
+  la combinazione con il PF in-sample più alto in assoluto della griglia (`min_days=15,
+  dd_min=2`, IN PF=3.7): OOS crolla a PF=2.88 WR=37.5% — stessa firma di overfitting già vista
+  e scartata nello sweep L1 (caso `mm200_delta=-1`).
+
+**CANDIDATE_MODEL_L0_20260808** (solo `equity_sviluppati` — unica famiglia raggiungibile per
+L0, vedi whitelist gate sopra):
+
+| Parametro | Valore |
+|---|---|
+| `regime_min_days_below_sma200` | 5 (baseline YAML: 10) |
+| `dd_min_duration_days` | 4 = 4% (invariato — nome fuorviante, è una soglia di drawdown /100, non un conteggio di giorni) |
+| `l0_take_profit_pct` | 16% (invariato, già il valore in produzione) |
+| `flash_crash_window_days` / `flash_crash_zscore_threshold` | invariati (non discriminanti) |
+| `dd_threshold` / `rsi_max` / `recovery_min_pct` (PRAGMATIC) | invariati (mai raggiunti in pratica) |
+| Stop Loss | invariato — formula dinamica a scaglioni esistente (`calculate_sl_suggerito_l0`: <5% profitto → entry×0.98, 5–15% → pareggio entry×1.01, >15% → protegge metà gain). Non sweepata in questo candidato, vedi nota sotto |
+
+**Metriche certificate** (Golden Dataset, batch `2026-08-07`, stesso split di
+`CANDIDATE_MODEL_B_20260807`):
+
+| | In-Sample | Out-of-Sample |
+|---|---|---|
+| N trade | 152 | 62 |
+| Profit Factor | 3.38 | 4.84 |
+| Win Rate | 44.1% | 51.6% |
+
+> ⚠️ **NON promosso in produzione** — stesso motivo del candidato L1: lockdown parametri fino
+> al 06/09/2026. A differenza di `CANDIDATE_MODEL_B_20260807` questo è un ritocco di un solo
+> parametro già attivo in produzione (non richiede attivare un motore sperimentale spento),
+> quindi il rischio di deploy è più basso — ma resta comunque **solo backtest**, non ancora
+> validato live, e va comunque attraverso l'attesa del lockdown.
+>
+> **Non ancora fatto**: sweep lato SL per L0 (`calculate_sl_suggerito_l0` ha la formula
+> hardcoded, non parametrizzata per famiglia — richiederebbe modifiche di codice, stesso tipo
+> di lavoro della Fase 2 di L1) e uno Shadow Monitor per il candidato L0 (stesso pattern di
+> quello già live per L1, ma L0 non ha ancora un candidato abbastanza maturo da meritarlo).
+
 ---
 
 ## Variabili d'Ambiente `.env`
