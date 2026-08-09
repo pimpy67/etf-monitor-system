@@ -1233,14 +1233,20 @@ class ETFTechnicalAnalyzer:
         # 2. Persistenza: >= 3gg sopra EMA20 + slope EMA20 positivo
         persistenza   = days_above_ema20 >= p['days_above_ema'] and ema20_slope > 0
 
-        # 3. RSI nel range target
-        rsi_ok        = rsi_val is not None and p['rsi_entry_low'] <= rsi_val <= p['rsi_entry_high']
+        # 3. RSI nel range target (famiglie senza soglia, es. monetario_liquidita: null/null → non applicabile, sempre OK)
+        if p['rsi_entry_low'] is None or p['rsi_entry_high'] is None:
+            rsi_ok = True
+        else:
+            rsi_ok = rsi_val is not None and p['rsi_entry_low'] <= rsi_val <= p['rsi_entry_high']
 
         # 4. Distanza da EMA20 entro limite
         dist_ok       = 0 <= dist_ema20 <= p['ema_dist_max']
 
-        # 5. ADX sopra soglia
-        adx_ok        = adx_val is not None and adx_val >= p['adx_entry']
+        # 5. ADX sopra soglia (famiglie senza soglia, es. monetario_liquidita: null → non applicabile, sempre OK)
+        if p['adx_entry'] is None:
+            adx_ok = True
+        else:
+            adx_ok = adx_val is not None and adx_val >= p['adx_entry']
 
         # 6. MACD momentum: histogram positivo + in accelerazione (o dip vicino EMA20)
         macd_positive  = macd_h is not None and macd_h > 0
