@@ -458,6 +458,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
           <div style="flex:1;min-width:140px;">
             <label id="plCalcLabel" style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">P&L se attivi SL</label>
             <div id="plCalcDisplay" style="padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#999;font-weight:600;font-size:0.9em;text-align:center;">—</div>
+            <div id="plCalcNetDisplay" style="margin-top:4px;padding:4px 6px;font-size:0.78em;color:#666;text-align:center;">—</div>
           </div>
           <button onclick="event.stopPropagation();saveStopLoss()" style="padding:6px 12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;font-weight:600;font-size:0.85em;cursor:pointer;transition:background 0.2s;white-space:nowrap;">💾 Salva</button>
         </div>
@@ -2495,9 +2496,13 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── Stop Loss Management (detail view) ──────────────────────────────────────
+const DIRECTA_COMMISSION_ROUNDTRIP = 10; // €5 acquisto + €5 vendita
+const CAPITAL_GAIN_TAX_RATE = 0.26; // 26% flat sulle plusvalenze
+
 function updatePLCalc() {
   try {
     const plDisplay = document.getElementById('plCalcDisplay');
+    const plNetDisplay = document.getElementById('plCalcNetDisplay');
     if (!plDisplay) return;
 
     const slValue = parseFloat(document.getElementById('slInsertedInput').value);
@@ -2507,6 +2512,7 @@ function updatePLCalc() {
     if (!slData || !slData.entry_price || !slValue || slValue <= 0 || !shares || shares <= 0) {
       plDisplay.textContent = '—';
       plDisplay.style.color = '#999';
+      if (plNetDisplay) plNetDisplay.textContent = '—';
       return;
     }
 
@@ -2520,6 +2526,17 @@ function updatePLCalc() {
 
     plDisplay.textContent = `${sign}${absGainLoss.toFixed(2)}€ (${sign}${pctChange.toFixed(2)}%)`;
     plDisplay.style.color = color;
+
+    if (plNetDisplay) {
+      const afterCommissions = absGainLoss - DIRECTA_COMMISSION_ROUNDTRIP;
+      const tax = Math.max(afterCommissions, 0) * CAPITAL_GAIN_TAX_RATE;
+      const netGainLoss = afterCommissions - tax;
+      const investedCapital = entryPrice * shares;
+      const netPctChange = investedCapital > 0 ? (netGainLoss / investedCapital) * 100 : 0;
+      const netSign = netGainLoss >= 0 ? '+' : '';
+      plNetDisplay.textContent = `netto: ${netSign}${netGainLoss.toFixed(2)}€ (${netSign}${netPctChange.toFixed(2)}%) — €5+5 comm., 26% tasse`;
+      plNetDisplay.style.color = netGainLoss < 0 ? '#f85149' : '#3fb950';
+    }
   } catch(e) {
     console.error('Errore in updatePLCalc:', e);
   }
