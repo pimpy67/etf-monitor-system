@@ -162,7 +162,7 @@ class ETFMonitor:
             # Yahoo Finance fornisce sempre OHLCV completo: salvalo con save_ohlcv_bulk
             # (save_close_bulk scartava High/Low/Open/Volume anche quando disponibili)
             if isin:
-                self.db.save_ohlcv_bulk(isin, df, source='yfinance')
+                self.db.save_ohlcv_bulk(isin, df, source='yfinance', isin=isin)
             else:
                 self.db.save_ohlcv_bulk(ticker, df, source='yfinance')
             return df

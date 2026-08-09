@@ -312,14 +312,17 @@ class PriceDatabase:
         finally:
             conn.close()
 
-    def save_ohlcv_bulk(self, ticker: str, df: pd.DataFrame, source: str = 'yfinance') -> int:
+    def save_ohlcv_bulk(self, ticker: str, df: pd.DataFrame, source: str = 'yfinance',
+                         isin: Optional[str] = None) -> int:
         """
         Salva dati OHLCV in blocco dal DataFrame yfinance
 
         Args:
-            ticker: Ticker dell'ETF
+            ticker: Ticker dell'ETF (o l'ISIN stesso, se usato come identificatore stabile)
             df: DataFrame con colonne Open, High, Low, Close, Volume e index=Date
             source: Fonte del dato
+            isin: Codice ISIN, se noto — popola la colonna isin (prima veniva lasciata NULL
+                  per ogni riga nuova, affidandosi solo alla convenzione ticker=isin)
 
         Returns:
             Numero di record salvati
@@ -335,16 +338,17 @@ class PriceDatabase:
                     date_str = date_idx.strftime('%Y-%m-%d') if hasattr(date_idx, 'strftime') else str(date_idx)
                     try:
                         cur.execute("""
-                            INSERT INTO etf_price_history (ticker, date, open, high, low, close, volume, source)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            INSERT INTO etf_price_history (ticker, date, open, high, low, close, volume, source, isin)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ON CONFLICT (ticker, date)
                             DO UPDATE SET open = EXCLUDED.open, high = EXCLUDED.high,
                                           low = EXCLUDED.low, close = EXCLUDED.close,
-                                          volume = EXCLUDED.volume, source = EXCLUDED.source
+                                          volume = EXCLUDED.volume, source = EXCLUDED.source,
+                                          isin = COALESCE(EXCLUDED.isin, etf_price_history.isin)
                         """, (ticker, date_str,
                               float(row.get('Open', 0)), float(row.get('High', 0)),
                               float(row.get('Low', 0)), float(row['Close']),
-                              int(row.get('Volume', 0)), source))
+                              int(row.get('Volume', 0)), source, isin))
                         saved += 1
                     except Exception:
                         continue
