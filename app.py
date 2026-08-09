@@ -284,7 +284,7 @@ def portfolio_sl():
                 cur.execute("""
                     SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
                            pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at, pe.shares,
-                           pe.sl_suggerito, pe.sg_suggerito
+                           pe.sl_suggerito, pe.sg_suggerito, pe.broker
                     FROM etf_portfolio_entries pe
                     WHERE pe.status = 'active' AND pe.isin = %s
                     ORDER BY pe.entry_date DESC
@@ -293,7 +293,7 @@ def portfolio_sl():
                 cur.execute("""
                     SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
                            pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at, pe.shares,
-                           pe.sl_suggerito, pe.sg_suggerito
+                           pe.sl_suggerito, pe.sg_suggerito, pe.broker
                     FROM etf_portfolio_entries pe
                     WHERE pe.status = 'active'
                     ORDER BY pe.entry_date DESC
@@ -329,6 +329,9 @@ def portfolio_sl():
                         else:
                             sl_suggerito = max(entry_price * 0.98, current_price * 0.95)
 
+                    broker = pos.get('broker') or 'Directa'
+                    order_parallel_ok = compute_order_prices(current_price, sl_suggerito, sg_suggerito, broker)['parallel_ok']
+
                     result.append({
                         'isin': isin,
                         'ticker': ticker,
@@ -343,6 +346,8 @@ def portfolio_sl():
                         'sg_suggested': round(sg_suggerito, 4) if sg_suggerito else None,
                         'sl_updated': str(pos['stop_loss_updated_at']) if pos['stop_loss_updated_at'] else None,
                         'shares': float(pos['shares']) if pos['shares'] else None,
+                        'broker': broker,
+                        'order_parallel_ok': order_parallel_ok,
                     })
 
         conn.close()
