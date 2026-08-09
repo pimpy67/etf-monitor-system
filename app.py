@@ -171,6 +171,15 @@ def etf_detail():
             df['ema20']  = prices.ewm(span=20, adjust=False).mean()
             df['sma50']  = prices.rolling(window=50, min_periods=1).mean()
             df['sma200'] = prices.rolling(window=200, min_periods=1).mean()
+            df['pct_1d'] = prices.pct_change(periods=1) * 100
+            df['pct_1w'] = prices.pct_change(periods=5) * 100
+            delta  = prices.diff()
+            gains  = delta.where(delta > 0, 0.0)
+            losses = (-delta).where(delta < 0, 0.0)
+            ag = gains.ewm(com=13, min_periods=14).mean()
+            al = losses.ewm(com=13, min_periods=14).mean()
+            rs = ag / al.replace(0, float('nan'))
+            df['rsi14'] = 100 - (100 / (1 + rs))
 
             def _fmt(v, d=4):
                 try:
@@ -186,6 +195,9 @@ def etf_detail():
                     'ema20': _fmt(row['ema20']),
                     'sma50': _fmt(row['sma50']),
                     'sma200': _fmt(row['sma200']),
+                    'pct_1d': _fmt(row['pct_1d'], 2),
+                    'pct_1w': _fmt(row['pct_1w'], 2),
+                    'rsi14': _fmt(row['rsi14'], 1),
                 })
 
         # Price date: data reale dell'ultimo prezzo disponibile

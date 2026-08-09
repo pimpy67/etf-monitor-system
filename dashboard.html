@@ -425,7 +425,8 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
         <div class="detail-title" id="detailTitle">-</div>
         <div class="detail-sub" id="detailSub">-</div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;">
+      <div style="display:flex;gap:8px;align-items:center;" class="no-print">
+        <button class="detail-close" onclick="downloadDetailPDF()" title="Scarica PDF" style="color:#555;cursor:pointer;border:none;background:none;font-size:1.2em;">📄</button>
         <button class="detail-close" onclick="toggleChartFullscreen()" title="Espandi grafico a schermo intero" style="color:#555;cursor:pointer;border:none;background:none;font-size:1.2em;">🔍</button>
         <button class="detail-close" onclick="closeDetail()">&times;</button>
       </div>
@@ -462,7 +463,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
         </div>
       </div>
       <div class="detail-chart-wrap">
-        <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px;z-index:1000;">
+        <div class="no-print" style="position:absolute;top:8px;right:8px;display:flex;gap:4px;z-index:1000;">
           <button class="detail-days-btn active" id="dbtn30" onclick="event.stopPropagation();changeDetailDays(30)" style="font-size:0.7em;padding:4px 8px;">30gg</button>
           <button class="detail-days-btn" id="dbtn120" onclick="event.stopPropagation();changeDetailDays(120)" style="font-size:0.7em;padding:4px 8px;">120gg</button>
           <button class="detail-days-btn" id="dbtn240" onclick="event.stopPropagation();changeDetailDays(240)" style="font-size:0.7em;padding:4px 8px;">240gg</button>
@@ -1781,6 +1782,27 @@ async function openETFDetail(ticker, isin) {
   await loadDetailSL();  // Carica dati SL per la retta verticale di acquisto
 }
 
+function downloadDetailPDF() {
+  const el = document.querySelector('.detail-box');
+  if (!el || typeof html2pdf === 'undefined') { alert('Generazione PDF non disponibile.'); return; }
+  const label = (currentDetailTicker || currentDetailIsin || 'ETF').replace(/[^a-zA-Z0-9]/g, '_');
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const opt = {
+    margin: 8,
+    filename: `ETF_${label}_${dateStr}.pdf`,
+    image: { type: 'jpeg', quality: 0.95 },
+    html2canvas: {
+      scale: 2,
+      backgroundColor: '#111927',
+      useCORS: true,
+      ignoreElements: (node) => node.classList && node.classList.contains('no-print'),
+    },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+  };
+  html2pdf().set(opt).from(el).save();
+}
+
 function toggleChartFullscreen() {
   const chartElement = document.getElementById('detailChart');
   if (!chartElement) return;
@@ -2196,19 +2218,18 @@ function renderDetailHistTable(history, days) {
     const col = v > 0 ? '#3fb950' : v < 0 ? '#f85149' : '#8b949e';
     return `<td style="color:${col}">${v > 0 ? '+' : ''}${v.toFixed(d)}%</td>`;
   };
-  // Need to compute pct_1g and dist_ema20 from raw data
   document.getElementById('detailTableBody').innerHTML = slice.map((r, i) => {
-    const rsiC = (r.rsi_val||r.rsi||50) < 35 ? '#3fb950' : (r.rsi_val||r.rsi||50) > 65 ? '#f85149' : '#d29922';
+    const rsiC = r.rsi14 == null ? '#555' : r.rsi14 < 35 ? '#3fb950' : r.rsi14 > 65 ? '#f85149' : '#d29922';
     const distEma = r.ema20 && r.close ? (r.close - r.ema20) / r.ema20 * 100 : null;
     return `<tr>
       <td>${r.date}</td>
       <td>${r.close != null ? r.close.toFixed(4) : '—'}</td>
-      <td style="color:#555">—</td>
-      <td style="color:#555">—</td>
+      ${fp(r.pct_1d)}
+      ${fp(r.pct_1w)}
       <td style="color:#58a6ff">${r.ema20 != null ? r.ema20.toFixed(4) : '—'}</td>
       <td style="color:#a5d6ff">${r.sma50 != null ? r.sma50.toFixed(4) : '—'}</td>
       ${fp(distEma)}
-      <td style="color:#555">—</td>
+      <td style="color:${rsiC}">${r.rsi14 != null ? r.rsi14.toFixed(1) : '—'}</td>
     </tr>`;
   }).join('');
 }
