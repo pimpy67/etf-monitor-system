@@ -455,7 +455,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
             <input type="number" id="sharesInput" placeholder="N. quote" step="0.01" min="0" oninput="event.stopPropagation();updatePLCalc()" onclick="event.stopPropagation()" style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#fff;font-size:0.9em;">
           </div>
           <div style="flex:1;min-width:140px;">
-            <label style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">P&L se attivi SL</label>
+            <label id="plCalcLabel" style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">P&L se attivi SL</label>
             <div id="plCalcDisplay" style="padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#999;font-weight:600;font-size:0.9em;text-align:center;">—</div>
           </div>
           <button onclick="event.stopPropagation();saveStopLoss()" style="padding:6px 12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;font-weight:600;font-size:0.85em;cursor:pointer;transition:background 0.2s;white-space:nowrap;">💾 Salva</button>
@@ -2543,6 +2543,8 @@ async function loadDetailSL() {
       const slPersLabel = document.getElementById('slPersLabel');
       if (slPersLabel) slPersLabel.textContent = pos.order_parallel_ok ? 'SL Personale' : 'Prezzo Limite (Stop) Personale';
       if (elSLIns) elSLIns.placeholder = pos.order_parallel_ok ? 'Valore SL' : 'Prezzo limite reale, non trigger';
+      const plCalcLabel = document.getElementById('plCalcLabel');
+      if (plCalcLabel) plCalcLabel.textContent = pos.order_parallel_ok ? 'P&L se attivi SL' : 'P&L al Prezzo Limite (Stop) Personale';
       window.detailSLData = pos;
       setTimeout(() => updatePLCalc(), 100); // Calcola P&L con i valori caricati
     } else {
