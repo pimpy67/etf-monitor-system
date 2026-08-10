@@ -268,6 +268,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 .regime-bar { padding:8px 12px; border-radius:8px; font-size:0.82em; margin-bottom:14px; }
 .regime-bar.bull { background:rgba(0,176,80,0.12); border:1px solid rgba(0,176,80,0.4); color:#00B050; }
 .regime-bar.bear { background:rgba(220,53,69,0.12); border:1px solid rgba(220,53,69,0.4); color:#DC3545; }
+.regime-bar.lat  { background:rgba(255,192,0,0.12); border:1px solid rgba(255,192,0,0.4); color:#FFC000; }
 
 /* L0 section in modal */
 .l0-section { background:rgba(122,58,0,0.12); border:1px solid rgba(122,58,0,0.3); border-radius:8px; padding:12px 14px; margin-bottom:14px; }
@@ -1830,13 +1831,14 @@ function renderDetailModal(e, days) {
   const lvl = e.suggested_level != null ? e.suggested_level : (e.level != null ? e.level : '—');
   const lvlBadge = `<span class="lv-badge lv${lvl}">L${lvl}</span>`;
 
-  // Regime
-  let regimeHtml = '';
-  if (e.sma200 != null) {
-    const bull = e.price != null && e.price > e.sma200;
-    document.getElementById('detailRegime').innerHTML = `<div class="regime-bar ${bull?'bull':'bear'}">
-      ${bull ? '▲ Bull Market — Prezzo sopra SMA200' : '▼ Bear Market — Prezzo sotto SMA200 (ingressi L1 bloccati)'}
-      &nbsp;(SMA200: ${fmtNum(e.sma200,4)})
+  // Regime reale usato dal gate L1 (EMA20 vs SMA50 — non prezzo vs SMA200)
+  if (e.regime) {
+    const cls   = e.regime === 'BULL' ? 'bull' : e.regime === 'BEAR' ? 'bear' : 'lat';
+    const label = e.regime === 'BULL' ? '▲ Regime BULL (EMA20 > SMA50) — ingressi L1 consentiti'
+                : e.regime === 'BEAR' ? '▼ Regime BEAR (EMA20 < SMA50) — ingressi L1 bloccati'
+                : '▬ Regime LATERALE (EMA20 ≈ SMA50) — ingressi L1 bloccati';
+    document.getElementById('detailRegime').innerHTML = `<div class="regime-bar ${cls}">
+      ${label}&nbsp;(EMA20: ${fmtNum(e.ema20,4)} · SMA50: ${fmtNum(e.sma50,4)})
     </div>`;
   } else {
     document.getElementById('detailRegime').innerHTML = '';
