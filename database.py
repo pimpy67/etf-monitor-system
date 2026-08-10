@@ -238,6 +238,26 @@ class PriceDatabase:
                     )
                 """)
 
+                # Preferiti personali — ETF "da tenere d'occhio", diversi dal portafoglio
+                # reale (nessun prezzo di carico, solo tracking di come evolvono le
+                # condizioni) e dalla etf_l2_watchlist sotto (quella è lo stato interno
+                # di anti-flickering del punteggio L2, non una lista curata dall'utente).
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS etf_favorites (
+                        id SERIAL PRIMARY KEY,
+                        isin VARCHAR(20) NOT NULL UNIQUE,
+                        ticker VARCHAR(20),
+                        nome VARCHAR(200),
+                        note TEXT,
+                        added_date DATE NOT NULL,
+                        last_buy_count INTEGER,
+                        last_level INTEGER,
+                        last_regime VARCHAR(20),
+                        last_checked_date DATE,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                """)
+
                 # Colonne piede dentro (idempotente — ADD COLUMN IF NOT EXISTS)
                 for col_sql in [
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS is_partial BOOLEAN DEFAULT FALSE",
@@ -1469,6 +1489,87 @@ class PriceDatabase:
                 return True
         except Exception as e:
             logging.error(f"Errore delete_portfolio_event {event_id}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    # ── Preferiti (watchlist personale) ─────────────────────────────────────
+
+    def get_favorites(self) -> List[Dict]:
+        """Restituisce tutti gli ETF nei Preferiti, più recenti prima."""
+        conn = self._get_connection()
+        if not conn:
+            return []
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT isin, ticker, nome, note, added_date,
+                           last_buy_count, last_level, last_regime, last_checked_date
+                    FROM etf_favorites
+                    ORDER BY added_date DESC
+                """)
+                return [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            logging.error(f"Errore get_favorites: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def add_favorite(self, isin: str, ticker: str = '', nome: str = '', note: str = '') -> bool:
+        """Aggiunge un ETF ai Preferiti (idempotente — nessun errore se già presente)."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO etf_favorites (isin, ticker, nome, note, added_date)
+                    VALUES (%s, %s, %s, %s, CURRENT_DATE)
+                    ON CONFLICT (isin) DO NOTHING
+                """, (isin, ticker, nome, note))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore add_favorite {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def remove_favorite(self, isin: str) -> bool:
+        """Rimuove definitivamente un ETF dai Preferiti."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM etf_favorites WHERE isin = %s", (isin,))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore remove_favorite {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def update_favorite_snapshot(self, isin: str, buy_count: int, level: int,
+                                  regime: str) -> bool:
+        """Aggiorna lo stato 'ieri' di un preferito (chiamato dal monitor ogni
+        ciclo) — serve al digest email per calcolare i delta giorno su giorno."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE etf_favorites
+                    SET last_buy_count = %s, last_level = %s, last_regime = %s,
+                        last_checked_date = CURRENT_DATE
+                    WHERE isin = %s
+                """, (buy_count, level, regime, isin))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore update_favorite_snapshot {isin}: {e}")
             return False
         finally:
             conn.close()

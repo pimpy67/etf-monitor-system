@@ -1108,9 +1108,14 @@ class ETFMonitor:
         # sempre i valori SL/TP del giorno precedente invece di quelli appena calcolati
         # sul prezzo di oggi)
         if send_daily_report:
+            favorites_digest = []
+            try:
+                favorites_digest = self._build_favorites_digest(results)
+            except Exception as e:
+                add_log(f"⚠️  Errore digest Preferiti: {e}")
             try:
                 add_log("Invio resoconto portafoglio...")
-                self.alert_system.send_portfolio_report()
+                self.alert_system.send_portfolio_report(favorites_digest=favorites_digest)
             except Exception as e:
                 add_log(f"ERRORE Resoconto portafoglio: {e}")
 
@@ -1381,6 +1386,53 @@ class ETFMonitor:
 
         except Exception as e:
             add_log(f"  ⚠️  Errore generale L0: {e}")
+
+    def _build_favorites_digest(self, results: list) -> list:
+        """
+        Costruisce il digest 'Preferiti' per l'email quotidiana: per ogni ETF
+        seguito manualmente (etf_favorites, lista curata dall'utente — non va
+        confusa con etf_l2_watchlist, lo stato interno di anti-flickering del
+        punteggio L2), legge lo stato di oggi dai risultati appena calcolati,
+        lo confronta con l'ultimo stato salvato (last_buy_count/last_level/
+        last_regime) per i delta, poi aggiorna lo snapshot per il confronto
+        di domani.
+        """
+        digest = []
+        favorites = self.db.get_favorites()
+        if not favorites:
+            return digest
+
+        results_by_key = {(r.get('isin', '') or r['ticker']): r for r in results}
+
+        for fav in favorites:
+            isin = fav['isin']
+            r = results_by_key.get(isin)
+            if not r:
+                continue
+            a = r.get('analysis', {})
+            buy_count = a.get('buy_count', 0)
+            level     = int(a.get('suggested_level', r.get('livello', 3)))
+            regime    = a.get('regime', 'LATERALE')
+
+            last_buy_count = fav.get('last_buy_count')
+            last_level     = fav.get('last_level')
+            last_regime    = fav.get('last_regime')
+
+            digest.append({
+                'isin':             isin,
+                'ticker':           r['ticker'],
+                'nome':             r['nome'],
+                'buy_count':        buy_count,
+                'level':            level,
+                'regime':           regime,
+                'delta_buy_count':  (buy_count - last_buy_count) if last_buy_count is not None else None,
+                'level_changed':    last_level is not None and level != last_level,
+                'regime_changed':   last_regime is not None and regime != last_regime,
+            })
+
+            self.db.update_favorite_snapshot(isin, buy_count, level, regime)
+
+        return digest
 
     def _update_portfolio_l1_suggerito(self, results: list):
         """

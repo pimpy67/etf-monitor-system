@@ -135,13 +135,17 @@ def etf_detail():
         if not data:
             return jsonify({'error': 'Dashboard data non disponibile'}), 404
 
-        # Cerca nelle liste di tutti i livelli
-        etf_info = None
-        for level_list in data.get('levels', {}).values():
+        # Cerca nelle liste di tutti i livelli — il livello è la CHIAVE del dict
+        # 'levels', non un campo dentro l'oggetto ETF (vedi CLAUDE.md), quindi va
+        # catturato qui: prima andava perso, la modal mostrava "Livello: L—".
+        etf_info  = None
+        etf_level = None
+        for level_key, level_list in data.get('levels', {}).items():
             for etf in level_list:
                 if (ticker and etf.get('ticker') == ticker) or \
                    (isin and etf.get('isin') == isin):
-                    etf_info = etf
+                    etf_info  = etf
+                    etf_level = level_key
                     break
             if etf_info:
                 break
@@ -246,6 +250,8 @@ def etf_detail():
 
         return jsonify({
             **etf_info,
+            'suggested_level': int(etf_level) if etf_level is not None else None,
+            'ema10':          cond.get('ema10_current'),
             'price_history':  price_hist,
             'price_date':     price_date,
             'l1_conditions':  l1_conditions,
@@ -945,6 +951,75 @@ def delete_portfolio_event_route(event_id):
     ok = db.delete_portfolio_event(event_id)
     if ok:
         return jsonify({'status': 'ok', 'id': event_id})
+    return jsonify({'error': 'Errore eliminazione'}), 503
+
+
+@app.route('/api/favorites', methods=['GET'])
+def get_favorites_route():
+    """Preferiti personali arricchiti con dati attuali (buy_count, livello, regime)."""
+    entries = db.get_favorites()
+
+    etf_analysis = {}
+    try:
+        with open('data/dashboard_data.json', 'r') as f:
+            dash = json.load(f)
+        for level_key, level_etfs in dash.get('levels', {}).items():
+            for etf in level_etfs:
+                key = etf.get('isin') or etf.get('ticker') or ''
+                if key:
+                    etf_analysis[key] = {**etf, 'level': int(level_key)}
+    except Exception:
+        pass
+
+    result = []
+    for entry in entries:
+        isin = entry['isin']
+        analysis = etf_analysis.get(isin, {})
+
+        buy_count = analysis.get('buy_count')
+        level     = analysis.get('level')
+
+        result.append({
+            'isin':            isin,
+            'ticker':          entry.get('ticker'),
+            'nome':            entry.get('nome') or analysis.get('nome'),
+            'note':            entry.get('note'),
+            'added_date':      str(entry['added_date']) if entry.get('added_date') else None,
+            'buy_count':       buy_count,
+            'level':           level,
+            'regime':          analysis.get('regime'),
+            'price':           analysis.get('price'),
+            'pct_1d':          analysis.get('pct_1d'),
+            'delta_buy_count': (buy_count - entry['last_buy_count'])
+                                if buy_count is not None and entry.get('last_buy_count') is not None else None,
+            'delta_level':     (level - entry['last_level'])
+                                if level is not None and entry.get('last_level') is not None else None,
+        })
+
+    return jsonify({'favorites': result, 'count': len(result)})
+
+
+@app.route('/api/favorites', methods=['POST'])
+def add_favorite_route():
+    data   = request.get_json(silent=True) or {}
+    isin   = (data.get('isin') or '').strip()
+    ticker = (data.get('ticker') or '').strip()
+    nome   = (data.get('nome') or '').strip()
+    note   = (data.get('note') or '').strip()
+    key = isin or ticker
+    if not key:
+        return jsonify({'error': 'isin o ticker richiesto'}), 400
+    ok = db.add_favorite(key, ticker, nome, note)
+    if ok:
+        return jsonify({'status': 'ok', 'isin': key})
+    return jsonify({'error': 'Errore salvataggio'}), 503
+
+
+@app.route('/api/favorites/<isin>', methods=['DELETE'])
+def remove_favorite_route(isin):
+    ok = db.remove_favorite(isin)
+    if ok:
+        return jsonify({'status': 'ok', 'isin': isin})
     return jsonify({'error': 'Errore eliminazione'}), 503
 
 

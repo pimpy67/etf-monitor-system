@@ -567,6 +567,8 @@ let l1TrackingMap = {};      // isin → {entry_date, entry_price, pct_gain, day
 let l1ExitsData = [];
 let recentExitsMap = {};  // isin → {exit_date, days_ago}
 let portfolioSectionOpen = false;
+let favoriteIsins = new Set();     // isin ticker seguiti manualmente ("Preferiti")
+let favoritesSectionOpen = false;
 let historyCache = {};
 let pfEditMode = false;      // true = modifica, false = aggiunta
 
@@ -575,6 +577,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadData();
   loadHealth();
   loadPortfolio();
+  loadFavorites();
   document.addEventListener('keydown', e => { if(e.key==='Escape') { closeDetail(); closePortfolioModal(); closeSellModal(); } });
   document.addEventListener('click', function(e) {
     const panel = document.getElementById('healthPanel');
@@ -585,6 +588,7 @@ window.addEventListener('DOMContentLoaded', () => {
   setInterval(loadData, 60000);
   setInterval(loadHealth, 120000);
   setInterval(loadPortfolio, 120000);
+  setInterval(loadFavorites, 120000);
 });
 
 // ── Data loading ──────────────────────────────────────────────────────────
@@ -674,8 +678,9 @@ async function loadMarketRegime() {
 function renderDashboard() {
   if (!allData) return;
 
-  // Salva lo stato del portfolio prima di ri-renderizzare
+  // Salva lo stato del portfolio/preferiti prima di ri-renderizzare
   const wasPortfolioOpen = portfolioSectionOpen;
+  const wasFavoritesOpen = favoritesSectionOpen;
 
   const s = allData.summary || {};
   document.getElementById('totCount').textContent = s.total_etfs || 0;
@@ -745,16 +750,21 @@ function renderDashboard() {
     sections.push(renderLevelSection(parseInt(lvl), label, cls, list));
   }
 
-  // Portfolio + param ref
+  // Preferiti + Portfolio + param ref
+  sections.push(renderFavoritesSection());
   sections.push(renderPortfolioSection());
   sections.push(renderParamRef());
 
   document.getElementById('mainContent').innerHTML = sections.join('');
 
-  // Ripristina lo stato del portfolio se era aperto
+  // Ripristina lo stato del portfolio/preferiti se erano aperti
   if (wasPortfolioOpen) {
     portfolioSectionOpen = false; // Reset per il toggle
     togglePortfolioSection();
+  }
+  if (wasFavoritesOpen) {
+    favoritesSectionOpen = false; // Reset per il toggle
+    toggleFavoritesSection();
   }
 
 }
@@ -904,13 +914,15 @@ function renderETFRow(e, lvl) {
 
   const inPf = portfolioIsins.has(isin);
   const pfBtn = isin ? `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}">${inPf?'&#10003;':'+ Port.'}</button>` : '';
+  const inFav = favoriteIsins.has(isin);
+  const favBtn = isin ? `<button onclick="event.stopPropagation();toggleFavorite('${isin}')" title="${inFav?'Rimuovi dai preferiti':'Aggiungi ai preferiti'}" style="background:none;border:none;cursor:pointer;font-size:1em;line-height:1;padding:0 2px;color:${inFav?'#FFC000':'#555'};flex-shrink:0;">${inFav?'&#9733;':'&#9734;'}</button>` : '';
 
   // Per L0, aggiungi il colore di sfondo e il badge score
   const trStyle = lvl === 0 ? `style="cursor:pointer;background-color:${l0BgColor};color:#fff;"` : `style="cursor:pointer;"`;
 
   return `<tr ${trStyle} onclick="openETFDetail('${encodeURIComponent(ticker)}','${isin}')">
     <td class="col-nome">
-      <div class="etf-nome"><span class="etf-nome-text">${nome}</span>${nomeBadges}${pfBtn}</div>
+      <div class="etf-nome">${favBtn}<span class="etf-nome-text">${nome}</span>${nomeBadges}${pfBtn}</div>
       <div style="font-size:0.7em;color:#555;font-family:monospace">${isin}</div>
     </td>
     <td class="col-ticker" style="color:#8b949e">${ticker}</td>
@@ -977,6 +989,119 @@ function switchPortfolioTab(tabType) {
     if (l2Content) l2Content.style.display = 'block';
     loadL2Watchlist();  // Load L2 data on tab open
   }
+}
+
+// ── Preferiti (watchlist personale) ──────────────────────────────────────
+// Diversi dal Portafoglio (nessuna posizione reale, nessun prezzo di carico)
+// e dalla L2 Readiness sopra (quella è generata automaticamente dal sistema —
+// qui è l'utente a scegliere manualmente cosa seguire nel tempo).
+function renderFavoritesSection() {
+  return `
+  <div class="portfolio-section" id="favoritesSection">
+    <div class="portfolio-header" onclick="event.stopPropagation();toggleFavoritesSection()">
+      <h3>&#11088; Preferiti — Watchlist Personale</h3>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span id="favoritesCount" style="font-size:0.78em;color:#555">0 ETF</span>
+        <span id="favoritesToggle" style="color:#555;font-size:0.75em">&#9660;</span>
+      </div>
+    </div>
+    <div class="portfolio-body" id="favoritesBody" style="display:none;">
+      <p style="margin:0 0 12px;font-size:0.78em;color:#8b949e;">ETF che segui manualmente — non sono posizioni reali. Il monitor traccia ogni giorno come cambiano le condizioni e le riassume nell'email del portafoglio.</p>
+      <div id="favoritesContent"></div>
+    </div>
+  </div>`;
+}
+
+function toggleFavoritesSection() {
+  favoritesSectionOpen = !favoritesSectionOpen;
+  const body = document.getElementById('favoritesBody');
+  const tog  = document.getElementById('favoritesToggle');
+  if (body) body.style.display = favoritesSectionOpen ? 'block' : 'none';
+  if (tog)  tog.innerHTML = favoritesSectionOpen ? '&#9650;' : '&#9660;';
+  if (favoritesSectionOpen) loadFavorites();
+}
+
+async function loadFavorites() {
+  try {
+    const res  = await fetch('/api/favorites');
+    const data = await res.json();
+    const favs = data.favorites || [];
+    const isinsBefore = favoriteIsins;
+    favoriteIsins = new Set(favs.map(f => f.isin));
+    const countEl = document.getElementById('favoritesCount');
+    if (countEl) countEl.textContent = favs.length + ' ETF';
+    const contentEl = document.getElementById('favoritesContent');
+    if (contentEl) contentEl.innerHTML = renderFavoritesTable(favs);
+    // Se le stelline nella tabella principale erano già state disegnate prima
+    // che i preferiti arrivassero (race al primo caricamento), ridisegna.
+    if (allData && isinsBefore.size !== favoriteIsins.size) renderDashboard();
+  } catch(e) { console.error('Favorites load error', e); }
+}
+
+function renderFavoritesTable(favs) {
+  if (!favs.length) return `<p style="text-align:center;padding:16px;color:#555;font-size:0.85em">Nessun preferito ancora — clicca la stellina ☆ accanto a un ETF per iniziare a seguirlo.</p>`;
+
+  const LEVEL_LABEL = {0:'L0', 1:'L1', 2:'L2', 3:'L3'};
+  const rows = favs.map(f => {
+    const lvlBadge = f.level != null ? `<span class="lv-badge lv${f.level}">${LEVEL_LABEL[f.level]}</span>` : '<span style="color:#555">—</span>';
+    const bc = f.buy_count != null ? `${f.buy_count}/7` : '—';
+    const regime = f.regime === 'BULL' ? '<span class="regime-bull">▲ Bull</span>'
+                 : f.regime === 'BEAR' ? '<span class="regime-bear">▼ Bear</span>'
+                 : f.regime === 'LATERALE' ? '<span class="regime-lat">▬ Laterale</span>' : '—';
+    const price = f.price != null ? fmtNum(f.price, 4) : '—';
+    return `<tr>
+      <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <strong>${f.nome || f.ticker}</strong><br>
+        <small style="color:#555;font-family:monospace">${f.ticker || ''} · ${f.isin}</small>
+      </td>
+      <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${lvlBadge}</td>
+      <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-weight:600">${bc}</td>
+      <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${regime}</td>
+      <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:right">${price}</td>
+      <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">
+        <button onclick="event.stopPropagation();removeFavorite('${f.isin}')" style="background:none;border:1px solid rgba(220,53,69,0.4);color:#DC3545;border-radius:4px;cursor:pointer;font-size:0.72em;padding:2px 8px;">Rimuovi</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `<table style="width:100%;border-collapse:collapse;font-size:0.82em">
+    <thead><tr style="color:#8b949e;text-align:left">
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15)">ETF</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Livello</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Condizioni</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Regime</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:right">Prezzo</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center"></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+async function toggleFavorite(isin) {
+  if (!isin) return;
+  if (favoriteIsins.has(isin)) {
+    await removeFavorite(isin);
+  } else {
+    const info = allEtfMap[isin] || {};
+    try {
+      await fetch('/api/favorites', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({isin, ticker: info.ticker || '', nome: info.nome || ''})
+      });
+      favoriteIsins.add(isin);
+      renderDashboard();
+      loadFavorites();
+    } catch(e) { console.error('Add favorite error', e); }
+  }
+}
+
+async function removeFavorite(isin) {
+  try {
+    await fetch('/api/favorites/' + encodeURIComponent(isin), {method: 'DELETE'});
+    favoriteIsins.delete(isin);
+    renderDashboard();
+    loadFavorites();
+  } catch(e) { console.error('Remove favorite error', e); }
 }
 
 // ── Param ref HTML ─────────────────────────────────────────────────────────

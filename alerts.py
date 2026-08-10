@@ -420,9 +420,15 @@ class AlertSystem:
         )
         return self._send_email(subject, body_html)
 
-    def send_portfolio_report(self) -> bool:
+    def send_portfolio_report(self, favorites_digest: list = None) -> bool:
         """
         STEP 5 — Invia resoconto giornaliero del portafoglio con SL/SG suggerito.
+
+        favorites_digest: lista opzionale (da monitor.py::_build_favorites_digest)
+        con lo stato quotidiano dei Preferiti — ETF seguiti manualmente, non
+        posizioni reali. Se presente, aggiunge una sezione "Preferiti" alla
+        stessa email invece di mandarne una separata (scelta 2026-08-10: un
+        digest passivo, niente traffico email aggiuntivo).
 
         Per ogni posizione L1 attiva, mostra:
         - Prezzo di carico
@@ -461,8 +467,8 @@ class AlertSystem:
             positions = cur.fetchall()
             conn.close()
 
-            if not positions:
-                return True  # No positions, no email needed
+            if not positions and not favorites_digest:
+                return True  # Nulla da segnalare, niente email
 
             l1_positions = [p for p in positions if p[5] == 'L1']  # portafoglio at index 5
             l0_positions = [p for p in positions if p[5] == 'L0']  # portafoglio at index 5
@@ -638,10 +644,58 @@ class AlertSystem:
             # Per ora mostriamo solo le posizioni L0 attive.
             # Se vuoi aggiungere candidati L0, si leggerebbero da un table separato o cache JSON.
 
-            if not l1_rows and not l0_rows:
-                return True  # No valid positions
+            # ── SEZIONE PREFERITI (watchlist personale, digest passivo) ─────────
+            favorites_section = ''
+            if favorites_digest:
+                LEVEL_LABELS = {0: 'L0', 1: 'L1', 2: 'L2', 3: 'L3'}
+                fav_rows = []
+                for i, fav in enumerate(favorites_digest):
+                    bc  = fav.get('buy_count', 0)
+                    lvl_str = LEVEL_LABELS.get(fav.get('level'), '—')
+                    regime  = fav.get('regime') or '—'
+                    regime_color = '#00B050' if regime == 'BULL' else '#DC3545' if regime == 'BEAR' else '#FFC000'
 
-            table_html = l1_section + l0_section
+                    delta_bc = fav.get('delta_buy_count')
+                    if not delta_bc:
+                        delta_str = ''
+                    elif delta_bc > 0:
+                        delta_str = f' <span style="color:#00B050">▲{delta_bc}</span>'
+                    else:
+                        delta_str = f' <span style="color:#DC3545">▼{abs(delta_bc)}</span>'
+
+                    flags = ('🔔' if fav.get('level_changed') else '') + ('🔄' if fav.get('regime_changed') else '')
+
+                    fav_rows.append(
+                        f'<tr style="background:{"#f8f9fa" if i % 2 == 0 else "white"}">'
+                        f'<td style="padding:8px;border:1px solid #ddd"><strong>{fav["nome"][:35]}</strong><br>'
+                        f'<small style="color:#888">{fav["ticker"]}</small></td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:center">{lvl_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:center"><strong>{bc}/7</strong>{delta_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:center;color:{regime_color}">{regime}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:center">{flags or "—"}</td>'
+                        f'</tr>'
+                    )
+
+                favorites_section = (
+                    f'<h2 style="color:#58a6ff;margin:16px 0 8px">⭐ PREFERITI — Watchlist Personale</h2>'
+                    f'<p style="margin:0 0 8px;font-size:11px;color:#666">ETF che segui manualmente — non sono posizioni reali, solo un promemoria di come evolvono le condizioni.</p>'
+                    f'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+                    f'<tr style="background:#58a6ff;color:white">'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:left">ETF</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:center">Livello</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:center">Condizioni</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:center">Regime</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:center">Novità</th>'
+                    f'</tr>'
+                    f'{"".join(fav_rows)}'
+                    f'</table>'
+                    f'<p style="margin:6px 0 0;font-size:10px;color:#999">🔔 = livello cambiato da ieri · 🔄 = regime cambiato da ieri</p>'
+                )
+
+            if not l1_rows and not l0_rows and not favorites_section:
+                return True  # Nulla da segnalare
+
+            table_html = l1_section + l0_section + favorites_section
 
             today = datetime.now().strftime('%d/%m/%Y %H:%M')
             subject = f'📊 Portafoglio L1/L0 — {datetime.now().strftime("%d/%m/%Y")}'
