@@ -1006,7 +1006,7 @@ function renderFavoritesSection() {
       </div>
     </div>
     <div class="portfolio-body" id="favoritesBody" style="display:none;">
-      <p style="margin:0 0 12px;font-size:0.78em;color:#8b949e;">ETF che segui manualmente — non sono posizioni reali. Il monitor traccia ogni giorno come cambiano le condizioni e le riassume nell'email del portafoglio.</p>
+      <p style="margin:0 0 12px;font-size:0.88em;color:#aaa;">ETF che segui manualmente — non sono posizioni reali. Il monitor traccia ogni giorno come cambiano le condizioni e le riassume nell'email del portafoglio.</p>
       <div id="favoritesContent"></div>
     </div>
   </div>`;
@@ -1039,7 +1039,7 @@ async function loadFavorites() {
 }
 
 function renderFavoritesTable(favs) {
-  if (!favs.length) return `<p style="text-align:center;padding:16px;color:#555;font-size:0.85em">Nessun preferito ancora — clicca la stellina ☆ accanto a un ETF per iniziare a seguirlo.</p>`;
+  if (!favs.length) return `<p style="text-align:center;padding:16px;color:#8b949e;font-size:0.95em">Nessun preferito ancora — clicca la stellina ☆ accanto a un ETF per iniziare a seguirlo.</p>`;
 
   const LEVEL_LABEL = {0:'L0', 1:'L1', 2:'L2', 3:'L3'};
   const rows = favs.map(f => {
@@ -1050,22 +1050,22 @@ function renderFavoritesTable(favs) {
                  : f.regime === 'LATERALE' ? '<span class="regime-lat">▬ Laterale</span>' : '—';
     const price = f.price != null ? fmtNum(f.price, 4) : '—';
     return `<tr>
-      <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.08)">
-        <strong>${f.nome || f.ticker}</strong><br>
-        <small style="color:#555;font-family:monospace">${f.ticker || ''} · ${f.isin}</small>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <strong style="font-size:1.05em;">${f.nome || f.ticker}</strong><br>
+        <span style="font-size:0.88em;color:#8b949e;font-family:monospace;letter-spacing:0.02em;">${f.ticker || ''} · ${f.isin}</span>
       </td>
-      <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${lvlBadge}</td>
-      <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-weight:600">${bc}</td>
-      <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${regime}</td>
-      <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:right">${price}</td>
-      <td style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">
-        <button onclick="event.stopPropagation();removeFavorite('${f.isin}')" style="background:none;border:1px solid rgba(220,53,69,0.4);color:#DC3545;border-radius:4px;cursor:pointer;font-size:0.72em;padding:2px 8px;">Rimuovi</button>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${lvlBadge}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-weight:700;font-size:1.05em;">${bc}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-size:1.05em;">${regime}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:right;font-weight:600;">${price}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">
+        <button onclick="event.stopPropagation();removeFavorite('${f.isin}')" style="background:none;border:1px solid rgba(220,53,69,0.5);color:#f87070;border-radius:4px;cursor:pointer;font-size:0.85em;font-weight:600;padding:4px 10px;">Rimuovi</button>
       </td>
     </tr>`;
   }).join('');
 
-  return `<table style="width:100%;border-collapse:collapse;font-size:0.82em">
-    <thead><tr style="color:#8b949e;text-align:left">
+  return `<table style="width:100%;border-collapse:collapse;font-size:0.95em">
+    <thead><tr style="color:#aaa;text-align:left;text-transform:uppercase;letter-spacing:0.03em;font-size:0.78em;">
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15)">ETF</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Livello</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Condizioni</th>
