@@ -461,6 +461,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
         <div class="kpi-glossary-item"><b>MACD Hist</b> — Differenza tra due medie mobili: positivo e in crescita indica un rialzo che sta accelerando, non solo proseguendo.</div>
         <div class="kpi-glossary-item"><b>Dist EMA20</b> — Di quanto il prezzo si è allontanato, in %, dalla sua media veloce. Troppo lontano = rischio di comprare un movimento già esaurito.</div>
         <div class="kpi-glossary-item"><b>Drawdown</b> — Calo % dal massimo storico recente (il "picco"). Più è profondo, più il recupero richiede un rialzo proporzionalmente maggiore.</div>
+        <div class="kpi-glossary-item"><b>Regime</b> — Bull/Bear/Laterale: confronta EMA20 e SMA50. È il gate che decide se i nuovi ingressi L1 sono ammessi — anche con 7/7 condizioni, se il Regime non è Bull l'ingresso resta bloccato.</div>
       </div>
       <div id="detailRegime"></div>
       <div id="detailL0"></div>
@@ -1164,79 +1165,18 @@ function renderParamRef() {
 
       <!-- TABELLE PARAMETRI COMPLETE -->
       <div class="param-section-title" style="margin-top:20px;">📊 Parametri per Famiglia — Parte 1: Equity & Commodity</div>
-      <div style="overflow-x:auto;margin-bottom:16px;">
-        <table class="param-table" style="font-size:0.75em;">
-          <thead><tr>
-            <th style="width:16%">Parametro</th>
-            <th style="width:12%">Equity Sviluppati</th>
-            <th style="width:12%">Mercati Emergenti</th>
-            <th style="width:12%">Settoriali Growth</th>
-            <th style="width:12%">Settoriali Difensivi</th>
-            <th style="width:12%">Commodities</th>
-            <th style="width:12%">Metalli Industriali</th>
-          </tr></thead>
-          <tbody>
-            <tr><td class="param-name">RSI Entry Range</td><td>45–55</td><td>40–52</td><td>48–58</td><td>42–50</td><td>40–55</td><td>38–50</td></tr>
-            <tr><td class="param-name">ADX Min</td><td>&gt;22</td><td>&gt;22</td><td>&gt;25</td><td>&gt;18</td><td>&gt;22</td><td>&gt;20</td></tr>
-            <tr><td class="param-name">Dist. EMA20 Max</td><td>4.0%</td><td>5.0%</td><td>5.0%</td><td>2.5%</td><td>3.0%</td><td>3.0%</td></tr>
-            <tr><td class="param-name">Giorni Sopra EMA20</td><td>5</td><td>3</td><td>5</td><td>5</td><td>3</td><td>3</td></tr>
-            <tr><td class="param-name">EMA20 Slope Min</td><td>1.5%</td><td>1.5%</td><td>1.5%</td><td>1.5%</td><td>1.5%</td><td>1.5%</td></tr>
-            <tr><td class="param-name">Min Buy Count</td><td>7/7</td><td>6/6</td><td>5/6</td><td>5/6</td><td>5/6</td><td>5/6</td></tr>
-            <tr><td class="param-name">SMA200 Filter</td><td>✓ Sì</td><td>✓ Sì</td><td>✓ Sì</td><td>✓ Sì</td><td>✓ Sì</td><td>✓ Sì</td></tr>
-            <tr><td class="param-name">L0 Drawdown</td><td>15%</td><td>20%</td><td>18%</td><td>15%</td><td>20%</td><td>18%</td></tr>
-            <tr><td class="param-name">L0 RSI Max</td><td>35</td><td>38</td><td>38</td><td>35</td><td>40</td><td>38</td></tr>
-          </tbody>
-        </table>
+      <div style="overflow-x:auto;margin-bottom:16px;" id="paramTablePart1">
+        <p style="color:#555;font-size:0.8em;">Caricamento parametri da YAML...</p>
       </div>
 
       <div class="param-section-title" style="margin-top:20px;">📊 Parametri per Famiglia — Parte 2: Bond, Oro, Real Estate</div>
-      <div style="overflow-x:auto;margin-bottom:16px;">
-        <table class="param-table" style="font-size:0.75em;">
-          <thead><tr>
-            <th style="width:16%">Parametro</th>
-            <th style="width:12%">Bond Gov.</th>
-            <th style="width:12%">Bond Corp/HY</th>
-            <th style="width:12%">Oro/Metalli PM</th>
-            <th style="width:12%">Real Estate REIT</th>
-            <th style="width:12%">Inflation Linked</th>
-            <th style="width:12%">Monetario</th>
-          </tr></thead>
-          <tbody>
-            <tr><td class="param-name">RSI Entry Range</td><td>38–48</td><td>42–52</td><td>38–52</td><td>42–52</td><td>38–48</td><td style="color:#888;">—</td></tr>
-            <tr><td class="param-name">ADX Min</td><td>&gt;12</td><td>&gt;15</td><td>&gt;18</td><td>&gt;15</td><td>&gt;12</td><td style="color:#888;">—</td></tr>
-            <tr><td class="param-name">Dist. EMA20 Max</td><td>1.5%</td><td>2.0%</td><td>2.5%</td><td>2.0%</td><td>1.5%</td><td>0.5%</td></tr>
-            <tr><td class="param-name">Giorni Sopra EMA20</td><td>3</td><td>3</td><td>3</td><td>3</td><td>3</td><td>3</td></tr>
-            <tr><td class="param-name">EMA20 Slope Min</td><td>1.5%</td><td>1.5%</td><td>1.5%</td><td>1.5%</td><td>1.5%</td><td>0.0%</td></tr>
-            <tr><td class="param-name">Min Buy Count</td><td>7/7</td><td>5/6</td><td>5/6</td><td>5/6</td><td>5/6</td><td>6/6</td></tr>
-            <tr><td class="param-name">SMA200 Filter</td><td>✗ No</td><td>✗ No</td><td>✓ Sì</td><td>✗ No</td><td>✗ No</td><td>✗ No</td></tr>
-            <tr><td class="param-name">L0 Drawdown</td><td>8%</td><td>10%</td><td>15%</td><td>12%</td><td>8%</td><td style="color:#888;">—</td></tr>
-            <tr><td class="param-name">L0 RSI Max</td><td>38</td><td>38</td><td>42</td><td>44</td><td>38</td><td style="color:#888;">—</td></tr>
-          </tbody>
-        </table>
+      <div style="overflow-x:auto;margin-bottom:16px;" id="paramTablePart2">
+        <p style="color:#555;font-size:0.8em;">Caricamento parametri da YAML...</p>
       </div>
 
       <div class="param-section-title" style="margin-top:20px;">📊 Parametri per Famiglia — Parte 3: Crypto, Leva, Private Equity</div>
-      <div style="overflow-x:auto;margin-bottom:16px;">
-        <table class="param-table" style="font-size:0.75em;">
-          <thead><tr>
-            <th style="width:20%">Parametro</th>
-            <th style="width:15%">Crypto/Digital</th>
-            <th style="width:15%">Leva/Single Stock</th>
-            <th style="width:15%">Private Equity</th>
-          </tr></thead>
-          <tbody>
-            <tr><td class="param-name">RSI Entry Range</td><td>35–52</td><td>45–58</td><td>40–55</td></tr>
-            <tr><td class="param-name">ADX Min</td><td>&gt;28</td><td>&gt;28</td><td>&gt;15</td></tr>
-            <tr><td class="param-name">Dist. EMA20 Max</td><td>6.0%</td><td>4.0%</td><td>2.5%</td></tr>
-            <tr><td class="param-name">Giorni Sopra EMA20</td><td>3</td><td>3</td><td>3</td></tr>
-            <tr><td class="param-name">EMA20 Slope Min</td><td>1.5%</td><td>1.5%</td><td>1.5%</td></tr>
-            <tr><td class="param-name">Min Buy Count</td><td>7/7</td><td>5/6</td><td>5/6</td></tr>
-            <tr><td class="param-name">SMA200 Filter</td><td>✓ Sì</td><td>✓ Sì</td><td>✗ No</td></tr>
-            <tr><td class="param-name">L0 Drawdown</td><td>25%</td><td>20%</td><td>15%</td></tr>
-            <tr><td class="param-name">L0 RSI Max</td><td>38</td><td>40</td><td>42</td></tr>
-            <tr><td class="param-name">Hold Max Days</td><td>—</td><td style="color:#ff8c00;"><strong>30gg</strong></td><td>—</td></tr>
-          </tbody>
-        </table>
+      <div style="overflow-x:auto;margin-bottom:16px;" id="paramTablePart3">
+        <p style="color:#555;font-size:0.8em;">Caricamento parametri da YAML...</p>
       </div>
 
       <!-- REGOLE USCITA L1 -->
@@ -1379,11 +1319,31 @@ function renderParamRef() {
   </div>`;
 }
 
+let paramTablesLoaded = false;
+
 function toggleParamRef() {
   const body = document.getElementById('paramRefBody');
   const tog  = document.getElementById('paramRefToggle');
   body.classList.toggle('open');
   tog.classList.toggle('open');
+  if (body.classList.contains('open') && !paramTablesLoaded) loadParamTables();
+}
+
+async function loadParamTables() {
+  try {
+    const res  = await fetch('/api/parameters-tables-html');
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    document.getElementById('paramTablePart1').innerHTML = data.tables_html;
+    document.getElementById('paramTablePart2').innerHTML = data.tables_html_part2;
+    document.getElementById('paramTablePart3').innerHTML = data.tables_html_part3;
+    paramTablesLoaded = true;
+  } catch(e) {
+    console.error('Param tables load error', e);
+    ['paramTablePart1','paramTablePart2','paramTablePart3'].forEach(id => {
+      document.getElementById(id).innerHTML = '<p style="color:#f85149;font-size:0.8em;">Errore caricamento parametri.</p>';
+    });
+  }
 }
 
 function exportParametersPDF() {

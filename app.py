@@ -1340,9 +1340,70 @@ def get_claude_doc():
         return jsonify({'error': f'Errore caricamento CLAUDE.md: {str(e)}'}), 500
 
 
+def _render_param_table(families, fam_list, rows, extra_width=None):
+    """Costruisce una tabella HTML parametri per un gruppo di famiglie, letta
+    live da config/etf_families.yaml — non hardcodata, non va mai fuori sync."""
+    n = len(fam_list)
+    name_w = extra_width or 16
+    col_w = (100 - name_w) / max(n, 1)
+    html = f'<table class="param-table" style="font-size:0.75em;"><thead><tr><th style="width:{name_w}%">Parametro</th>'
+    for fam in fam_list:
+        if fam in families:
+            label = families[fam].get('description', fam).split(' — ')[0]
+            html += f'<th style="width:{col_w:.0f}%">{label}</th>'
+    html += '</tr></thead><tbody>'
+
+    for param_name, param_key in rows:
+        html += f'<tr><td class="param-name">{param_name}</td>'
+        for fam in fam_list:
+            if fam not in families:
+                continue
+            p = families[fam]
+            if param_key == 'rsi_entry_low':
+                lo, hi = p.get('rsi_entry_low'), p.get('rsi_entry_high')
+                val = f"{lo}–{hi}" if lo is not None and hi is not None else '—'
+            elif param_key == 'adx_entry':
+                val = f"&gt;{p.get('adx_entry')}" if p.get('adx_entry') is not None else '—'
+            elif param_key == 'ema_dist_max':
+                v = p.get('ema_dist_max')
+                val = f"{v:.1f}%" if v is not None else '—'  # già in %, non moltiplicare
+            elif param_key == 'ema20_slope_min':
+                v = p.get('ema20_slope_min')
+                val = f"{v:.1f}%" if v is not None else '—'  # già in %, non moltiplicare
+            elif param_key == 'min_buy_count':
+                v = p.get('min_buy_count')
+                val = f"{v}/7" if v is not None else '—'  # 7 condizioni totali per tutte le famiglie
+            elif param_key == 'mm200_filter':
+                val = '✓ Sì' if p.get('mm200_filter') else '✗ No'
+            elif param_key == 'l0_drawdown':
+                v = p.get('l0_drawdown')
+                val = f"{v}%" if v is not None else '—'
+            elif param_key == 'l0_rsi_max':
+                v = p.get('l0_rsi_max')
+                val = str(v) if v is not None else '—'
+            elif param_key == 'hold_days_max':
+                v = p.get('hold_days_max')
+                val = f"<strong style=\"color:#ff8c00;\">{v}gg</strong>" if v else '—'
+            else:
+                v = p.get(param_key)
+                val = str(v) if v is not None else '—'
+            html += f'<td>{val}</td>'
+        html += '</tr>'
+    html += '</tbody></table>'
+    return html
+
+
 @app.route('/api/parameters-tables-html')
 def get_parameters_tables_html():
-    """Genera le tabelle HTML parametri dinamicamente da YAML — 100% sincronizzate."""
+    """Genera le tabelle HTML parametri dinamicamente da YAML — 100% sincronizzate.
+
+    Sostituisce le tabelle statiche che c'erano prima in dashboard.html (rimaste
+    indietro rispetto al codice reale: min_buy_count mostrava ancora 5/6-6/6
+    invece di 7/7, dist/slope erano moltiplicati per 100 nonostante il YAML li
+    memorizzi già in %). Qui i valori si leggono live dal file, quindi non
+    possono più andare fuori sincrono — coerente con la regola di
+    sincronizzazione del progetto (vedi CLAUDE.md).
+    """
     try:
         import yaml
         with open('config/etf_families.yaml', 'r') as f:
@@ -1350,57 +1411,27 @@ def get_parameters_tables_html():
 
         families = config.get('families', {})
 
-        # Organizza famiglie per categoria
         equity_commodity = ['equity_sviluppati', 'mercati_emergenti', 'settoriali_growth',
                             'settoriali_difensivi', 'commodities', 'metalli_industriali']
         bond_other = ['bond_governativi', 'bond_corp_hy_em', 'oro_metalli_preziosi',
                       'real_estate_reit', 'inflation_linked', 'monetario_liquidita']
         crypto_leva = ['crypto_digital_assets', 'leva_single_stock', 'private_equity_buffer']
 
-        # Tabella 1: Equity & Commodity
-        html_part1 = '<table class="param-table" style="font-size:0.75em;"><thead><tr><th style="width:16%">Parametro</th>'
-        for fam in equity_commodity:
-            if fam in families:
-                html_part1 += f'<th style="width:12%">{families[fam].get("description", fam).split(" — ")[0]}</th>'
-        html_part1 += '</tr></thead><tbody>'
-
-        # Righe parametri
-        for param_name, param_key in [
+        base_rows = [
             ('RSI Entry Range', 'rsi_entry_low'), ('ADX Min', 'adx_entry'),
             ('Dist. EMA20 Max', 'ema_dist_max'), ('Giorni Sopra EMA20', 'days_above_ema'),
             ('EMA20 Slope Min', 'ema20_slope_min'), ('Min Buy Count', 'min_buy_count'),
-            ('SMA200 Filter', 'mm200_filter'), ('L0 Drawdown', 'l0_drawdown'), ('L0 RSI Max', 'l0_rsi_max')
-        ]:
-            html_part1 += f'<tr><td class="param-name">{param_name}</td>'
-            for fam in equity_commodity:
-                if fam in families:
-                    params = families[fam]
-                    if param_key == 'rsi_entry_low':
-                        val = f"{params.get('rsi_entry_low', '—')}–{params.get('rsi_entry_high', '—')}"
-                    elif param_key == 'adx_entry':
-                        val = f"&gt;{params.get('adx_entry', '—')}" if params.get('adx_entry') else '—'
-                    elif param_key == 'ema_dist_max':
-                        val = f"{params.get('ema_dist_max', '—')*100:.1f}%"
-                    elif param_key == 'ema20_slope_min':
-                        val = f"{params.get('ema20_slope_min', 1.5)*100:.1f}%"
-                    elif param_key == 'min_buy_count':
-                        val = f"{params.get('min_buy_count', 6)}/6"
-                    elif param_key == 'mm200_filter':
-                        val = '✓ Sì' if params.get('mm200_filter') else '✗ No'
-                    elif param_key == 'l0_drawdown':
-                        val = f"{params.get('l0_drawdown', '—')}%" if params.get('l0_drawdown') else '—'
-                    elif param_key == 'l0_rsi_max':
-                        val = f"{params.get('l0_rsi_max', '—')}"
-                    else:
-                        val = str(params.get(param_key, '—'))
-                    html_part1 += f'<td>{val}</td>'
-            html_part1 += '</tr>'
-        html_part1 += '</tbody></table>'
+            ('SMA200 Filter', 'mm200_filter'), ('L0 Drawdown', 'l0_drawdown'), ('L0 RSI Max', 'l0_rsi_max'),
+        ]
 
-        # Nota: Parte 2 e 3 analoghe (implementate sulla dashboard come fallback per ora)
+        html_part1 = _render_param_table(families, equity_commodity, base_rows)
+        html_part2 = _render_param_table(families, bond_other, base_rows)
+        html_part3 = _render_param_table(families, crypto_leva, base_rows + [('Hold Max Days', 'hold_days_max')], extra_width=20)
 
         return jsonify({
             'tables_html': html_part1,
+            'tables_html_part2': html_part2,
+            'tables_html_part3': html_part3,
             'note': 'Tabelle generate dinamicamente da config/etf_families.yaml',
             'timestamp': datetime.now().isoformat()
         })
