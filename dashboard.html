@@ -821,7 +821,8 @@ function renderLevelSection(lvl, label, cls, list) {
             const scoreB = calculateL0Score(b);
             return scoreB - scoreA;
           }
-          return 0; // altri livelli, mantieni ordine originale
+          // L1/L2/L3: ordina per buy_count decrescente (più vicini a L1 in cima)
+          return (b.buy_count || 0) - (a.buy_count || 0);
         }).map(e => renderETFRow(e, lvl)).join('') : `<tr><td colspan="8" class="empty-msg">${emptyMsg}</td></tr>`}
       </tbody>
     </table>
