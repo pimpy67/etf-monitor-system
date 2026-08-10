@@ -115,6 +115,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 
 .regime-bull { color:#00B050; font-size:0.75em; font-weight:600; }
 .regime-bear { color:#DC3545; font-size:0.75em; font-weight:600; }
+.regime-lat  { color:#FFC000; font-size:0.75em; font-weight:600; }
 .regime-na   { color:#8b949e; font-size:0.75em; }
 
 /* Buy count badge */
@@ -123,10 +124,11 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 .buy-dot   { width:7px; height:7px; border-radius:50%; background:#30363d; }
 .buy-dot.on { background:#00B050; }
 .buy-count { font-weight:700; font-size:0.85em; }
-.buy-count.bc6 { color:#fff; text-shadow:0 0 8px #00ff88,0 0 16px #00B050; }
-.buy-count.bc5 { color:#00ff88; text-shadow:0 0 6px #00ff88; }
-.buy-count.bc4 { color:#00ff88; }
-.buy-count.bc3 { color:#FFC000; }
+.buy-count.bc7 { color:#fff; text-shadow:0 0 8px #00ff88,0 0 16px #00B050; }
+.buy-count.bc6 { color:#00ff88; text-shadow:0 0 6px #00ff88; }
+.buy-count.bc5 { color:#00ff88; }
+.buy-count.bc4 { color:#FFC000; }
+.buy-count.bc3 { color:#ff9966; }
 .buy-count.bc2 { color:#ff9966; }
 .buy-count.bc1 { color:#DC3545; }
 .buy-count.bc0 { color:#888; }
@@ -858,11 +860,11 @@ function renderETFRow(e, lvl) {
   const ticker = e.ticker || '';
   const isin   = e.isin   || '';
   const price  = e.price != null ? fmtNum(e.price,4) : '—';
-  let sma200Html = '—';
-  if (e.sma200 != null) {
-    const isBull = e.price != null && e.price > e.sma200;
-    sma200Html = `<span class="${isBull?'regime-bull':'regime-bear'}">${isBull?'▲ Bull':'▼ Bear'}</span>`;
-  }
+  // Regime reale usato dal gate L1 (EMA20 vs SMA50, non prezzo vs SMA200)
+  let regimeHtml = '—';
+  if (e.regime === 'BULL') regimeHtml = `<span class="regime-bull">▲ Bull</span>`;
+  else if (e.regime === 'BEAR') regimeHtml = `<span class="regime-bear">▼ Bear</span>`;
+  else if (e.regime === 'LATERALE') regimeHtml = `<span class="regime-lat">▬ Laterale</span>`;
   const bc = e.buy_count || 0;
   const c  = e.conditions || {};
 
@@ -875,12 +877,12 @@ function renderETFRow(e, lvl) {
   if (lvl === 1) {
     const partialBadge = c.partial_exit
       ? `<span title="Regola D: RSI>78 — vendi 90%, tieni 10%" style="margin-left:4px;font-size:0.75em;color:#ff8c00;font-weight:700;">90%↓</span>` : '';
-    condCell = `<span class="buy-count bc${bc}">${bc}/6</span> <span class="cond-dots">${condDot(c.allineamento_ok,'A','Allineamento')}${condDot(c.persistenza_ok,'P','Persistenza')}${condDot(c.rsi_ok,'R','RSI range')}${condDot(c.distance_ok,'D','Distanza EMA20')}${condDot(c.adx_ok,'X','ADX')}${condDot(c.macd_ok,'M','MACD momentum')}</span>${partialBadge}`;
+    condCell = `<span class="buy-count bc${bc}">${bc}/7</span> <span class="cond-dots">${condDot(c.allineamento_ok,'A','Allineamento')}${condDot(c.persistenza_ok,'P','Persistenza')}${condDot(c.rsi_ok,'R','RSI range')}${condDot(c.distance_ok,'D','Distanza EMA20')}${condDot(c.adx_ok,'X','ADX')}${condDot(c.macd_ok,'M','MACD momentum')}${condDot(c.space_residuo_ok,'S','Spazio residuo')}</span>${partialBadge}`;
   } else if (lvl === 0 && e.drawdown_from_peak != null) {
     condCell = `<span class="dd-pill">-${fmtNum(e.drawdown_from_peak,1)}%</span>`;
   } else {
-    const dots = [0,1,2,3,4,5].map(i => `<div class="buy-dot ${i < bc ? 'on' : ''}"></div>`).join('');
-    condCell = `<div class="buy-badge"><div class="buy-dots">${dots}</div><span class="buy-count bc${bc}" style="font-size:0.78em;color:#555">${bc}/6</span></div>`;
+    const dots = [0,1,2,3,4,5,6].map(i => `<div class="buy-dot ${i < bc ? 'on' : ''}"></div>`).join('');
+    condCell = `<div class="buy-badge"><div class="buy-dots">${dots}</div><span class="buy-count bc${bc}" style="font-size:0.78em">${bc}/7</span></div>`;
   }
 
   // Nome cell badges
@@ -915,7 +917,7 @@ function renderETFRow(e, lvl) {
     <td class="col-pct">${fmtPct(e.pct_1d)}</td>
     <td class="col-pct">${fmtPct(e.pct_1w)}</td>
     <td class="col-pct">${fmtPct(e.pct_1m)}</td>
-    <td class="col-sma200">${sma200Html}</td>
+    <td class="col-sma200">${regimeHtml}</td>
     <td class="col-buy">${condCell}</td>
   </tr>`;
 }
@@ -1913,6 +1915,8 @@ function renderL1CondPanel(e) {
     // Fallback dots (quando dati arrivano da allData senza API)
     const cond = e.conditions || {};
     const macdNote = cond.macd_histogram != null ? ` (${cond.macd_histogram>0?'+':''}${cond.macd_histogram.toFixed(3)})` : '';
+    const spaceNote = cond.space_residuo_pct != null
+      ? ` (${cond.space_residuo_pct.toFixed(1)}% vs min ${cond.space_residuo_threshold?.toFixed(1) ?? '—'}%)` : '';
     const condMap = [
       ['allineamento_ok', 'Allineamento: Prezzo > EMA20 > SMA50'],
       ['persistenza_ok',  'Persistenza: ≥3gg sopra EMA20 + slope↑'],
@@ -1920,8 +1924,9 @@ function renderL1CondPanel(e) {
       ['distance_ok',     `Distanza EMA20 entro limite (${cond.dist_ema20!=null?cond.dist_ema20.toFixed(1)+'%':'—'})`],
       ['adx_ok',          `ADX ≥ soglia (${cond.adx!=null?cond.adx.toFixed(0):'—'})`],
       ['macd_ok',         `MACD momentum${macdNote}`],
+      ['space_residuo_ok', `Spazio residuo minimo${spaceNote}`],
     ];
-    return `<div class="cond-title">Condizioni L1 Trend Sicuro (${e.buy_count||0}/6)</div>
+    return `<div class="cond-title">Condizioni L1 Trend Sicuro (${e.buy_count||0}/7)</div>
       <div class="cond-grid">${condMap.map(([k,label]) => {
         const ok = cond[k], dc = ok===true?'ok':ok===false?'no':'na';
         return `<div class="cond-item"><div class="cond-dot ${dc}"></div><span>${label}</span></div>`;
@@ -1983,15 +1988,23 @@ function renderL1CondPanel(e) {
         const sign = mh != null && mh > 0 ? '+' : '';
         return `Hist <span class="${pos?'ok':'ko'}">${sign}${fmt(mh,4)}</span> · deve essere <span class="na">&gt;0 e in crescita</span>`;
       }
+    },
+    {
+      key: 'space_residuo_ok', label: 'Spazio Residuo',
+      detail: () => {
+        const sp = v.space_residuo_pct, th = v.space_residuo_threshold;
+        const ok = sp != null && th != null && sp >= th;
+        return `Spazio <span class="${ok?'ok':'ko'}">${fmt(sp,1)}%</span> · min <span class="na">${fmt(th,1)}%</span>`;
+      }
     }
   ];
 
   const passed = rows.filter(r => lc[r.key]).length;
-  const scoreColor = passed === 6 ? '#3fb950' : passed >= 4 ? '#d29922' : '#f85149';
+  const scoreColor = passed === 7 ? '#3fb950' : passed >= 5 ? '#d29922' : '#f85149';
 
   let html = `<div class="l1-cond-panel">
     <div class="l1-cond-title">Condizioni L1 Trend Sicuro
-      <span class="l1-cond-score" style="color:${scoreColor}">${passed}/6</span>
+      <span class="l1-cond-score" style="color:${scoreColor}">${passed}/7</span>
     </div>`;
   rows.forEach(r => {
     html += `<div class="l1-cond-row">
@@ -2400,7 +2413,7 @@ async function loadAndDisplayParameters() {
               </tr>
               <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                 <td style="padding:4px 8px;color:#8b949e;"><strong>⭐ Min Buy Count</strong></td>
-                <td style="padding:4px 8px;color:#fff;font-weight:bold;">${params.min_buy_count}/6</td>
+                <td style="padding:4px 8px;color:#fff;font-weight:bold;">${params.min_buy_count}/7</td>
               </tr>
               <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                 <td style="padding:4px 8px;color:#8b949e;">AUM Min</td>

@@ -1278,6 +1278,9 @@ class ETFTechnicalAnalyzer:
             'adx_ok':             adx_ok,
             'macd_ok':            macd_ok,
             'space_residuo_ok':   space_ok,
+            'space_residuo_pct':       round(space_residuo_check.get('space_pct', 0) * 100, 2),
+            'space_residuo_threshold': round(space_residuo_check.get('threshold', 0) * 100, 2),
+            'space_residuo_method':    space_residuo_check.get('method', 'none'),
             'smart_6_7_macd_enabled': smart_6_7_macd_enabled,
             'smart_6_7_triggered': smart_6_7_triggered,
             # Valori per display

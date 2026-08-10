@@ -217,6 +217,7 @@ def etf_detail():
             'distance_ok':     bool(cond.get('distance_ok', False)),
             'adx_ok':          bool(cond.get('adx_ok', False)),
             'macd_ok':         bool(cond.get('macd_ok', False)),
+            'space_residuo_ok': bool(cond.get('space_residuo_ok', False)),
             'values': {
                 'price':            etf_info.get('price'),
                 'price_date':       price_date,
@@ -230,6 +231,8 @@ def etf_detail():
                 'ema20_slope':      cond.get('ema20_slope'),
                 'regime_ok':        cond.get('regime_ok'),
                 'macd_histogram':   cond.get('macd_histogram'),
+                'space_residuo_pct':       cond.get('space_residuo_pct'),
+                'space_residuo_threshold': cond.get('space_residuo_threshold'),
             },
             'thresholds': {
                 'rsi_min':        p['rsi_entry_low'],
