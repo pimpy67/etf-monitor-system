@@ -24,7 +24,16 @@ db  = PriceDatabase()
 
 @app.route('/')
 def index():
-    return send_file('dashboard.html')
+    # No-cache: dashboard.html cambia a ogni deploy — senza questo header il
+    # browser può tenersi in cache una versione vecchia della pagina/JS anche
+    # dopo un deploy riuscito, mostrando dati o logica superati (visto in
+    # produzione il 2026-08-10: un utente vedeva ancora il vecchio testo
+    # "Bull Market — Prezzo sopra SMA200" ore dopo che il fix era live).
+    response = send_file('dashboard.html')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route('/portfolio')
 def portfolio():
