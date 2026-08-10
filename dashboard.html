@@ -253,7 +253,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 .detail-box { background:#111927; border:1px solid rgba(255,255,255,0.12); border-radius:16px; width:900px; max-width:98vw; box-shadow:0 20px 60px rgba(0,0,0,0.7); padding:0; overflow:hidden; position:relative; margin:auto; }
 .detail-header { padding:16px 22px 12px; background:rgba(255,255,255,0.04); border-bottom:1px solid rgba(255,255,255,0.08); display:flex; justify-content:space-between; align-items:flex-start; }
 .detail-title { font-size:1em; font-weight:bold; color:#e6edf3; }
-.detail-sub { font-size:0.72em; color:#555; font-family:monospace; margin-top:2px; }
+.detail-sub { font-size:0.95em; color:#aaa; font-family:monospace; letter-spacing:0.02em; margin-top:4px; }
 .detail-close { background:none; border:none; color:#555; font-size:1.4em; cursor:pointer; padding:0 4px; line-height:1; }
 .detail-close:hover { color:#e6edf3; }
 .detail-body { padding:16px 22px 22px; }
@@ -1488,7 +1488,7 @@ function renderPortfolioTable(portfolioData, portfolioType) {
       ? `<span style="display:inline-block;background:rgba(255,140,0,0.18);color:#ff8c00;font-size:0.62em;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;border:1px solid rgba(255,140,0,0.4);vertical-align:middle;" title="Piede Dentro: 90% venduto il ${p.partial_exit_date||'?'} a ${p.partial_exit_price||'?'}">&#129463; 10%</span>`
       : '';
     return `<tr id="pf-row-${isin}" style="cursor:pointer;" onclick="openETFDetail('${(allEtfMap[isin]?.ticker||'').replace(/'/g,"\'")}','${isin}')">
-      <td style="font-weight:600">${p.fund_name||isin}${partialBadgePf}<br><span style="font-family:monospace;font-size:0.7em;color:#555">${isin}</span></td>
+      <td style="font-weight:600">${p.fund_name||isin}${partialBadgePf}<br><span style="font-family:monospace;font-size:0.85em;color:#8b949e;letter-spacing:0.02em;">${isin}</span></td>
       <td style="color:#8b949e;font-size:0.83em">${p.entry_date||'-'}</td>
       <td style="font-family:monospace;font-size:0.85em">${prAcq}</td>
       <td style="font-family:monospace;font-size:0.85em">${prAtt}</td>
