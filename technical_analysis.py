@@ -1407,14 +1407,12 @@ class ETFTechnicalAnalyzer:
                 reason_codes.append('L1_ENTRY')
 
         else:
-            # L2 Watchlist: ETF quasi pronti (>=5/7 condizioni) OPPURE in trend
-            # strutturale attivo (persistenza sopra EMA20 o EMA20 > SMA50) — altrimenti L3.
-            near_l1 = buy_count_finale >= 5
-            structural_trend = (days_above_ema20 >= p['days_above_ema']) or ema_sma50_ok
-            if near_l1 or structural_trend:
+            # L2 Watchlist: ETF quasi pronti, >=5/7 condizioni — altrimenti L3.
+            # (criterio "trend strutturale" EMA20>SMA50/persistenza scartato: troppo
+            # permissivo da solo, il 76% dell'universo lo soddisfa senza essere vicino a L1)
+            if buy_count_finale >= 5:
                 suggested = 2
-                reason    = f'Watchlist — {buy_count}/{min_buy_required} condizioni' + \
-                            (', trend strutturale attivo' if structural_trend and not near_l1 else '')
+                reason    = f'Watchlist — {buy_count}/{min_buy_required} condizioni'
                 reason_codes.append('L2_WATCHLIST')
             else:
                 suggested = 3
