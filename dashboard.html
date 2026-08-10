@@ -67,11 +67,10 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 .col-header th { padding:7px 8px; text-align:left; font-size:0.75em; font-weight:600; color:#aaa; text-transform:uppercase; letter-spacing:.03em; overflow:hidden; }
 
 /* Column widths */
-.col-nome   { width:22%; } .col-ticker { width:6%; }
-.col-prezzo { width:6%; }  .col-pct    { width:5%; }
-.col-ema20  { width:6%; }  .col-sma50  { width:6%; } .col-sma200 { width:7%; }
-.col-rsi    { width:5%; }  .col-adx    { width:5%; }
-.col-buy    { width:6%; }  .col-ragione { width:15%; }
+.col-nome   { width:40%; } .col-ticker { width:8%; }
+.col-prezzo { width:9%; }  .col-pct    { width:7%; }
+.col-sma200 { width:10%; }
+.col-buy    { width:12%; }
 
 /* ── Container ───────────────────────────────────────────────────────────── */
 .container { max-width:1640px; margin:0 auto; padding:14px 20px; }
@@ -150,8 +149,8 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 .lv2 { background:rgba(255,192,0,0.2); color:#FFC000; }
 .lv3 { background:rgba(68,114,196,0.2); color:#4472C4; }
 
-.etf-nome { font-weight:600; display:flex; align-items:center; gap:4px; overflow:hidden; }
-.etf-nome-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; }
+.etf-nome { font-weight:600; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+.etf-nome-text { white-space:normal; flex:1; min-width:0; }
 .etf-type-tag { display:inline-block; font-size:0.65em; padding:0 5px; border-radius:3px; background:rgba(255,255,255,0.08); color:#8b949e; flex-shrink:0; }
 .empty-msg { padding:28px; text-align:center; color:#8b949e; }
 
@@ -325,7 +324,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 .l1-cond-detail .na { color:#555; font-style:italic; }
 .price-date-sub { font-size:0.65em; color:#555; margin-top:2px; }
 
-@media(max-width:900px){ .col-ragione,.col-sma200 { display:none; } }
+@media(max-width:900px){ .col-sma200 { display:none; } }
 @media(max-width:600px){ .etf-table td,.col-header th { font-size:0.72em; padding:6px 5px; } }
 </style>
 </head>
@@ -532,16 +531,14 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
     <colgroup>
       <col class="col-nome"><col class="col-ticker"><col class="col-prezzo">
       <col class="col-pct"><col class="col-pct"><col class="col-pct">
-      <col class="col-ema20"><col class="col-sma50"><col class="col-sma200">
-      <col class="col-rsi"><col class="col-adx">
-      <col class="col-buy"><col class="col-ragione">
+      <col class="col-sma200">
+      <col class="col-buy">
     </colgroup>
     <tr>
       <th>ETF</th><th>Ticker</th><th>Prezzo</th>
       <th>%1G</th><th>%1W</th><th>%1M</th>
-      <th>EMA20</th><th>SMA50</th><th>Regime</th>
-      <th>RSI</th><th>ADX</th>
-      <th>Cond.</th><th>Info</th>
+      <th>Regime</th>
+      <th>Cond.</th>
     </tr>
   </table>
 </div>
@@ -787,7 +784,6 @@ function clearSearch() {
 // ── Unified level section (L0, L1, L2, L3) ───────────────────────────────
 function renderLevelSection(lvl, label, cls, list) {
   const count = list.length;
-  const infoHeader = lvl === 1 ? 'Gg L1 / vs Ent.' : lvl === 0 ? 'Drawdown' : 'Info';
   const emptyMsg   = lvl === 1 ? 'Nessun ETF in L1' : 'Nessun ETF';
   return `
   <div class="level-section ${cls}">
@@ -798,15 +794,14 @@ function renderLevelSection(lvl, label, cls, list) {
       <colgroup>
         <col class="col-nome"><col class="col-ticker"><col class="col-prezzo">
         <col class="col-pct"><col class="col-pct"><col class="col-pct">
-        <col class="col-ema20"><col class="col-sma50"><col class="col-sma200">
-        <col class="col-rsi"><col class="col-adx">
-        <col class="col-buy"><col class="col-ragione">
+        <col class="col-sma200">
+        <col class="col-buy">
       </colgroup>
       <thead class="etf-colheader"><tr>
         <th>ETF</th><th>Ticker</th><th>Prezzo</th>
         <th>%1G</th><th>%1W</th><th>%1M</th>
-        <th>EMA20</th><th>SMA50</th><th>Regime</th>
-        <th>RSI</th><th>ADX</th><th>${lvl===0 ? 'Drawdown %' : 'Condizioni'}</th><th>${infoHeader}</th>
+        <th>Regime</th>
+        <th>${lvl===0 ? 'Drawdown %' : 'Condizioni'}</th>
       </tr></thead>
       <tbody>
         ${count ? list.sort((a, b) => {
@@ -827,7 +822,7 @@ function renderLevelSection(lvl, label, cls, list) {
             return scoreB - scoreA;
           }
           return 0; // altri livelli, mantieni ordine originale
-        }).map(e => renderETFRow(e, lvl)).join('') : `<tr><td colspan="13" class="empty-msg">${emptyMsg}</td></tr>`}
+        }).map(e => renderETFRow(e, lvl)).join('') : `<tr><td colspan="8" class="empty-msg">${emptyMsg}</td></tr>`}
       </tbody>
     </table>
   </div>`;
@@ -857,18 +852,11 @@ function getL0ScoreColor(score) {
   }
 }
 
-function getL0ScoreBadge(score) {
-  const labels = ['❌ 0/4', '⚠️ 1/4', '⚠️ 2/4', '✓ 3/4', '⭐ 4/4'];
-  return labels[score] || '?/4';
-}
-
 // ── Unified ETF row (L0, L1, L2, L3) ─────────────────────────────────────
 function renderETFRow(e, lvl) {
   const ticker = e.ticker || '';
   const isin   = e.isin   || '';
   const price  = e.price != null ? fmtNum(e.price,4) : '—';
-  const ema20  = e.ema20  != null ? fmtNum(e.ema20,4) : '—';
-  const sma50  = e.sma50  != null ? fmtNum(e.sma50,4) : '—';
   let sma200Html = '—';
   if (e.sma200 != null) {
     const isBull = e.price != null && e.price > e.sma200;
@@ -880,7 +868,6 @@ function renderETFRow(e, lvl) {
   // Calcola score L0 e colore sfondo
   const l0Score = lvl === 0 ? calculateL0Score(e) : -1;
   const l0BgColor = lvl === 0 ? getL0ScoreColor(l0Score) : 'transparent';
-  const l0ScoreBadge = lvl === 0 ? getL0ScoreBadge(l0Score) : '';
 
   // Condition cell
   let condCell;
@@ -893,30 +880,6 @@ function renderETFRow(e, lvl) {
   } else {
     const dots = [0,1,2,3,4,5].map(i => `<div class="buy-dot ${i < bc ? 'on' : ''}"></div>`).join('');
     condCell = `<div class="buy-badge"><div class="buy-dots">${dots}</div><span class="buy-count bc${bc}" style="font-size:0.78em;color:#555">${bc}/6</span></div>`;
-  }
-
-  // Info column: Gg L1 + vs Ent. per L1, level_reason per gli altri
-  let infoCell;
-  if (lvl === 1) {
-    const track = l1TrackingMap[isin] || {};
-    let daysStr = '—';
-    if (track.entry_date) {
-      const today = new Date().toISOString().slice(0,10);
-      const days  = tradingDays(track.entry_date, today);
-      const col   = days <= 5 ? '#00B050' : days <= 15 ? '#FFC000' : '#888';
-      daysStr = `<span style="color:${col};font-weight:bold">${days}gg</span>`;
-    }
-    const pg = track.pct_gain;
-    const pgSpan = pg != null
-      ? `<span class="pct ${pg>0?'pos':pg<0?'neg':'zero'}">${pg>0?'+':''}${pg.toFixed(2)}%</span>`
-      : '<span style="color:#555">—</span>';
-    infoCell = `${daysStr} &nbsp;|&nbsp; ${pgSpan}`;
-  } else if (lvl === 0) {
-    // Per L0, mostra score + status
-    const baseInfo = (e.level_reason || '').replace(/L0 Deep Recovery.*$/i, '').replace(/\s*\(\d+gg sopra EMA\d+\)/g, '').substring(0, 40);
-    infoCell = `<span style="font-weight:bold">${l0ScoreBadge}</span> ${baseInfo}`;
-  } else {
-    infoCell = (e.level_reason || '').replace(/\s*\(\d+gg sopra EMA\d+\)/g, '').substring(0, 60);
   }
 
   // Nome cell badges
@@ -951,13 +914,8 @@ function renderETFRow(e, lvl) {
     <td class="col-pct">${fmtPct(e.pct_1d)}</td>
     <td class="col-pct">${fmtPct(e.pct_1w)}</td>
     <td class="col-pct">${fmtPct(e.pct_1m)}</td>
-    <td class="col-ema20" style="color:#4472C4">${ema20}</td>
-    <td class="col-sma50" style="color:#5A8FD4">${sma50}</td>
     <td class="col-sma200">${sma200Html}</td>
-    <td class="col-rsi">${fmtRsi(e.rsi)}</td>
-    <td class="col-adx">${fmtAdx(e.adx)}</td>
     <td class="col-buy">${condCell}</td>
-    <td class="col-ragione" style="color:#8b949e;font-size:0.78em">${infoCell}</td>
   </tr>`;
 }
 
