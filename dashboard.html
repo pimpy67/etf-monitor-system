@@ -292,7 +292,15 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 .reason-box { background:rgba(255,255,255,0.04); border-left:3px solid #4472C4; padding:8px 12px; border-radius:4px; font-size:0.8em; color:#e6edf3; margin-bottom:14px; }
 
 /* Chart */
-.detail-chart-wrap { background:rgba(0,0,0,0.3); border-radius:10px; padding:12px; margin-bottom:16px; height:200px; position:relative; }
+.detail-chart-wrap { background:rgba(0,0,0,0.3); border-radius:10px; padding:12px; margin-bottom:16px; height:360px; position:relative; border:1px solid rgba(88,166,255,0.15); }
+
+/* KPI glossary (collassabile, spiega EMA/RSI/ADX/MACD/ecc. una volta sola) */
+.kpi-glossary-toggle { display:inline-flex; align-items:center; gap:5px; font-size:0.82em; color:#58a6ff; cursor:pointer; margin:2px 0 12px; user-select:none; }
+.kpi-glossary-toggle:hover { color:#79c0ff; text-decoration:underline; }
+.kpi-glossary { display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; background:rgba(88,166,255,0.06); border:1px solid rgba(88,166,255,0.2); border-radius:8px; padding:12px 14px; margin-bottom:14px; font-size:0.85em; }
+.kpi-glossary-item b { color:#e6edf3; }
+.kpi-glossary-item { color:#8b949e; line-height:1.45; }
+@media(max-width:640px){ .kpi-glossary { grid-template-columns:1fr; } }
 
 /* Day selector */
 .detail-days-btn { background:none; border:1px solid rgba(255,255,255,0.12); color:#666; border-radius:4px; cursor:pointer; font-size:0.72em; padding:2px 8px; margin-left:4px; transition:all .15s; }
@@ -317,14 +325,20 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 .l1-cond-panel { background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 14px; margin-top:8px; }
 .l1-cond-title { font-size:0.72em; color:#8b949e; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
 .l1-cond-score { background:rgba(255,255,255,0.07); border-radius:10px; padding:2px 8px; font-size:1.1em; font-weight:bold; letter-spacing:0; text-transform:none; }
-.l1-cond-row { display:flex; align-items:flex-start; gap:8px; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.04); font-size:0.8em; }
+.l1-cond-row { display:flex; align-items:flex-start; gap:10px; padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
 .l1-cond-row:last-child { border-bottom:none; }
-.l1-cond-icon { font-size:1em; width:18px; flex-shrink:0; margin-top:1px; }
-.l1-cond-name { color:#8b949e; width:120px; flex-shrink:0; }
-.l1-cond-detail { color:#ccc; flex:1; }
+.l1-cond-icon { font-size:1.15em; width:20px; flex-shrink:0; margin-top:2px; }
+.l1-cond-body { flex:1; min-width:0; }
+.l1-cond-headline { display:flex; flex-wrap:wrap; align-items:baseline; gap:5px 12px; margin-bottom:4px; }
+.l1-cond-name { color:#fff; font-weight:700; font-size:1.02em; }
+.l1-cond-detail { color:#ccc; font-size:0.92em; }
 .l1-cond-detail .ok { color:#3fb950; }
 .l1-cond-detail .ko { color:#f85149; }
-.l1-cond-detail .na { color:#555; font-style:italic; }
+.l1-cond-detail .na { color:#8b949e; font-style:italic; }
+.l1-cond-what { color:#8b949e; font-size:0.88em; line-height:1.45; margin-bottom:6px; }
+.l1-cond-interpret { font-size:0.92em; line-height:1.5; color:#dbe1e8; padding:7px 10px; background:rgba(255,255,255,0.03); border-left:3px solid rgba(255,255,255,0.15); border-radius:0 5px 5px 0; }
+.l1-cond-interpret.ok { border-left-color:#3fb950; }
+.l1-cond-interpret.ko { border-left-color:#f85149; }
 .price-date-sub { font-size:0.65em; color:#555; margin-top:2px; }
 
 @media(max-width:900px){ .col-sma200 { display:none; } }
@@ -435,6 +449,19 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
     </div>
     <div class="detail-body">
       <div class="detail-kpis" id="detailKpis"></div>
+      <div class="kpi-glossary-toggle no-print" onclick="toggleKpiGlossary()">
+        <span id="kpiGlossaryIcon">▸</span> Cosa significano questi indicatori?
+      </div>
+      <div class="kpi-glossary" id="kpiGlossary" style="display:none;">
+        <div class="kpi-glossary-item"><b>EMA10 / EMA20</b> — Media Mobile Esponenziale: segue i prezzi più recenti da vicino (reagisce in fretta). La EMA20 è la "bussola" principale del sistema per il trend a breve termine.</div>
+        <div class="kpi-glossary-item"><b>SMA50</b> — Media Mobile Semplice a 50 giorni: il trend di medio periodo. Se la EMA20 sta sopra, il breve termine sta trainando il medio.</div>
+        <div class="kpi-glossary-item"><b>SMA200</b> — Media a 200 giorni: il trend di lungo periodo, spesso usata per distinguere un mercato "toro" (sopra) da uno "orso" (sotto).</div>
+        <div class="kpi-glossary-item"><b>RSI14</b> — Relative Strength Index (0-100): quanto il prezzo è "caldo". Vicino a 100 = ipercomprato (rischio di ritracciamento), vicino a 0 = ipervenduto.</div>
+        <div class="kpi-glossary-item"><b>ADX14</b> — Average Directional Index (0-100): misura la FORZA del trend, non la direzione. Sotto 20 il mercato è spesso laterale, senza una vera direzione.</div>
+        <div class="kpi-glossary-item"><b>MACD Hist</b> — Differenza tra due medie mobili: positivo e in crescita indica un rialzo che sta accelerando, non solo proseguendo.</div>
+        <div class="kpi-glossary-item"><b>Dist EMA20</b> — Di quanto il prezzo si è allontanato, in %, dalla sua media veloce. Troppo lontano = rischio di comprare un movimento già esaurito.</div>
+        <div class="kpi-glossary-item"><b>Drawdown</b> — Calo % dal massimo storico recente (il "picco"). Più è profondo, più il recupero richiede un rialzo proporzionalmente maggiore.</div>
+      </div>
       <div id="detailRegime"></div>
       <div id="detailL0"></div>
       <div id="detailExit"></div>
@@ -1891,6 +1918,15 @@ function downloadDetailPDF() {
   html2pdf().set(opt).from(el).save();
 }
 
+function toggleKpiGlossary() {
+  const box  = document.getElementById('kpiGlossary');
+  const icon = document.getElementById('kpiGlossaryIcon');
+  if (!box) return;
+  const open = box.style.display !== 'none';
+  box.style.display = open ? 'none' : 'grid';
+  if (icon) icon.textContent = open ? '▸' : '▾';
+}
+
 function toggleChartFullscreen() {
   const chartElement = document.getElementById('detailChart');
   if (!chartElement) return;
@@ -2068,6 +2104,7 @@ function renderL1CondPanel(e) {
   const rows = [
     {
       key: 'allineamento_ok', label: 'Allineamento',
+      what: 'Controlla se le medie mobili sono in fila nella direzione giusta: il prezzo sopra la sua media veloce (EMA20), che a sua volta sta sopra quella lenta (SMA50).',
       detail: () => {
         const ok1 = v.price > v.ema20, ok2 = v.ema20 > v.sma50;
         let s = `Prezzo <span class="${ok1?'ok':'ko'}">${fmt(v.price,4)}</span> &gt; EMA20 <span class="${ok1?'ok':'ko'}">${fmt(v.ema20,4)}</span> &gt; SMA50 <span class="${ok2?'ok':'ko'}">${fmt(v.sma50,4)}</span>`;
@@ -2076,52 +2113,103 @@ function renderL1CondPanel(e) {
           s += ` · SMA200 <span class="${ok3?'ok':'ko'}">${fmt(v.sma200,4)}</span>`;
         }
         return s;
+      },
+      interpret: () => {
+        const ok1 = v.price > v.ema20, ok2 = v.ema20 > v.sma50;
+        if (ok1 && ok2) return 'Le medie sono allineate al rialzo: il prezzo guida, l\'EMA20 segue da sotto e la SMA50 conferma — trend ordinato su più orizzonti temporali.';
+        if (!ok2) {
+          const gap = v.sma50 ? Math.abs(((v.ema20 - v.sma50) / v.sma50) * 100).toFixed(1) : null;
+          return `La media veloce (EMA20) è ancora ${gap!=null?'circa '+gap+'% ':''}sotto quella lenta (SMA50): il trend di fondo non si è ancora ribaltato al rialzo, anche se il prezzo ha ripreso quota nel breve periodo.`;
+        }
+        return 'Il prezzo è tornato sotto la sua media veloce (EMA20): lo slancio rialzista recente si è già affievolito.';
       }
     },
     {
       key: 'persistenza_ok', label: 'Persistenza',
+      what: 'Verifica che il rialzo sopra l\'EMA20 non sia un episodio isolato di un giorno: serve restarci sopra per più giorni consecutivi, con la EMA20 stessa che sta salendo.',
       detail: () => {
         const d = v.days_above_ema20, req = t.days_above_ema;
         const sl = v.ema20_slope != null && v.ema20_slope > 0;
         return `Giorni EMA20: <span class="${d>=req?'ok':'ko'}">${d??'—'}/${req}</span> · Slope: <span class="${sl?'ok':'ko'}">${sl?'↑':'→/↓'}</span>`;
+      },
+      interpret: () => {
+        const d = v.days_above_ema20, req = t.days_above_ema;
+        const sl = v.ema20_slope != null && v.ema20_slope > 0;
+        if (d >= req && sl) return 'Il prezzo resta sopra la sua media veloce da abbastanza giorni e la media stessa sta salendo: non è un episodio isolato ma un movimento che si sta consolidando.';
+        if (d < req) return `Servono almeno ${req} giorni consecutivi sopra l'EMA20 per considerare il segnale confermato — per ora ce ne sono ${d ?? 0}.`;
+        return 'Il prezzo è sopra l\'EMA20 da abbastanza giorni, ma la media stessa non sta ancora salendo: manca la spinta di fondo che confermi il movimento.';
       }
     },
     {
       key: 'rsi_ok', label: 'RSI target',
+      what: 'Il Relative Strength Index (0-100) misura se il prezzo è "caldo" (ipercomprato, rischio di ritracciamento) o "freddo" (ipervenduto, manca slancio). Il sistema cerca una fascia intermedia, specifica per questo tipo di ETF.',
       detail: () => {
         const ok = v.rsi != null && v.rsi >= t.rsi_min && v.rsi <= t.rsi_max;
         return `RSI <span class="${ok?'ok':'ko'}">${fmt(v.rsi,1)}</span> · range <span class="na">[${t.rsi_min}–${t.rsi_max}]</span>`;
+      },
+      interpret: () => {
+        const ok = v.rsi != null && v.rsi >= t.rsi_min && v.rsi <= t.rsi_max;
+        if (ok) return 'Il prezzo ha momentum positivo senza essere già ipercomprato: c\'è ancora margine di salita prima che diventi rischioso comprare.';
+        if (v.rsi != null && v.rsi > t.rsi_max) return `RSI sopra la soglia massima (${t.rsi_max}): il rialzo potrebbe essere già troppo esteso, con rischio di un ritracciamento a breve.`;
+        return `RSI sotto la soglia minima (${t.rsi_min}): manca ancora lo slancio necessario per confermare l'ingresso.`;
       }
     },
     {
       key: 'distance_ok', label: 'Distanza EMA20',
+      what: 'Quanto il prezzo si è già allontanato, in percentuale, dalla sua media veloce. Comprare troppo lontano dalla media aumenta il rischio di inseguire un movimento già esaurito.',
       detail: () => {
         const ok = v.dist_ema20 > 0 && v.dist_ema20 <= t.max_dist_ema20;
         return `Dist <span class="${ok?'ok':'ko'}">${fmt(v.dist_ema20,1)}%</span> · max <span class="na">${t.max_dist_ema20}%</span>`;
+      },
+      interpret: () => {
+        const ok = v.dist_ema20 > 0 && v.dist_ema20 <= t.max_dist_ema20;
+        if (ok) return 'Il prezzo è vicino alla sua media veloce: margine sufficiente prima di un eventuale ritorno verso la media (pull-back).';
+        if (v.dist_ema20 != null && v.dist_ema20 > t.max_dist_ema20) return `Il prezzo si è già allontanato oltre il ${t.max_dist_ema20}% dalla sua media: comprare qui significa inseguire un movimento probabilmente già maturo.`;
+        return 'Il prezzo non è ancora sopra la sua media veloce.';
       }
     },
     {
       key: 'adx_ok', label: 'ADX',
+      what: 'L\'Average Directional Index (0-100) misura la FORZA del trend, non la direzione. Sotto la soglia, il movimento è debole o laterale anche se la direzione sembra quella giusta.',
       detail: () => {
         const ok = v.adx != null && v.adx >= t.adx_threshold;
         return `ADX <span class="${ok?'ok':'ko'}">${fmt(v.adx,1)}</span> · soglia <span class="na">${t.adx_threshold}</span>`;
+      },
+      interpret: () => {
+        const ok = v.adx != null && v.adx >= t.adx_threshold;
+        if (ok) return 'Il trend ha una direzione forte e ordinata: non è solo un\'oscillazione senza direzione.';
+        return `Il movimento manca ancora di forza direzionale (serve almeno ${t.adx_threshold}): potrebbe trattarsi di rumore più che di un vero trend.`;
       }
     },
     {
       key: 'macd_ok', label: 'MACD',
+      what: 'Misura l\'accelerazione del momentum. Non basta che il prezzo salga: l\'istogramma deve essere positivo e in crescita, cioè il rialzo deve guadagnare velocità.',
       detail: () => {
         const mh = v.macd_histogram;
         const pos = mh != null && mh > 0;
         const sign = mh != null && mh > 0 ? '+' : '';
         return `Hist <span class="${pos?'ok':'ko'}">${sign}${fmt(mh,4)}</span> · deve essere <span class="na">&gt;0 e in crescita</span>`;
+      },
+      interpret: () => {
+        const mh = v.macd_histogram;
+        const pos = mh != null && mh > 0;
+        if (pos) return 'Il momentum è positivo: il rialzo ha ancora carburante, anche se andrebbe confermato in accelerazione nei prossimi giorni.';
+        return 'Il momentum è ancora negativo o in frenata: il movimento rialzista non ha (ancora) una spinta sufficiente.';
       }
     },
     {
       key: 'space_residuo_ok', label: 'Spazio Residuo',
+      what: 'Verifica che ci sia margine di guadagno reale prima del prossimo ostacolo tecnico — una resistenza recente o la volatilità tipica del titolo — per evitare di comprare a ridosso di un muro.',
       detail: () => {
         const sp = v.space_residuo_pct, th = v.space_residuo_threshold;
         const ok = sp != null && th != null && sp >= th;
         return `Spazio <span class="${ok?'ok':'ko'}">${fmt(sp,1)}%</span> · min <span class="na">${fmt(th,1)}%</span>`;
+      },
+      interpret: () => {
+        const sp = v.space_residuo_pct, th = v.space_residuo_threshold;
+        const ok = sp != null && th != null && sp >= th;
+        if (ok) return 'C\'è margine reale di guadagno prima di incontrare una resistenza tecnica o superare la volatilità tipica del titolo.';
+        return 'Il prezzo è già vicino a un ostacolo tecnico (una resistenza recente o il range di volatilità tipico): poco spazio per un guadagno prima di un possibile freno.';
       }
     }
   ];
@@ -2134,10 +2222,17 @@ function renderL1CondPanel(e) {
       <span class="l1-cond-score" style="color:${scoreColor}">${passed}/7</span>
     </div>`;
   rows.forEach(r => {
+    const ok = !!lc[r.key];
     html += `<div class="l1-cond-row">
-      <span class="l1-cond-icon">${icon(lc[r.key])}</span>
-      <span class="l1-cond-name">${r.label}</span>
-      <span class="l1-cond-detail">${r.detail()}</span>
+      <span class="l1-cond-icon">${icon(ok)}</span>
+      <div class="l1-cond-body">
+        <div class="l1-cond-headline">
+          <span class="l1-cond-name">${r.label}</span>
+          <span class="l1-cond-detail">${r.detail()}</span>
+        </div>
+        <div class="l1-cond-what">${r.what}</div>
+        <div class="l1-cond-interpret ${ok?'ok':'ko'}">${r.interpret()}</div>
+      </div>
     </div>`;
   });
   return html + '</div>';
@@ -2279,15 +2374,24 @@ function renderDetailChart(history, days) {
     }
   };
 
+  const priceGradient = (context) => {
+    const { ctx: c, chartArea } = context.chart;
+    if (!chartArea) return 'rgba(88,166,255,0.15)';
+    const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+    g.addColorStop(0, 'rgba(88,166,255,0.38)');
+    g.addColorStop(1, 'rgba(88,166,255,0.01)');
+    return g;
+  };
+
   detailChart = new Chart(ctx, {
     type: 'line',
     data: {
       labels,
       datasets: [
-        { label:'Prezzo', data:closes,  borderColor:'#58a6ff', borderWidth:2,   pointRadius:0, tension:0.3, fill:false },
+        { label:'Prezzo', data:closes,  borderColor:'#79c0ff', borderWidth:2.5, pointRadius:0, pointHoverRadius:4, pointHoverBackgroundColor:'#79c0ff', tension:0.3, fill:'origin', backgroundColor:priceGradient },
         { label:'EMA20',  data:ema20s,  borderColor:'#ffffff', borderWidth:1.5, pointRadius:0, tension:0.3, fill:false, borderDash:[4,3] },
-        { label:'SMA50',  data:sma50s,  borderColor:'#f85149', borderWidth:1,   pointRadius:0, tension:0.3, fill:false, borderDash:[6,4] },
-        { label:'SMA200', data:sma200s, borderColor:'#ffd700', borderWidth:1,   pointRadius:0, tension:0.3, fill:false, borderDash:[8,4] },
+        { label:'SMA50',  data:sma50s,  borderColor:'#f85149', borderWidth:1.3, pointRadius:0, tension:0.3, fill:false, borderDash:[6,4] },
+        { label:'SMA200', data:sma200s, borderColor:'#ffd700', borderWidth:1.3, pointRadius:0, tension:0.3, fill:false, borderDash:[8,4] },
       ]
     },
     options: {
@@ -2295,12 +2399,12 @@ function renderDetailChart(history, days) {
       interaction:{ mode:'index', intersect:false },
       layout:{ padding:{ right:46 } },
       plugins:{
-        legend:{ labels:{ color:'#8b949e', font:{size:11}, boxWidth:24 } },
-        tooltip:{ backgroundColor:'rgba(10,15,25,0.92)', titleColor:'#ccc', bodyColor:'#8b949e' }
+        legend:{ labels:{ color:'#c9d1d9', font:{size:12, weight:'600'}, boxWidth:26 } },
+        tooltip:{ backgroundColor:'rgba(10,15,25,0.92)', titleColor:'#ccc', bodyColor:'#8b949e', padding:10, titleFont:{size:12}, bodyFont:{size:12} }
       },
       scales:{
-        x:{ ticks:{ color:'#555', maxTicksLimit:8, font:{size:10} }, grid:{ color:'rgba(255,255,255,0.05)' } },
-        y:{ ticks:{ color:'#555', font:{size:10} }, grid:{ color:'rgba(255,255,255,0.05)' } }
+        x:{ ticks:{ color:'#8b949e', maxTicksLimit:8, font:{size:11} }, grid:{ color:'rgba(255,255,255,0.05)' } },
+        y:{ ticks:{ color:'#8b949e', font:{size:11} }, grid:{ color:'rgba(255,255,255,0.06)' } }
       }
     },
     plugins:[l1LinesPlugin]
