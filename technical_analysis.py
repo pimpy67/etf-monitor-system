@@ -1407,9 +1407,19 @@ class ETFTechnicalAnalyzer:
                 reason_codes.append('L1_ENTRY')
 
         else:
-            suggested = 3
-            reason    = 'Monitoraggio passivo'
-            reason_codes.append('L3_MONITOR')
+            # L2 Watchlist: ETF quasi pronti (>=5/7 condizioni) OPPURE in trend
+            # strutturale attivo (persistenza sopra EMA20 o EMA20 > SMA50) — altrimenti L3.
+            near_l1 = buy_count_finale >= 5
+            structural_trend = (days_above_ema20 >= p['days_above_ema']) or ema_sma50_ok
+            if near_l1 or structural_trend:
+                suggested = 2
+                reason    = f'Watchlist — {buy_count}/{min_buy_required} condizioni' + \
+                            (', trend strutturale attivo' if structural_trend and not near_l1 else '')
+                reason_codes.append('L2_WATCHLIST')
+            else:
+                suggested = 3
+                reason    = 'Monitoraggio passivo'
+                reason_codes.append('L3_MONITOR')
 
         # ── CALCOLO STOP LOSS DINAMICO (solo per L1) ───────────────────────────
         sl_data = None
