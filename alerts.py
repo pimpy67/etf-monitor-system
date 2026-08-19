@@ -434,11 +434,15 @@ class AlertSystem:
         )
         return self._send_email(subject, body_html)
 
-    def _period_returns_row(self, isin: str, colspan: int, bg: str) -> str:
+    def _period_returns_row(self, isin: str, colspan: int, bg: str, header_color: str) -> str:
         """
         Riga extra sotto ogni ETF con la variazione % a 1/3/10/30/60/90 giorni
         di trading (non calendario — coincide con le righe disponibili in
         etf_price_history, che si accumula un punto per giorno di mercato).
+
+        Mini-tabella a 6 colonne con intestazione colorata (stesso colore
+        dell'header della sezione) e i valori sotto — stesso stile delle
+        tabelle principali, non una riga inline.
         """
         periods = [1, 3, 10, 30, 60, 90]
         try:
@@ -447,28 +451,46 @@ class AlertSystem:
         except Exception:
             df = None
 
-        parts = []
+        header_cells = ''.join(
+            f'<th style="padding:3px 4px;border:1px solid #ddd;font-weight:normal;font-size:10px">{p}g</th>'
+            for p in periods
+        )
+
         if df is None or df.empty:
-            cells_html = '<span style="color:#999">dati storici insufficienti</span>'
+            value_cells = (
+                f'<td colspan="{len(periods)}" style="padding:3px 4px;border:1px solid #ddd;'
+                f'text-align:center;color:#999;font-size:10px">dati storici insufficienti</td>'
+            )
         else:
             closes = df['Close'].values
             n = len(closes)
             last = closes[-1]
+            cells = []
             for p in periods:
                 if n > p and closes[-1 - p]:
                     ref = closes[-1 - p]
                     pct = (last - ref) / ref * 100
                     color = '#28a745' if pct >= 0 else '#dc3545'
                     sign = '+' if pct >= 0 else ''
-                    parts.append(f'<span style="color:{color}">{p}g {sign}{pct:.1f}%</span>')
+                    cells.append(
+                        f'<td style="padding:3px 4px;border:1px solid #ddd;text-align:center;'
+                        f'color:{color};font-size:10px"><strong>{sign}{pct:.1f}%</strong></td>'
+                    )
                 else:
-                    parts.append(f'<span style="color:#999">{p}g —</span>')
-            cells_html = ' &nbsp;·&nbsp; '.join(parts)
+                    cells.append(
+                        '<td style="padding:3px 4px;border:1px solid #ddd;text-align:center;'
+                        'color:#999;font-size:10px">—</td>'
+                    )
+            value_cells = ''.join(cells)
 
         return (
             f'<tr style="background:{bg}">'
-            f'<td colspan="{colspan}" style="padding:2px 8px 6px;border:1px solid #ddd;'
-            f'border-top:none;font-size:10px;color:#666">↳ {cells_html}</td>'
+            f'<td colspan="{colspan}" style="padding:2px 8px 8px;border:1px solid #ddd;border-top:none">'
+            f'<table style="width:100%;border-collapse:collapse;margin-top:2px">'
+            f'<tr style="background:{header_color};color:white">{header_cells}</tr>'
+            f'<tr>{value_cells}</tr>'
+            f'</table>'
+            f'</td>'
             f'</tr>'
         )
 
@@ -606,7 +628,7 @@ class AlertSystem:
                         f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right;font-size:12px">{lim_tp_str}</td>'
                         f'</tr>'
                     )
-                    l1_rows.append(self._period_returns_row(isin, colspan=7, bg=row_bg))
+                    l1_rows.append(self._period_returns_row(isin, colspan=7, bg=row_bg, header_color='#00B050'))
                 except Exception as e:
                     print(f"⚠️ Errore L1 {isin}: {e}")
                     continue
@@ -663,7 +685,7 @@ class AlertSystem:
                         f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right;font-size:12px">{lim_tp_str}</td>'
                         f'</tr>'
                     )
-                    l0_rows.append(self._period_returns_row(isin, colspan=7, bg=row_bg))
+                    l0_rows.append(self._period_returns_row(isin, colspan=7, bg=row_bg, header_color='#E65100'))
                 except Exception as e:
                     print(f"⚠️ Errore L0 {isin}: {e}")
                     continue
@@ -746,7 +768,7 @@ class AlertSystem:
                         f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:center">{flags or "—"}</td>'
                         f'</tr>'
                     )
-                    fav_rows.append(self._period_returns_row(fav.get('isin') or fav['ticker'], colspan=5, bg=row_bg))
+                    fav_rows.append(self._period_returns_row(fav.get('isin') or fav['ticker'], colspan=5, bg=row_bg, header_color='#58a6ff'))
 
                 favorites_section = (
                     f'<h2 style="color:#58a6ff;margin:16px 0 8px">⭐ PREFERITI — Watchlist Personale</h2>'
@@ -790,7 +812,7 @@ class AlertSystem:
                 f'• <strong>⚠️</strong> = Performance &lt; -2% (attenzione)<br>'
                 f'• <strong>✓</strong> = In profitto<br>'
                 f'• <strong>◆</strong> = In perdita ma &gt; -2%<br>'
-                f'• <strong>↳ 1g/3g/10g/30g/60g/90g</strong> = variazione % del prezzo negli ultimi N giorni di trading (non calendario) — riga sotto ogni ETF, indipendente dal prezzo di carico</p>'
+                f'• <strong>1g/3g/10g/30g/60g/90g</strong> (riquadro sotto ogni ETF) = variazione % del prezzo negli ultimi N giorni di trading (non calendario), indipendente dal prezzo di carico</p>'
                 f'</div>'
                 f'{_FOOTER.format(ts=ts)}</body></html>'
             )
