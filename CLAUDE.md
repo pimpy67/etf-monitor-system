@@ -558,16 +558,24 @@ NON le posizioni comprate davvero):
 > (posizione L1 su Amundi MSCI Water, 70 quote) durante una sessione di gestione
 > portafoglio, non da un'analisi preventiva.
 >
-> ⚠️ **Specifica di Directa, non universale**: l'utente opera anche su **Webank** (es. la
-> posizione DJIA, FR0007056841) — confermato che Webank supporta Stop Loss e Take Profit
-> **contemporaneamente attivi** (verosimilmente un vero OCO), a differenza del vincolo
-> Directa descritto sotto. `order_pricing.py` calcola comunque gli stessi tre prezzi per
-> ogni posizione indipendentemente dal broker — su Webank si possono piazzare
+> ⚠️ **Specifica di Directa, non universale (storico)**: il sistema ha operato per un periodo
+> anche su **Webank** (es. la posizione DJIA, FR0007056841) — confermato che Webank supporta
+> Stop Loss e Take Profit **contemporaneamente attivi** (verosimilmente un vero OCO), a
+> differenza del vincolo Directa descritto sotto. `order_pricing.py` calcola gli stessi tre
+> prezzi per ogni posizione indipendentemente dal broker — su Webank si possono piazzare
 > `prezzo_stop`/`prezzo_limite_stop` E `prezzo_limite_tp` come due ordini separati fin da
-> subito, senza la danza cancella-e-sostituisci richiesta da Directa. Il sistema non
-> traccia ancora il broker per posizione (nessuna colonna dedicata in
-> `etf_portfolio_entries`) — email e dashboard mostrano lo stesso messaggio "vale per
-> Directa" a tutte le posizioni; l'utente deve applicare la distinzione a mente per ora.
+> subito, senza la danza cancella-e-sostituisci richiesta da Directa. Il broker **è** tracciato
+> per posizione (`etf_portfolio_entries.broker`, aggiunto durante la sessione dell'8/08) — email
+> e dashboard applicano automaticamente la logica giusta in base al broker della posizione
+> (`OCO_CAPABLE_BROKERS = {'Webank'}` in `order_pricing.py`).
+>
+> ✅ **Aggiornamento 2026-08-19 — policy Directa-only**: l'utente è passato a usare solo
+> Directa per le nuove posizioni (sia L0 che L1) — non apre più posizioni su Webank. Le due
+> posizioni Webank residue (Amundi DJ Industrial Average L1, iShares MSCI Canada L0) restano
+> gestite manualmente dall'utente in dashboard. **Codice non modificato**: il default era
+> già `'Directa'` ovunque (form dashboard, `add_portfolio_entry()`, tutte le letture in
+> `app.py`) — la logica multi-broker/OCO resta nel codice ma inerte, tenuta per flessibilità
+> futura, non rimossa. Vedi `memory/etf_broker_choice_l0_webank_l1_directa.md`.
 
 **Directa non ha un ordine "Take Profit"**: lo Stop di vendita accetta solo un trigger
 verso il basso (`Prezzo Stop ≤ X` → esegue un ordine Limite a un prezzo Y sotto il
