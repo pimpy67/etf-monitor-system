@@ -283,6 +283,14 @@ class PriceDatabase:
                     # cosi' il tattico non torna mai indietro anche se il prezzo si allontana
                     # temporaneamente dal TP. Scritto solo dal monitor giornaliero.
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS tp_proximity_stop_max DECIMAL(12, 4)",
+                    # Trigger personale inserito su Directa per l'ordine Stop reale (2026-08-19)
+                    # — distinto da stop_loss_inserted (il Prezzo Limite personale, il prezzo di
+                    # garanzia). Insieme replicano la coppia Trigger+Limite di un vero ordine Stop
+                    # Directa. Sostituisce l'uso di stop_gain_target come "TP personale" nella riga
+                    # portafoglio (poco utile: il TP è comunque un ordine Limite separato, non fa
+                    # parte dell'ordine Stop) — stop_gain_target resta nello schema ma non più letto
+                    # dalla UI della riga portafoglio.
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS stop_trigger_inserted DECIMAL(12, 4)",
                     # PRIORITÀ 1 FASE 2 — L0 State Persistence (2026-07-21)
                     "ALTER TABLE etf_l0_tracking ADD COLUMN IF NOT EXISTS confirmation_mode VARCHAR(10)",
                     "ALTER TABLE etf_l0_tracking ADD COLUMN IF NOT EXISTS trigger_low_price DECIMAL(12, 4)",
@@ -1200,7 +1208,7 @@ class PriceDatabase:
                            is_partial, partial_exit_date, partial_exit_price,
                            portfolio_type, stop_loss_l0_suggested,
                            sl_suggerito, sg_suggerito, stop_loss_inserted, stop_gain_target,
-                           broker, tp_proximity_stop_max
+                           broker, tp_proximity_stop_max, stop_trigger_inserted
                     FROM etf_portfolio_entries
                     WHERE status = 'active'
                     ORDER BY entry_date DESC

@@ -476,7 +476,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
       <div id="slManagementPanel" style="background:rgba(58,166,255,0.08);border:1px solid rgba(58,166,255,0.2);border-radius:6px;padding:12px;margin-bottom:12px;display:none;">
         <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">
           <div style="flex:1;min-width:140px;">
-            <label style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">SL Suggerito</label>
+            <label id="slSuggLabel" style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">SL Suggerito</label>
             <input type="text" id="slSuggestedInput" readonly style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#58a6ff;font-weight:600;font-size:0.9em;">
           </div>
           <div style="flex:1;min-width:140px;">
@@ -1390,6 +1390,8 @@ async function loadAllPortfolioSLData() {
     const data = await resp.json();
     const positions = data.positions || [];
 
+    window.portfolioSharesMap = window.portfolioSharesMap || {};
+
     positions.forEach(pos => {
       const isin = pos.isin;
       // Nota: NON sovrascrivere qui il testo di sl-sugg-{isin} — renderPortfolio()
@@ -1398,10 +1400,9 @@ async function loadAllPortfolioSLData() {
       // "ufficiale" grezzo, senza quella logica: sovrascriverlo lo vanificherebbe.
 
       const slPersInput = document.getElementById('sl-pers-' + isin);
-      const sharesInput = document.getElementById('shares-' + isin);
       if (slPersInput && !slPersInput.value) slPersInput.value = pos.sl_inserted || '';
-      if (sharesInput && !sharesInput.value) sharesInput.value = pos.shares || '';
-      updatePortfolioP_L(isin, pos.entry_price);
+      window.portfolioSharesMap[isin] = pos.shares || null;
+      updatePortfolioRowPL(isin, pos.entry_price);
     });
   } catch(e) {
     console.log('Error loading portfolio SL data:', e);
@@ -1500,18 +1501,19 @@ function renderPortfolioTable(portfolioData, portfolioType) {
     </tr>
     <tr class="sl-row" id="pf-sl-${isin}" style="background:rgba(88,166,255,0.04);">
       <td colspan="10" style="padding:12px;">
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:16px;align-items:end;">
+        <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:16px;align-items:end;">
           <div><div class="sl-label">Pr. Carico <span style="text-transform:none;">(${p.broker || 'Directa'})</span></div><span class="sl-value" style="color:#58a6ff;">€${prAcq}</span></div>
           <div><div class="sl-label">Prezzo Stop (Trigger)${p.stop_tightened ? ' 🔶' : ''}</div><span class="sl-value" style="color:#58a6ff;" id="sl-sugg-${isin}">${p.prezzo_stop ? '€' + parseFloat(p.prezzo_stop).toFixed(4) : '—'}</span></div>
           <div><div class="sl-label">Prezzo Limite</div><span class="sl-value" style="color:#58a6ff;">${p.prezzo_limite_stop ? '€' + parseFloat(p.prezzo_limite_stop).toFixed(4) : '—'}</span></div>
-          <div><div class="sl-label">${p.order_parallel_ok ? 'SL Personale' : 'Prezzo Limite Personale'}</div><input type="text" class="sl-input" style="color:#58a6ff;" id="sl-pers-${isin}" placeholder="${p.order_parallel_ok ? 'Inserisci SL' : 'Prezzo limite, non trigger'}" value="${p.sl_inserted ? parseFloat(p.sl_inserted).toFixed(4) : ''}" oninput="updatePortfolioP_L('${isin}',${prAcq})"></div>
+          <div><div class="sl-label">${p.order_parallel_ok ? 'Stop Personale' : 'Prezzo Stop Personale (Trigger)'}</div><input type="text" class="sl-input" style="color:#58a6ff;" id="trigger-pers-${isin}" placeholder="Trigger inserito" value="${p.trigger_inserted ? parseFloat(p.trigger_inserted).toFixed(4) : ''}" oninput="updatePortfolioRowPL('${isin}',${prAcq})"></div>
+          <div><div class="sl-label">${p.order_parallel_ok ? 'SL Personale' : 'Prezzo Limite Personale'}</div><input type="text" class="sl-input" style="color:#58a6ff;" id="sl-pers-${isin}" placeholder="${p.order_parallel_ok ? 'Inserisci SL' : 'Prezzo limite, non trigger'}" value="${p.sl_inserted ? parseFloat(p.sl_inserted).toFixed(4) : ''}" oninput="updatePortfolioRowPL('${isin}',${prAcq})"></div>
           <div><div class="sl-label">Target TP</div><span class="sl-value" style="color:#3fb950;" id="tp-sugg-${isin}">${p.prezzo_limite_tp ? '€' + parseFloat(p.prezzo_limite_tp).toFixed(4) : '—'}</span></div>
-          <div><div class="sl-label">${p.order_parallel_ok ? 'TP Personale' : 'Target TP Personale'}</div><input type="text" class="sl-input" style="color:#3fb950;" id="tp-pers-${isin}" placeholder="Inserisci TP" value="${p.tp_inserted ? parseFloat(p.tp_inserted).toFixed(4) : ''}"></div>
+          <div><div class="sl-label">P&amp;L (Prezzo Limite Personale)</div><span class="sl-value" id="pl-row-${isin}" style="color:#999;">—</span><div id="pl-row-net-${isin}" style="font-size:0.75em;color:#8b949e;margin-top:2px;">—</div></div>
           <div><button class="btn-pf-save" onclick="savePortfolioSL_TP('${isin}')" style="background:#238636;color:#fff;border:none;padding:9px 16px;border-radius:4px;cursor:pointer;font-weight:700;font-size:0.95em;">💾 Salva</button></div>
         </div>
         <div style="margin-top:8px;font-size:0.75em;color:#8b949e;">${p.order_parallel_ok
           ? `${p.broker || 'Directa'} supporta Stop e Limite (TP) attivi in parallelo (OCO) — piazza entrambi subito.`
-          : `Target TP = il livello a cui punti al rialzo, da piazzare come ordine <strong>Limite</strong> separato (non lo stesso ordine Stop) quando ci arrivi — su ${p.broker || 'Directa'} NON può restare attivo in parallelo allo Stop (stesse quote impegnate, ordine rifiutato). Quando il prezzo si avvicina: cancella lo Stop e piazza il Limite. 🔶 = Stop stretto perché il prezzo è entro il 3% dal TP.`}</div>
+          : `Prezzo Stop Personale (Trigger) e Prezzo Limite Personale = i due valori che hai davvero inserito sull'ordine Stop su ${p.broker || 'Directa'} (coppia Trigger+Limite di un vero ordine Stop) — il P&L qui sotto si basa sul Prezzo Limite Personale, il prezzo di esecuzione garantito. Target TP = il livello a cui punti al rialzo, da piazzare come ordine <strong>Limite</strong> separato (non lo stesso ordine Stop) quando ci arrivi — su ${p.broker || 'Directa'} NON può restare attivo in parallelo allo Stop (stesse quote impegnate, ordine rifiutato). Quando il prezzo si avvicina: cancella lo Stop e piazza il Limite. 🔶 = Stop stretto perché il prezzo è entro il 3% dal TP.`}</div>
       </td>
     </tr>
     <tr class="history-row" id="pf-hist-${isin}" style="display:none;">
@@ -1556,9 +1558,13 @@ async function loadPortfolioSLData(isin) {
       if (!document.getElementById('sl-pers-' + isin).value) {
         document.getElementById('sl-pers-' + isin).value = pos.sl_inserted || '';
       }
-      if (!document.getElementById('tp-pers-' + isin).value) {
-        document.getElementById('tp-pers-' + isin).value = pos.tp_inserted || '';
+      const triggerPersInput = document.getElementById('trigger-pers-' + isin);
+      if (triggerPersInput && !triggerPersInput.value) {
+        triggerPersInput.value = pos.trigger_inserted || '';
       }
+      window.portfolioSharesMap = window.portfolioSharesMap || {};
+      window.portfolioSharesMap[isin] = pos.shares || null;
+      updatePortfolioRowPL(isin, pos.entry_price);
     }
   } catch(e) {
     console.log('Error loading portfolio SL:', e);
@@ -1567,10 +1573,10 @@ async function loadPortfolioSLData(isin) {
 
 async function savePortfolioSL_TP(isin) {
   const slValue = document.getElementById('sl-pers-' + isin)?.value;
-  const tpValue = document.getElementById('tp-pers-' + isin)?.value;
+  const triggerValue = document.getElementById('trigger-pers-' + isin)?.value;
 
-  if (!slValue && !tpValue) {
-    alert('Inserisci almeno SL o TP');
+  if (!slValue && !triggerValue) {
+    alert('Inserisci almeno Prezzo Limite Personale o Prezzo Stop Personale (Trigger)');
     return;
   }
 
@@ -1581,7 +1587,7 @@ async function savePortfolioSL_TP(isin) {
       body: JSON.stringify({
         isin: isin,
         sl_value: slValue ? parseFloat(slValue) : null,
-        tp_value: tpValue ? parseFloat(tpValue) : null
+        trigger_value: triggerValue ? parseFloat(triggerValue) : null
       })
     });
 
@@ -2713,6 +2719,44 @@ function updatePLCalc() {
   }
 }
 
+function updatePortfolioRowPL(isin, entryPrice) {
+  try {
+    const plDisplay = document.getElementById('pl-row-' + isin);
+    const plNetDisplay = document.getElementById('pl-row-net-' + isin);
+    if (!plDisplay) return;
+
+    const slPersInput = document.getElementById('sl-pers-' + isin);
+    const slValue = slPersInput ? parseFloat(slPersInput.value) : NaN;
+    const shares = (window.portfolioSharesMap || {})[isin];
+
+    if (!entryPrice || !slValue || slValue <= 0 || !shares || shares <= 0) {
+      plDisplay.textContent = '—';
+      plDisplay.style.color = '#999';
+      if (plNetDisplay) plNetDisplay.textContent = shares ? '—' : 'imposta le quote nel dettaglio ETF';
+      return;
+    }
+
+    const pctChange = ((slValue - entryPrice) / entryPrice) * 100;
+    const absGainLoss = (slValue - entryPrice) * shares;
+    const color = absGainLoss < 0 ? '#f85149' : '#3fb950';
+    const sign = absGainLoss >= 0 ? '+' : '';
+
+    plDisplay.textContent = `${sign}${absGainLoss.toFixed(2)}€ (${sign}${pctChange.toFixed(2)}%)`;
+    plDisplay.style.color = color;
+
+    if (plNetDisplay) {
+      const afterCommissions = absGainLoss - DIRECTA_COMMISSION_ROUNDTRIP;
+      const tax = Math.max(afterCommissions, 0) * CAPITAL_GAIN_TAX_RATE;
+      const netGainLoss = afterCommissions - tax;
+      const netSign = netGainLoss >= 0 ? '+' : '';
+      plNetDisplay.textContent = `netto: ${netSign}${netGainLoss.toFixed(2)}€ — €5+5 comm., 26% tasse`;
+      plNetDisplay.style.color = netGainLoss < 0 ? '#f85149' : '#3fb950';
+    }
+  } catch(e) {
+    console.error('Errore in updatePortfolioRowPL:', e);
+  }
+}
+
 async function loadDetailSL() {
   const isin = currentDetailIsin;
   const ticker = currentDetailTicker;
@@ -2746,6 +2790,8 @@ async function loadDetailSL() {
       if (slPanel) slPanel.style.display = 'flex';
       if (elEntry) elEntry.value = pos.entry_price ? '€' + pos.entry_price.toFixed(4) : '—';
       if (elSLSugg) elSLSugg.value = pos.sl_suggested ? '€' + pos.sl_suggested.toFixed(4) : '—';
+      const slSuggLabel = document.getElementById('slSuggLabel');
+      if (slSuggLabel) slSuggLabel.textContent = 'SL Suggerito' + (pos.stop_tightened ? ' 🔶' : '');
       if (elSGSugg) elSGSugg.value = pos.sg_suggested ? '€' + pos.sg_suggested.toFixed(4) : '—';
       if (elSLIns) elSLIns.value = pos.sl_inserted || '';
       if (elShares) elShares.value = pos.shares || '';

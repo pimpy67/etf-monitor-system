@@ -314,7 +314,8 @@ def portfolio_sl():
                 cur.execute("""
                     SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
                            pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at, pe.shares,
-                           pe.sl_suggerito, pe.sg_suggerito, pe.broker
+                           pe.sl_suggerito, pe.sg_suggerito, pe.broker, pe.tp_proximity_stop_max,
+                           pe.stop_trigger_inserted
                     FROM etf_portfolio_entries pe
                     WHERE pe.status = 'active' AND pe.isin = %s
                     ORDER BY pe.entry_date DESC
@@ -323,7 +324,8 @@ def portfolio_sl():
                 cur.execute("""
                     SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
                            pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at, pe.shares,
-                           pe.sl_suggerito, pe.sg_suggerito, pe.broker
+                           pe.sl_suggerito, pe.sg_suggerito, pe.broker, pe.tp_proximity_stop_max,
+                           pe.stop_trigger_inserted
                     FROM etf_portfolio_entries pe
                     WHERE pe.status = 'active'
                     ORDER BY pe.entry_date DESC
@@ -360,7 +362,18 @@ def portfolio_sl():
                             sl_suggerito = max(entry_price * 0.98, current_price * 0.95)
 
                     broker = pos.get('broker') or 'Directa'
-                    order_parallel_ok = compute_order_prices(current_price, sl_suggerito, sg_suggerito, broker)['parallel_ok']
+                    famiglia = ETFTechnicalAnalyzer.detect_family(pos['fund_name'] or '')
+                    sl_initial_pct = ETFTechnicalAnalyzer(famiglia=famiglia).p.get('sl_initial_pct')
+                    tp_proximity_stop_max = pos.get('tp_proximity_stop_max')
+                    op = compute_order_prices(
+                        current_price, sl_suggerito, sg_suggerito, broker,
+                        previous_tightened_stop=float(tp_proximity_stop_max) if tp_proximity_stop_max else None,
+                        sl_initial_pct=sl_initial_pct,
+                    )
+                    # sl_suggested riflette il ratchet/tightening (stesso valore mostrato
+                    # come "Prezzo Stop (Trigger)" nell'elenco portafoglio via /api/portfolio)
+                    # cosi' il pannello di dettaglio ETF resta sempre coerente con l'elenco.
+                    sl_suggested_final = op['prezzo_stop'] if op['prezzo_stop'] else (round(sl_suggerito, 4) if sl_suggerito else None)
 
                     result.append({
                         'isin': isin,
@@ -372,12 +385,14 @@ def portfolio_sl():
                         'price_date': str(price_date),
                         'pct_change': round(pct_change, 2),
                         'sl_inserted': float(pos['stop_loss_inserted']) if pos['stop_loss_inserted'] else None,
-                        'sl_suggested': round(sl_suggerito, 4) if sl_suggerito else None,
+                        'trigger_inserted': float(pos['stop_trigger_inserted']) if pos.get('stop_trigger_inserted') else None,
+                        'sl_suggested': sl_suggested_final,
                         'sg_suggested': round(sg_suggerito, 4) if sg_suggerito else None,
+                        'stop_tightened': op['tightened'],
                         'sl_updated': str(pos['stop_loss_updated_at']) if pos['stop_loss_updated_at'] else None,
                         'shares': float(pos['shares']) if pos['shares'] else None,
                         'broker': broker,
-                        'order_parallel_ok': order_parallel_ok,
+                        'order_parallel_ok': op['parallel_ok'],
                     })
 
         conn.close()
@@ -400,14 +415,15 @@ def accept_sl_suggestion():
         isin = data.get('isin')
         sl_value = data.get('sl_value')
         tp_value = data.get('tp_value')
+        trigger_value = data.get('trigger_value')
 
         if not isin:
             return jsonify({'error': 'ISIN required'}), 400
 
-        if sl_value is None and tp_value is None:
-            return jsonify({'error': 'Almeno SL o TP richiesto'}), 400
+        if sl_value is None and tp_value is None and trigger_value is None:
+            return jsonify({'error': 'Almeno SL, TP o Trigger richiesto'}), 400
 
-        # Salva SL/TP personale nel database
+        # Salva SL/TP/Trigger personale nel database
         conn = db.get_connection()
         if not conn:
             return jsonify({'error': 'Database unavailable'}), 500
@@ -424,6 +440,9 @@ def accept_sl_suggestion():
                 if tp_value is not None:
                     updates.append("stop_gain_target = %s")
                     params.append(float(tp_value))
+                if trigger_value is not None:
+                    updates.append("stop_trigger_inserted = %s")
+                    params.append(float(trigger_value))
 
                 params.append(isin)  # WHERE isin = ?
 
@@ -445,6 +464,8 @@ def accept_sl_suggestion():
                         result['sl_inserted'] = float(sl_value)
                     if tp_value is not None:
                         result['tp_inserted'] = float(tp_value)
+                    if trigger_value is not None:
+                        result['trigger_inserted'] = float(trigger_value)
                     return jsonify(result)
                 else:
                     return jsonify({'error': 'Portfolio entry not found'}), 404
@@ -807,6 +828,7 @@ def get_portfolio():
             'portfolio_type':      entry.get('portfolio_type', 'L1'),
             'stop_loss_l0_suggested': float(entry.get('stop_loss_l0_suggested')) if entry.get('stop_loss_l0_suggested') else None,
             'sl_inserted':         float(entry.get('stop_loss_inserted')) if entry.get('stop_loss_inserted') else None,
+            'trigger_inserted':    float(entry.get('stop_trigger_inserted')) if entry.get('stop_trigger_inserted') else None,
             'tp_inserted':         float(entry.get('stop_gain_target')) if entry.get('stop_gain_target') else None,
             'accumulated_pcts':    accumulated_pcts,
             'accumulated_dates':   accumulated_dates,
