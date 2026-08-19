@@ -450,6 +450,7 @@ class AlertSystem:
         try:
             from database import db
             from order_pricing import compute_order_prices
+            from technical_analysis import ETFTechnicalAnalyzer
 
             # Leggi il portafoglio personale — nessun filtro sulla classificazione dashboard,
             # solo lo status reale della posizione.
@@ -459,7 +460,8 @@ class AlertSystem:
             cur = conn.cursor()
             cur.execute("""
                 SELECT pe.id, pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
-                       pe.portafoglio, pe.sl_suggerito, pe.sg_suggerito, pe.broker
+                       pe.portafoglio, pe.sl_suggerito, pe.sg_suggerito, pe.broker,
+                       pe.tp_proximity_stop_max
                 FROM etf_portfolio_entries pe
                 WHERE pe.status = 'active'
                 ORDER BY pe.entry_date DESC
@@ -478,7 +480,7 @@ class AlertSystem:
             l1_total_gain = 0
             l1_total_notional = 0
 
-            for entry_id, isin, entry_price, entry_date, fund_name, portafoglio, sl_sug, sg_sug, broker in l1_positions:
+            for entry_id, isin, entry_price, entry_date, fund_name, portafoglio, sl_sug, sg_sug, broker, prev_tp_stop_max in l1_positions:
                 try:
                     entry_price = float(entry_price) if entry_price else 0
                     if entry_price <= 0:
@@ -523,8 +525,12 @@ class AlertSystem:
                     # stringe automaticamente se il prezzo è vicino al TP (non si
                     # può tenere il Limite TP in parallelo); su broker con OCO
                     # (es. Webank) entrambi si piazzano subito — vedi order_pricing.py.
+                    famiglia = ETFTechnicalAnalyzer.detect_family(fund_name or '')
+                    sl_initial_pct = ETFTechnicalAnalyzer(famiglia=famiglia).p.get('sl_initial_pct')
                     op = compute_order_prices(current_price, sl_sug and float(sl_sug),
-                                               sg_sug and float(sg_sug), broker)
+                                               sg_sug and float(sg_sug), broker,
+                                               previous_tightened_stop=float(prev_tp_stop_max) if prev_tp_stop_max else None,
+                                               sl_initial_pct=sl_initial_pct)
                     stop_str = f'€{op["prezzo_stop"]:.2f}' if op['prezzo_stop'] else '—'
                     lim_sl_str = f'€{op["prezzo_limite_stop"]:.2f}' if op['prezzo_limite_stop'] else '—'
                     lim_tp_str = f'€{op["prezzo_limite_tp"]:.2f}' if op['prezzo_limite_tp'] else '—'
@@ -551,7 +557,7 @@ class AlertSystem:
 
             # ── SEZIONE L0 ──────────────────────────────────────────────────
             l0_rows = []
-            for entry_id, isin, entry_price, entry_date, fund_name, portafoglio, sl_sug, sg_sug, broker in l0_positions:
+            for entry_id, isin, entry_price, entry_date, fund_name, portafoglio, sl_sug, sg_sug, broker, prev_tp_stop_max in l0_positions:
                 try:
                     entry_price = float(entry_price) if entry_price else 0
                     if entry_price <= 0:
@@ -575,8 +581,12 @@ class AlertSystem:
                     sign = '+' if pct_change >= 0 else ''
 
                     # Prezzi pronti per l'ordine sul broker reale — stessa logica della sezione L1
+                    famiglia = ETFTechnicalAnalyzer.detect_family(fund_name or '')
+                    sl_initial_pct = ETFTechnicalAnalyzer(famiglia=famiglia).p.get('sl_initial_pct')
                     op = compute_order_prices(current_price, sl_sug and float(sl_sug),
-                                               sg_sug and float(sg_sug), broker)
+                                               sg_sug and float(sg_sug), broker,
+                                               previous_tightened_stop=float(prev_tp_stop_max) if prev_tp_stop_max else None,
+                                               sl_initial_pct=sl_initial_pct)
                     stop_str = f'€{op["prezzo_stop"]:.2f}' if op['prezzo_stop'] else '—'
                     lim_sl_str = f'€{op["prezzo_limite_stop"]:.2f}' if op['prezzo_limite_stop'] else '—'
                     lim_tp_str = f'€{op["prezzo_limite_tp"]:.2f}' if op['prezzo_limite_tp'] else '—'
@@ -610,9 +620,9 @@ class AlertSystem:
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Carico</th>'
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo</th>'
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Perf</th>'
-                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Stop</th>'
-                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Limite (Stop)</th>'
-                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Limite (TP)</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Stop (Trigger)</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Limite</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Target TP</th>'
                     f'</tr>'
                     f'{"".join(l1_rows)}'
                     f'</table>'
@@ -631,9 +641,9 @@ class AlertSystem:
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Carico</th>'
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo</th>'
                     f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Perf</th>'
-                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Stop</th>'
-                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Limite (Stop)</th>'
-                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Limite (TP)</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Stop (Trigger)</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo Limite</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Target TP</th>'
                     f'</tr>'
                     f'{"".join(l0_rows)}'
                     f'</table>'
@@ -710,10 +720,10 @@ class AlertSystem:
                 f'{table_html}'
                 f'<hr style="border:none;border-top:1px solid #ccc;margin:20px 0">'
                 f'<p style="margin:12px 0;font-size:11px;color:#666">'
-                f'<strong>📌 Legenda — prezzi pronti per Directa:</strong><br>'
-                f'• <strong>Prezzo Stop</strong> = trigger dell\'ordine Stop di vendita (L1: formula ibrida — L0: trailing progressivo; si stringe automaticamente 🔶 se il prezzo è vicino al TP)<br>'
-                f'• <strong>Prezzo Limite (Stop)</strong> = da inserire nel campo "Prezzo limite" dello stesso ordine Stop (margine 1% sotto il trigger, per garantire l\'esecuzione anche in caso di gap)<br>'
-                f'• <strong>Prezzo Limite (TP)</strong> = target di riferimento per un ordine <strong>Limite</strong> (NON Stop), da tenere d\'occhio — su un conto cash Directa <strong>NON puoi tenerlo attivo in parallelo allo Stop</strong> (le stesse quote sono impegnate dallo Stop, un secondo ordine di vendita viene rifiutato: "quantità superiore alla disponibilità"). Quando il prezzo si avvicina, <strong>cancella lo Stop e piazza il Limite</strong> (o vendi) in quel momento — <em>su altri broker con OCO nativo (es. Webank) puoi invece piazzare entrambi subito</em><br>'
+                f'<strong>📌 Legenda — campi pronti per l\'ordine Stop su Directa:</strong><br>'
+                f'• <strong>Prezzo Stop (Trigger)</strong> = il campo "Prezzo Stop" dell\'ordine Stop di vendita su Directa (quando il prezzo lo tocca/supera al ribasso, la condizione si avvera — L1: formula ibrida, L0: trailing progressivo; si stringe automaticamente 🔶 se il prezzo è vicino al TP)<br>'
+                f'• <strong>Prezzo Limite</strong> = il campo "Prezzo Limite" dello stesso ordine Stop su Directa (il prezzo di garanzia: l\'eseguito non scende sotto questo valore, margine 1% sotto il Prezzo Stop, per garantire l\'esecuzione anche in caso di gap)<br>'
+                f'• <strong>Target TP</strong> = il livello a cui punti al rialzo, da piazzare come ordine <strong>Limite</strong> separato (NON lo stesso ordine Stop) quando ci arrivi — su un conto cash Directa <strong>NON puoi tenerlo attivo in parallelo allo Stop</strong> (le stesse quote sono impegnate dallo Stop, un secondo ordine di vendita viene rifiutato: "quantità superiore alla disponibilità"). Quando il prezzo si avvicina, <strong>cancella lo Stop e piazza il Limite</strong> (o vendi) in quel momento — <em>su altri broker con OCO nativo (es. Webank) puoi invece piazzare entrambi subito</em><br>'
                 f'• <strong>🔶</strong> = Stop stretto perché il prezzo è entro il 3% dal TP — valuta di cancellarlo e piazzare il Limite a breve (solo Directa — su Webank imposta direttamente il TP)<br>'
                 f'• <strong>⚠️</strong> = Performance &lt; -2% (attenzione)<br>'
                 f'• <strong>✓</strong> = In profitto<br>'

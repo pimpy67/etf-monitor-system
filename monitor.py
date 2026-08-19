@@ -29,6 +29,7 @@ from alerts import AlertSystem
 from database import PriceDatabase
 from pdf_generator import generate_parameters_pdf
 from pdf_generator_complete import generate_complete_pdf
+from order_pricing import compute_order_prices
 
 
 monitor_log = []
@@ -1262,7 +1263,7 @@ class ETFMonitor:
             # Leggi tutte le entry L0 attive
             query = """
                 SELECT id, isin, entry_date, entry_price, fund_name,
-                       days_no_recovery, stallo_counter
+                       days_no_recovery, stallo_counter, broker, tp_proximity_stop_max
                 FROM etf_portfolio_entries
                 WHERE status = 'active' AND portafoglio = 'L0'
             """
@@ -1287,7 +1288,7 @@ class ETFMonitor:
 
             add_log(f"  Aggiornamento {len(rows)} posizioni L0...")
 
-            for entry_id, isin, entry_date_str, entry_price_str, fund_name, days_no_rec, stallo_cnt in rows:
+            for entry_id, isin, entry_date_str, entry_price_str, fund_name, days_no_rec, stallo_cnt, broker, prev_tp_stop_max in rows:
                 try:
                     entry_price = float(entry_price_str) if entry_price_str else None
                     if not entry_price or entry_price <= 0:
@@ -1313,6 +1314,7 @@ class ETFMonitor:
                     # Recupera famiglia per i parametri L0
                     famiglia = ETFTechnicalAnalyzer.detect_family(fund_name or result.get('categoria', ''))
                     analyzer = ETFTechnicalAnalyzer(famiglia=famiglia)
+                    sl_initial_pct = analyzer.p.get('sl_initial_pct')
 
                     # Dati di mercato per SL
                     ema20 = a.get('ema20')
@@ -1360,14 +1362,26 @@ class ETFMonitor:
                         icon = '🟢' if tp_hit else '🔴'
                         add_log(f"    {icon} EXIT L0 {fund_name[:40]:40s} | {exit_rule}")
                     else:
+                        # Ratchet dello Stop tattico di avvicinamento al TP — vedi commento
+                        # analogo nella sezione L1 sopra, stessa logica.
+                        op = compute_order_prices(
+                            current_price, sl_suggerito, tp_suggerito, broker,
+                            previous_tightened_stop=float(prev_tp_stop_max) if prev_tp_stop_max else None,
+                            sl_initial_pct=sl_initial_pct,
+                        )
+                        tp_proximity_stop_max = op.get('tp_proximity_stop_max')
+                        if op.get('tightened'):
+                            add_log(f"    🔶 Stop tattico stretto a {op['prezzo_stop']:.2f}€ (avvicinamento TP)")
+
                         # Nessuna uscita — salva SL, TP e contatori
                         with conn.cursor() as cur:
                             cur.execute("""
                                 UPDATE etf_portfolio_entries
                                 SET sl_suggerito = %s, sg_suggerito = %s, days_no_recovery = %s,
-                                    stallo_counter = %s, stop_loss_updated_at = now()
+                                    stallo_counter = %s, stop_loss_updated_at = now(),
+                                    tp_proximity_stop_max = %s
                                 WHERE id = %s
-                            """, (sl_suggerito, tp_suggerito, days_no_rec, stallo_cnt, entry_id))
+                            """, (sl_suggerito, tp_suggerito, days_no_rec, stallo_cnt, tp_proximity_stop_max, entry_id))
                             conn.commit()
 
                         alert_msg = ''
@@ -1450,7 +1464,8 @@ class ETFMonitor:
         try:
             # Leggi tutte le entry L1 attive
             query = """
-                SELECT id, isin, entry_date, entry_price, fund_name
+                SELECT id, isin, entry_date, entry_price, fund_name,
+                       broker, tp_proximity_stop_max
                 FROM etf_portfolio_entries
                 WHERE status = 'active' AND portafoglio = 'L1'
             """
@@ -1475,7 +1490,7 @@ class ETFMonitor:
 
             add_log(f"  Aggiornamento {len(rows)} posizioni L1...")
 
-            for entry_id, isin, entry_date_str, entry_price_str, fund_name in rows:
+            for entry_id, isin, entry_date_str, entry_price_str, fund_name, broker, prev_tp_stop_max in rows:
                 try:
                     entry_price = float(entry_price_str) if entry_price_str else None
                     if not entry_price or entry_price <= 0:
@@ -1501,6 +1516,7 @@ class ETFMonitor:
                     # Recupera famiglia dall'analyzer per i parametri
                     famiglia = ETFTechnicalAnalyzer.detect_family(fund_name or result.get('categoria', ''))
                     analyzer = ETFTechnicalAnalyzer(famiglia=famiglia)
+                    sl_initial_pct = analyzer.p.get('sl_initial_pct')
 
                     # Dati di mercato per SL/SG
                     ema20 = a.get('ema20')
@@ -1556,13 +1572,26 @@ class ETFMonitor:
                             conn.commit()
                         add_log(f"    🔴 EXIT L1 {fund_name[:40]:40s} | {exit_rule} toccato (prezzo {current_price:.2f})")
                     else:
+                        # Ratchet dello Stop tattico di avvicinamento al TP (order_pricing.py)
+                        # — solo per calcolare il nuovo tp_proximity_stop_max da persistere,
+                        # non cambia sl_suggerito/l'uscita reale (quella resta SL/TP puri sopra).
+                        op = compute_order_prices(
+                            current_price, sl_suggerito, sg_suggerito, broker,
+                            previous_tightened_stop=float(prev_tp_stop_max) if prev_tp_stop_max else None,
+                            sl_initial_pct=sl_initial_pct,
+                        )
+                        tp_proximity_stop_max = op.get('tp_proximity_stop_max')
+                        if op.get('tightened'):
+                            add_log(f"    🔶 Stop tattico stretto a {op['prezzo_stop']:.2f}€ (avvicinamento TP)")
+
                         # Salva SL/SG suggerito — STEP 3 v4.0
                         with conn.cursor() as cur:
                             cur.execute("""
                                 UPDATE etf_portfolio_entries
-                                SET sl_suggerito = %s, sg_suggerito = %s, stop_loss_updated_at = now()
+                                SET sl_suggerito = %s, sg_suggerito = %s, stop_loss_updated_at = now(),
+                                    tp_proximity_stop_max = %s
                                 WHERE id = %s
-                            """, (sl_suggerito, sg_suggerito, entry_id))
+                            """, (sl_suggerito, sg_suggerito, tp_proximity_stop_max, entry_id))
                             conn.commit()
 
                         add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ | SG: {sg_suggerito:.2f}€")

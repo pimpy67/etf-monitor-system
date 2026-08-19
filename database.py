@@ -278,6 +278,11 @@ class PriceDatabase:
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS days_no_recovery INTEGER DEFAULT 0",
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS stallo_counter INTEGER DEFAULT 0",
                     "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS add_history TEXT DEFAULT '[]'",
+                    # Ratchet dello Stop tattico di avvicinamento al TP (order_pricing.py) —
+                    # il massimo prezzo_stop già suggerito finché la posizione resta aperta,
+                    # cosi' il tattico non torna mai indietro anche se il prezzo si allontana
+                    # temporaneamente dal TP. Scritto solo dal monitor giornaliero.
+                    "ALTER TABLE etf_portfolio_entries ADD COLUMN IF NOT EXISTS tp_proximity_stop_max DECIMAL(12, 4)",
                     # PRIORITÀ 1 FASE 2 — L0 State Persistence (2026-07-21)
                     "ALTER TABLE etf_l0_tracking ADD COLUMN IF NOT EXISTS confirmation_mode VARCHAR(10)",
                     "ALTER TABLE etf_l0_tracking ADD COLUMN IF NOT EXISTS trigger_low_price DECIMAL(12, 4)",
@@ -1195,7 +1200,7 @@ class PriceDatabase:
                            is_partial, partial_exit_date, partial_exit_price,
                            portfolio_type, stop_loss_l0_suggested,
                            sl_suggerito, sg_suggerito, stop_loss_inserted, stop_gain_target,
-                           broker
+                           broker, tp_proximity_stop_max
                     FROM etf_portfolio_entries
                     WHERE status = 'active'
                     ORDER BY entry_date DESC

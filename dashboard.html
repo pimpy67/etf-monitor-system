@@ -1392,8 +1392,10 @@ async function loadAllPortfolioSLData() {
 
     positions.forEach(pos => {
       const isin = pos.isin;
-      const slSuggEl = document.getElementById('sl-sugg-' + isin);
-      if (slSuggEl) slSuggEl.textContent = pos.sl_suggested ? '€' + pos.sl_suggested.toFixed(4) : '—';
+      // Nota: NON sovrascrivere qui il testo di sl-sugg-{isin} — renderPortfolio()
+      // lo ha già popolato con p.prezzo_stop (via /api/portfolio), che include
+      // ratchet + buffer di avvicinamento al TP. pos.sl_suggested qui è il valore
+      // "ufficiale" grezzo, senza quella logica: sovrascriverlo lo vanificherebbe.
 
       const slPersInput = document.getElementById('sl-pers-' + isin);
       const sharesInput = document.getElementById('shares-' + isin);
@@ -1500,16 +1502,16 @@ function renderPortfolioTable(portfolioData, portfolioType) {
       <td colspan="10" style="padding:12px;">
         <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:16px;align-items:end;">
           <div><div class="sl-label">Pr. Carico <span style="text-transform:none;">(${p.broker || 'Directa'})</span></div><span class="sl-value" style="color:#58a6ff;">€${prAcq}</span></div>
-          <div><div class="sl-label">Prezzo Stop${p.stop_tightened ? ' 🔶' : ''}</div><span class="sl-value" style="color:#58a6ff;" id="sl-sugg-${isin}">${p.prezzo_stop ? '€' + parseFloat(p.prezzo_stop).toFixed(4) : '—'}</span></div>
-          <div><div class="sl-label">Prezzo Limite (Stop)</div><span class="sl-value" style="color:#58a6ff;">${p.prezzo_limite_stop ? '€' + parseFloat(p.prezzo_limite_stop).toFixed(4) : '—'}</span></div>
-          <div><div class="sl-label">${p.order_parallel_ok ? 'SL Personale' : 'Prezzo Limite (Stop) Personale'}</div><input type="text" class="sl-input" style="color:#58a6ff;" id="sl-pers-${isin}" placeholder="${p.order_parallel_ok ? 'Inserisci SL' : 'Prezzo limite, non trigger'}" value="${p.sl_inserted ? parseFloat(p.sl_inserted).toFixed(4) : ''}" oninput="updatePortfolioP_L('${isin}',${prAcq})"></div>
-          <div><div class="sl-label">Prezzo Limite (TP)</div><span class="sl-value" style="color:#3fb950;" id="tp-sugg-${isin}">${p.prezzo_limite_tp ? '€' + parseFloat(p.prezzo_limite_tp).toFixed(4) : '—'}</span></div>
-          <div><div class="sl-label">${p.order_parallel_ok ? 'TP Personale' : 'Prezzo Limite (TP) Personale'}</div><input type="text" class="sl-input" style="color:#3fb950;" id="tp-pers-${isin}" placeholder="Inserisci TP" value="${p.tp_inserted ? parseFloat(p.tp_inserted).toFixed(4) : ''}"></div>
+          <div><div class="sl-label">Prezzo Stop (Trigger)${p.stop_tightened ? ' 🔶' : ''}</div><span class="sl-value" style="color:#58a6ff;" id="sl-sugg-${isin}">${p.prezzo_stop ? '€' + parseFloat(p.prezzo_stop).toFixed(4) : '—'}</span></div>
+          <div><div class="sl-label">Prezzo Limite</div><span class="sl-value" style="color:#58a6ff;">${p.prezzo_limite_stop ? '€' + parseFloat(p.prezzo_limite_stop).toFixed(4) : '—'}</span></div>
+          <div><div class="sl-label">${p.order_parallel_ok ? 'SL Personale' : 'Prezzo Limite Personale'}</div><input type="text" class="sl-input" style="color:#58a6ff;" id="sl-pers-${isin}" placeholder="${p.order_parallel_ok ? 'Inserisci SL' : 'Prezzo limite, non trigger'}" value="${p.sl_inserted ? parseFloat(p.sl_inserted).toFixed(4) : ''}" oninput="updatePortfolioP_L('${isin}',${prAcq})"></div>
+          <div><div class="sl-label">Target TP</div><span class="sl-value" style="color:#3fb950;" id="tp-sugg-${isin}">${p.prezzo_limite_tp ? '€' + parseFloat(p.prezzo_limite_tp).toFixed(4) : '—'}</span></div>
+          <div><div class="sl-label">${p.order_parallel_ok ? 'TP Personale' : 'Target TP Personale'}</div><input type="text" class="sl-input" style="color:#3fb950;" id="tp-pers-${isin}" placeholder="Inserisci TP" value="${p.tp_inserted ? parseFloat(p.tp_inserted).toFixed(4) : ''}"></div>
           <div><button class="btn-pf-save" onclick="savePortfolioSL_TP('${isin}')" style="background:#238636;color:#fff;border:none;padding:9px 16px;border-radius:4px;cursor:pointer;font-weight:700;font-size:0.95em;">💾 Salva</button></div>
         </div>
         <div style="margin-top:8px;font-size:0.75em;color:#8b949e;">${p.order_parallel_ok
           ? `${p.broker || 'Directa'} supporta Stop e Limite (TP) attivi in parallelo (OCO) — piazza entrambi subito.`
-          : `Prezzo Limite (TP) = target per un ordine <strong>Limite</strong> (non Stop) — su ${p.broker || 'Directa'} NON può restare attivo in parallelo allo Stop (stesse quote impegnate, ordine rifiutato). Quando il prezzo si avvicina: cancella lo Stop e piazza il Limite. 🔶 = Stop stretto perché il prezzo è entro il 3% dal TP.`}</div>
+          : `Target TP = il livello a cui punti al rialzo, da piazzare come ordine <strong>Limite</strong> separato (non lo stesso ordine Stop) quando ci arrivi — su ${p.broker || 'Directa'} NON può restare attivo in parallelo allo Stop (stesse quote impegnate, ordine rifiutato). Quando il prezzo si avvicina: cancella lo Stop e piazza il Limite. 🔶 = Stop stretto perché il prezzo è entro il 3% dal TP.`}</div>
       </td>
     </tr>
     <tr class="history-row" id="pf-hist-${isin}" style="display:none;">
@@ -2748,10 +2750,10 @@ async function loadDetailSL() {
       if (elSLIns) elSLIns.value = pos.sl_inserted || '';
       if (elShares) elShares.value = pos.shares || '';
       const slPersLabel = document.getElementById('slPersLabel');
-      if (slPersLabel) slPersLabel.textContent = pos.order_parallel_ok ? 'SL Personale' : 'Prezzo Limite (Stop) Personale';
+      if (slPersLabel) slPersLabel.textContent = pos.order_parallel_ok ? 'SL Personale' : 'Prezzo Limite Personale';
       if (elSLIns) elSLIns.placeholder = pos.order_parallel_ok ? 'Valore SL' : 'Prezzo limite reale, non trigger';
       const plCalcLabel = document.getElementById('plCalcLabel');
-      if (plCalcLabel) plCalcLabel.textContent = pos.order_parallel_ok ? 'P&L se attivi SL' : 'P&L al Prezzo Limite (Stop) Personale';
+      if (plCalcLabel) plCalcLabel.textContent = pos.order_parallel_ok ? 'P&L se attivi SL' : 'P&L al Prezzo Limite Personale';
       window.detailSLData = pos;
       setTimeout(() => updatePLCalc(), 100); // Calcola P&L con i valori caricati
     } else {

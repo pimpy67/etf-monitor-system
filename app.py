@@ -752,11 +752,16 @@ def get_portfolio():
         sl_suggerito = entry.get('sl_suggerito')
         sg_suggerito = entry.get('sg_suggerito')
         broker = entry.get('broker') or 'Directa'
+        tp_proximity_stop_max = entry.get('tp_proximity_stop_max')
+        famiglia = ETFTechnicalAnalyzer.detect_family(analysis.get('categoria') or entry.get('fund_name') or '')
+        sl_initial_pct = ETFTechnicalAnalyzer(famiglia=famiglia).p.get('sl_initial_pct')
         order_prices = compute_order_prices(
             current_price,
             float(sl_suggerito) if sl_suggerito else None,
             float(sg_suggerito) if sg_suggerito else None,
             broker,
+            previous_tightened_stop=float(tp_proximity_stop_max) if tp_proximity_stop_max else None,
+            sl_initial_pct=sl_initial_pct,
         )
         entry_confidence = entry.get('entry_confidence', 1.0)
         accumulated_pcts_str = entry.get('accumulated_pcts', '[]')
