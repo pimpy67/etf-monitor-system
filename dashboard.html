@@ -489,11 +489,11 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
           </div>
           <div style="flex:1;min-width:140px;">
             <label id="slPersLabel" style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">SL Personale</label>
-            <input type="number" id="slInsertedInput" placeholder="Valore SL" step="0.01" oninput="event.stopPropagation();updatePLCalc()" onclick="event.stopPropagation()" style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#fff;font-size:0.9em;">
+            <input type="text" inputmode="decimal" id="slInsertedInput" placeholder="Valore SL" oninput="event.stopPropagation();updatePLCalc()" onclick="event.stopPropagation()" style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#fff;font-size:0.9em;">
           </div>
           <div style="flex:1;min-width:120px;">
             <label style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">Quote</label>
-            <input type="number" id="sharesInput" placeholder="N. quote" step="0.01" min="0" oninput="event.stopPropagation();updatePLCalc()" onclick="event.stopPropagation()" style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#fff;font-size:0.9em;">
+            <input type="text" inputmode="decimal" id="sharesInput" placeholder="N. quote" oninput="event.stopPropagation();updatePLCalc()" onclick="event.stopPropagation()" style="width:100%;padding:6px;border:1px solid #555;border-radius:4px;background:#1a1a1a;color:#fff;font-size:0.9em;">
           </div>
           <div style="flex:1;min-width:140px;">
             <label id="plCalcLabel" style="display:block;font-size:0.75em;color:#999;margin-bottom:4px;font-weight:600;">P&L se attivi SL</label>
@@ -1585,23 +1585,33 @@ async function savePortfolioSL_TP(isin) {
   }
 
   try {
+    const slParsed = slValue ? parseLocaleFloat(slValue) : null;
+    const triggerParsed = triggerValue ? parseLocaleFloat(triggerValue) : null;
+
+    if ((slValue && isNaN(slParsed)) || (triggerValue && isNaN(triggerParsed))) {
+      alert('❌ Valore non valido — usa solo numeri (es. 244,70 o 244.70)');
+      return;
+    }
+
     const resp = await fetch('/api/accept-sl-suggestion', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         isin: isin,
-        sl_value: slValue ? parseFloat(slValue) : null,
-        trigger_value: triggerValue ? parseFloat(triggerValue) : null
+        sl_value: slParsed,
+        trigger_value: triggerParsed
       })
     });
 
     if (resp.ok) {
-      console.log('✅ SL/TP salvati per ' + isin);
+      alert('✅ Salvato');
+      await loadPortfolioSLData(isin);
     } else {
-      console.log('❌ Errore salvataggio SL/TP');
+      const errText = await resp.text().catch(() => '');
+      alert('❌ Errore nel salvataggio' + (errText ? ' (' + errText + ')' : ''));
     }
   } catch(e) {
-    console.log('Errore:', e);
+    alert('❌ Errore nel salvataggio: ' + e.message);
   }
 }
 
@@ -2680,14 +2690,20 @@ document.addEventListener('DOMContentLoaded', () => {
 const DIRECTA_COMMISSION_ROUNDTRIP = 10; // €5 acquisto + €5 vendita
 const CAPITAL_GAIN_TAX_RATE = 0.26; // 26% flat sulle plusvalenze
 
+// Accetta sia virgola che punto come separatore decimale (input utente IT)
+function parseLocaleFloat(str) {
+  if (str == null || str === '') return NaN;
+  return parseFloat(String(str).replace(',', '.'));
+}
+
 function updatePLCalc() {
   try {
     const plDisplay = document.getElementById('plCalcDisplay');
     const plNetDisplay = document.getElementById('plCalcNetDisplay');
     if (!plDisplay) return;
 
-    const slValue = parseFloat(document.getElementById('slInsertedInput').value);
-    const shares = parseFloat(document.getElementById('sharesInput').value);
+    const slValue = parseLocaleFloat(document.getElementById('slInsertedInput').value);
+    const shares = parseLocaleFloat(document.getElementById('sharesInput').value);
     const slData = window.detailSLData;
 
     if (!slData || !slData.entry_price || !slValue || slValue <= 0 || !shares || shares <= 0) {
@@ -2730,7 +2746,7 @@ function updatePortfolioRowPL(isin, entryPrice) {
     if (!plDisplay) return;
 
     const slPersInput = document.getElementById('sl-pers-' + isin);
-    const slValue = slPersInput ? parseFloat(slPersInput.value) : NaN;
+    const slValue = slPersInput ? parseLocaleFloat(slPersInput.value) : NaN;
     const shares = (window.portfolioSharesMap || {})[isin];
 
     if (!entryPrice || !slValue || slValue <= 0 || !shares || shares <= 0) {
@@ -2819,8 +2835,8 @@ async function loadDetailSL() {
 
 async function saveStopLoss() {
   try {
-    const slValue = parseFloat(document.getElementById('slInsertedInput').value);
-    const shares = parseFloat(document.getElementById('sharesInput').value);
+    const slValue = parseLocaleFloat(document.getElementById('slInsertedInput').value);
+    const shares = parseLocaleFloat(document.getElementById('sharesInput').value);
 
     console.log('saveStopLoss: slValue=', slValue, 'shares=', shares, 'isin=', currentDetailIsin);
 
