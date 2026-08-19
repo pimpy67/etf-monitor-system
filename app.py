@@ -246,6 +246,8 @@ def etf_detail():
                 'macd_histogram':   cond.get('macd_histogram'),
                 'space_residuo_pct':       cond.get('space_residuo_pct'),
                 'space_residuo_threshold': cond.get('space_residuo_threshold'),
+                'dist_sma200_pct':  cond.get('dist_sma200_pct'),
+                'dist_sma200_ok':   cond.get('dist_sma200_ok'),
             },
             'thresholds': {
                 'rsi_min':        p['rsi_entry_low'],
@@ -253,6 +255,7 @@ def etf_detail():
                 'max_dist_ema20': p['ema_dist_max'],
                 'adx_threshold':  p['adx_entry'],
                 'days_above_ema': p['days_above_ema'],
+                'max_dist_sma200': cond.get('mm200_distance_max'),
             },
             'buy_count': etf_info.get('buy_count', 0),
         }

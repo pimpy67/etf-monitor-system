@@ -1223,9 +1223,10 @@ class ETFTechnicalAnalyzer:
 
         # Controllo distanza da SMA200: impedisce ingressi su ETF troppo estesi
         dist_sma200_ok = True
+        dist_sma200 = None
+        max_dist = p.get('mm200_distance_max', 4.0)  # default 4% se non specificato
         if sma200_v is not None and sma200_v > 0:
             dist_sma200 = 100 * (current - sma200_v) / sma200_v
-            max_dist = p.get('mm200_distance_max', 4.0)  # default 4% se non specificato
             dist_sma200_ok = dist_sma200 <= max_dist
 
         allineamento  = price_ema_ok and ema_sma50_ok and regime_ok_mm200 and dist_sma200_ok
@@ -1281,6 +1282,9 @@ class ETFTechnicalAnalyzer:
             'space_residuo_pct':       round(space_residuo_check.get('space_pct', 0) * 100, 2),
             'space_residuo_threshold': round(space_residuo_check.get('threshold', 0) * 100, 2),
             'space_residuo_method':    space_residuo_check.get('method', 'none'),
+            'dist_sma200_ok':     dist_sma200_ok,
+            'dist_sma200_pct':    round(dist_sma200, 2) if dist_sma200 is not None else None,
+            'mm200_distance_max': round(max_dist, 2),
             'smart_6_7_macd_enabled': smart_6_7_macd_enabled,
             'smart_6_7_triggered': smart_6_7_triggered,
             # Valori per display

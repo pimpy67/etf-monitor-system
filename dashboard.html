@@ -2098,13 +2098,20 @@ function renderL1CondPanel(e) {
         const ok1 = v.price > v.ema20, ok2 = v.ema20 > v.sma50;
         let s = `Prezzo <span class="${ok1?'ok':'ko'}">${fmt(v.price,4)}</span> &gt; EMA20 <span class="${ok1?'ok':'ko'}">${fmt(v.ema20,4)}</span> &gt; SMA50 <span class="${ok2?'ok':'ko'}">${fmt(v.sma50,4)}</span>`;
         if (v.sma200 != null) {
-          const ok3 = v.price > v.sma200;
+          const ok3 = v.dist_sma200_ok !== false;
           s += ` · SMA200 <span class="${ok3?'ok':'ko'}">${fmt(v.sma200,4)}</span>`;
+          if (v.dist_sma200_pct != null) {
+            s += ` <span class="${ok3?'ok':'ko'}">(dist. ${v.dist_sma200_pct.toFixed(1)}% / max ${fmt(t.max_dist_sma200,1)}%)</span>`;
+          }
         }
         return s;
       },
       interpret: () => {
         const ok1 = v.price > v.ema20, ok2 = v.ema20 > v.sma50;
+        const okDist = v.dist_sma200_ok !== false;
+        if (ok1 && ok2 && !okDist) {
+          return `Le medie sono allineate al rialzo, ma il prezzo si è già allontanato troppo dalla SMA200 (${v.dist_sma200_pct!=null?v.dist_sma200_pct.toFixed(1)+'%':'?'} contro un massimo di ${fmt(t.max_dist_sma200,1)}% per questa famiglia): comprare qui rischierebbe di inseguire un movimento già molto esteso, senza margine prima di un pull-back.`;
+        }
         if (ok1 && ok2) return 'Le medie sono allineate al rialzo: il prezzo guida, l\'EMA20 segue da sotto e la SMA50 conferma — trend ordinato su più orizzonti temporali.';
         if (!ok2) {
           const gap = v.sma50 ? Math.abs(((v.ema20 - v.sma50) / v.sma50) * 100).toFixed(1) : null;
@@ -2915,7 +2922,8 @@ async function loadL2Watchlist() {
       const status = score >= 70 ? '🟨 WATCH' : (score >= 60 ? '🟡 NEAR' : '⚪ LOW');
       const entryDate = w.entered_date || '—';
 
-      html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);hover:background:rgba(255,255,255,0.02);cursor:pointer;">';
+      const tickerEsc = (w.ticker || '').replace(/'/g, "\\'");
+      html += `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);hover:background:rgba(255,255,255,0.02);cursor:pointer;" onclick="openETFDetail('${tickerEsc}','${w.isin||''}')">`;
       html += `<td style="padding:8px;color:#ccc;">${w.ticker || '—'}</td>`;
       html += `<td style="padding:8px;text-align:center;color:${scoreColor};font-weight:bold;">${score}</td>`;
       html += `<td style="padding:8px;text-align:center;color:#8b949e;">${status}</td>`;
