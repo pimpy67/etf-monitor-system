@@ -1087,7 +1087,8 @@ function renderFavoritesTable(favs) {
                  : f.regime === 'BEAR' ? '<span class="regime-bear">▼ Bear</span>'
                  : f.regime === 'LATERALE' ? '<span class="regime-lat">▬ Laterale</span>' : '—';
     const price = f.price != null ? fmtNum(f.price, 4) : '—';
-    return `<tr>
+    const tickerEsc = (f.ticker || '').replace(/'/g, "\\'");
+    return `<tr style="cursor:pointer" onclick="openETFDetail('${tickerEsc}','${f.isin}')">
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08)">
         <strong style="font-size:1.05em;">${f.nome || f.ticker}</strong><br>
         <span style="font-size:0.88em;color:#8b949e;font-family:monospace;letter-spacing:0.02em;">${f.ticker || ''} · ${f.isin}</span>
