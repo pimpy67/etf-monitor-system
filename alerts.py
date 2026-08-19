@@ -434,6 +434,44 @@ class AlertSystem:
         )
         return self._send_email(subject, body_html)
 
+    def _period_returns_row(self, isin: str, colspan: int, bg: str) -> str:
+        """
+        Riga extra sotto ogni ETF con la variazione % a 1/3/10/30/60/90 giorni
+        di trading (non calendario — coincide con le righe disponibili in
+        etf_price_history, che si accumula un punto per giorno di mercato).
+        """
+        periods = [1, 3, 10, 30, 60, 90]
+        try:
+            from database import db
+            df = db.get_close_by_isin(isin, days=130)
+        except Exception:
+            df = None
+
+        parts = []
+        if df is None or df.empty:
+            cells_html = '<span style="color:#999">dati storici insufficienti</span>'
+        else:
+            closes = df['Close'].values
+            n = len(closes)
+            last = closes[-1]
+            for p in periods:
+                if n > p and closes[-1 - p]:
+                    ref = closes[-1 - p]
+                    pct = (last - ref) / ref * 100
+                    color = '#28a745' if pct >= 0 else '#dc3545'
+                    sign = '+' if pct >= 0 else ''
+                    parts.append(f'<span style="color:{color}">{p}g {sign}{pct:.1f}%</span>')
+                else:
+                    parts.append(f'<span style="color:#999">{p}g —</span>')
+            cells_html = ' &nbsp;·&nbsp; '.join(parts)
+
+        return (
+            f'<tr style="background:{bg}">'
+            f'<td colspan="{colspan}" style="padding:2px 8px 6px;border:1px solid #ddd;'
+            f'border-top:none;font-size:10px;color:#666">↳ {cells_html}</td>'
+            f'</tr>'
+        )
+
     def send_portfolio_report(self, favorites_digest: list = None) -> bool:
         """
         STEP 5 — Invia resoconto giornaliero del portafoglio con SL/SG suggerito.
@@ -493,6 +531,7 @@ class AlertSystem:
             l1_rows = []
             l1_total_gain = 0
             l1_total_notional = 0
+            l1_etf_idx = 0
 
             for entry_id, isin, entry_price, entry_date, fund_name, portafoglio, sl_sug, sg_sug, broker, prev_tp_stop_max in l1_positions:
                 try:
@@ -553,24 +592,28 @@ class AlertSystem:
                     # Indicatore status
                     status_icon = '⚠️' if pct_change < -2 else ('✓' if pct_change >= 0 else '◆')
 
+                    row_bg = "#f8f9fa" if l1_etf_idx % 2 == 0 else "white"
+                    l1_etf_idx += 1
                     l1_rows.append(
-                        f'<tr style="background:{"#f8f9fa" if len(l1_rows) % 2 == 0 else "white"}">'
-                        f'<td style="padding:8px;border:1px solid #ddd"><strong>{fund_name[:35]}</strong><br>'
+                        f'<tr style="background:{row_bg}">'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none"><strong>{fund_name[:35]}</strong><br>'
                         f'<small style="color:#888">{isin} · {broker or "Directa"}</small></td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{entry_price:.2f}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{current_price:.2f}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:{color}"><strong>{status_icon} {sign}{pct_change:.1f}%</strong></td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{stop_str}{tighten_flag}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{lim_sl_str}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{lim_tp_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right">€{entry_price:.2f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right">€{current_price:.2f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right;color:{color}"><strong>{status_icon} {sign}{pct_change:.1f}%</strong></td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right;font-size:12px">{stop_str}{tighten_flag}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right;font-size:12px">{lim_sl_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right;font-size:12px">{lim_tp_str}</td>'
                         f'</tr>'
                     )
+                    l1_rows.append(self._period_returns_row(isin, colspan=7, bg=row_bg))
                 except Exception as e:
                     print(f"⚠️ Errore L1 {isin}: {e}")
                     continue
 
             # ── SEZIONE L0 ──────────────────────────────────────────────────
             l0_rows = []
+            l0_etf_idx = 0
             for entry_id, isin, entry_price, entry_date, fund_name, portafoglio, sl_sug, sg_sug, broker, prev_tp_stop_max in l0_positions:
                 try:
                     entry_price = float(entry_price) if entry_price else 0
@@ -606,18 +649,21 @@ class AlertSystem:
                     lim_tp_str = f'€{op["prezzo_limite_tp"]:.2f}' if op['prezzo_limite_tp'] else '—'
                     tighten_flag = ' 🔶' if op['tightened'] else ''
 
+                    row_bg = "#f8f9fa" if l0_etf_idx % 2 == 0 else "white"
+                    l0_etf_idx += 1
                     l0_rows.append(
-                        f'<tr style="background:{"#f8f9fa" if len(l0_rows) % 2 == 0 else "white"}">'
-                        f'<td style="padding:8px;border:1px solid #ddd"><strong>{fund_name[:35]}</strong><br>'
+                        f'<tr style="background:{row_bg}">'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none"><strong>{fund_name[:35]}</strong><br>'
                         f'<small style="color:#888">{isin} · {broker or "Directa"}</small></td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{entry_price:.2f}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{current_price:.2f}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:{color}"><strong>{sign}{pct_change:.1f}%</strong></td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{stop_str}{tighten_flag}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{lim_sl_str}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{lim_tp_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right">€{entry_price:.2f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right">€{current_price:.2f}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right;color:{color}"><strong>{sign}{pct_change:.1f}%</strong></td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right;font-size:12px">{stop_str}{tighten_flag}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right;font-size:12px">{lim_sl_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right;font-size:12px">{lim_tp_str}</td>'
                         f'</tr>'
                     )
+                    l0_rows.append(self._period_returns_row(isin, colspan=7, bg=row_bg))
                 except Exception as e:
                     print(f"⚠️ Errore L0 {isin}: {e}")
                     continue
@@ -689,16 +735,18 @@ class AlertSystem:
 
                     flags = ('🔔' if fav.get('level_changed') else '') + ('🔄' if fav.get('regime_changed') else '')
 
+                    row_bg = "#f8f9fa" if i % 2 == 0 else "white"
                     fav_rows.append(
-                        f'<tr style="background:{"#f8f9fa" if i % 2 == 0 else "white"}">'
-                        f'<td style="padding:8px;border:1px solid #ddd"><strong>{fav["nome"][:35]}</strong><br>'
+                        f'<tr style="background:{row_bg}">'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none"><strong>{fav["nome"][:35]}</strong><br>'
                         f'<small style="color:#888">{fav["ticker"]}</small></td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:center">{lvl_str}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:center"><strong>{bc}/7</strong>{delta_str}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:center;color:{regime_color}">{regime}</td>'
-                        f'<td style="padding:8px;border:1px solid #ddd;text-align:center">{flags or "—"}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:center">{lvl_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:center"><strong>{bc}/7</strong>{delta_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:center;color:{regime_color}">{regime}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:center">{flags or "—"}</td>'
                         f'</tr>'
                     )
+                    fav_rows.append(self._period_returns_row(fav.get('isin') or fav['ticker'], colspan=5, bg=row_bg))
 
                 favorites_section = (
                     f'<h2 style="color:#58a6ff;margin:16px 0 8px">⭐ PREFERITI — Watchlist Personale</h2>'
@@ -741,7 +789,8 @@ class AlertSystem:
                 f'• <strong>🔶</strong> = Stop stretto perché il prezzo è entro il 3% dal TP — valuta di cancellarlo e piazzare il Limite a breve (solo Directa — su Webank imposta direttamente il TP)<br>'
                 f'• <strong>⚠️</strong> = Performance &lt; -2% (attenzione)<br>'
                 f'• <strong>✓</strong> = In profitto<br>'
-                f'• <strong>◆</strong> = In perdita ma &gt; -2%</p>'
+                f'• <strong>◆</strong> = In perdita ma &gt; -2%<br>'
+                f'• <strong>↳ 1g/3g/10g/30g/60g/90g</strong> = variazione % del prezzo negli ultimi N giorni di trading (non calendario) — riga sotto ogni ETF, indipendente dal prezzo di carico</p>'
                 f'</div>'
                 f'{_FOOTER.format(ts=ts)}</body></html>'
             )
