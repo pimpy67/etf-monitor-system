@@ -1804,8 +1804,28 @@ L0, vedi whitelist gate sopra):
 >
 > **Non ancora fatto**: sweep lato SL per L0 (`calculate_sl_suggerito_l0` ha la formula
 > hardcoded, non parametrizzata per famiglia — richiederebbe modifiche di codice, stesso tipo
-> di lavoro della Fase 2 di L1) e uno Shadow Monitor per il candidato L0 (stesso pattern di
-> quello già live per L1, ma L0 non ha ancora un candidato abbastanza maturo da meritarlo).
+> di lavoro della Fase 2 di L1).
+>
+> ✅ **Correzione 2026-08-19 — lo Shadow Monitor L0 esiste già ed è live**: la frase sopra era
+> superata. `shadow_monitor_l0.py` è stato aggiunto l'08/08 (stessa sessione di questo
+> candidato, poco dopo) — STEP 8b in `monitor.py::run()`, stesso pattern del sperimentale L1
+> (nessuna email, solo log su `etf_shadow_positions` con `model_name='candidate_model_l0_20260808'`,
+> avvolto in try/except non bloccante). Logga una riga di riepilogo solo quando succede
+> qualcosa (apertura/chiusura) — per questo è passato inosservato per giorni, non perché non
+> stesse girando. Estrazione manuale al 06/09/2026, stessa data del candidato L1:
+> ```sql
+> SELECT ticker, entry_date, exit_date, exit_reason, gross_pct_gain, status
+> FROM etf_shadow_positions WHERE model_name = 'candidate_model_l0_20260808'
+> ORDER BY entry_date;
+> ```
+> Stato al 2026-08-19 (12 giorni di osservazione): 5 posizioni tracciate, tutte su
+> `equity_sviluppati` (unica famiglia raggiungibile) — 1 chiusa via SL (-2.42%), 4 aperte
+> (ENRG.PA, INCI.MI, WATC.SW, LBRE.DE — quest'ultimo un rientro dopo lo stop dell'08/08).
+> Campione ancora troppo piccolo per qualunque conclusione. Nello stesso periodo lo Shadow
+> Monitor L1 (`candidate_model_b_20260807`) non ha aperto nessuna posizione ombra: in 12 giorni
+> nessuno dei due gate (nativo 7/7 o candidato 6/7+MACD) ha trovato un ingresso valido sulle
+> famiglie core — non è che il gate 7/7 sia più selettivo del candidato in questo periodo,
+> è che il mercato non ha offerto setup validi per nessuno dei due.
 
 ---
 
