@@ -1083,11 +1083,14 @@ class ETFMonitor:
         # posizioni ipotetiche sul cluster 'core' con i parametri del candidato
         # (mm200_distance_max=7.0%, adx-4, smart_6_macd, TP=15%) senza toccare NESSUNA
         # decisione reale — solo log su etf_shadow_positions per il confronto
-        # native_7 vs candidato a fine lockdown (06/09/2026). Nessuna email. Vedi
-        # CLAUDE.md "CANDIDATE_MODEL_B_20260807".
+        # native_7 vs candidato a fine lockdown (06/09/2026). Email sui nuovi ingressi
+        # collegata il 2026-08-19 su richiesta esplicita (prima "nessuna email").
+        # Vedi CLAUDE.md "CANDIDATE_MODEL_B_20260807".
         try:
             from shadow_monitor import run_shadow_monitor
-            run_shadow_monitor(self.db, results, add_log=add_log)
+            shadow_l1_entries = run_shadow_monitor(self.db, results, add_log=add_log)
+            if shadow_l1_entries and send_daily_report:
+                self.alert_system.send_shadow_entries(shadow_l1_entries, variant='L1')
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor (non bloccante): {e}")
 
@@ -1096,11 +1099,14 @@ class ETFMonitor:
         # ipotetiche su equity_sviluppati (unica famiglia raggiungibile da L0) con
         # regime_min_days_below_sma200=5 invece del baseline YAML=10, senza toccare
         # NESSUNA decisione reale. Solo log su etf_shadow_positions per il confronto
-        # a fine lockdown (06/09/2026). Nessuna email. Vedi CLAUDE.md
+        # a fine lockdown (06/09/2026). Email sui nuovi ingressi collegata il
+        # 2026-08-19 su richiesta esplicita (prima "nessuna email"). Vedi CLAUDE.md
         # "CANDIDATE_MODEL_L0_20260808".
         try:
             from shadow_monitor_l0 import run_shadow_monitor_l0
-            run_shadow_monitor_l0(self.db, results, add_log=add_log)
+            shadow_l0_entries = run_shadow_monitor_l0(self.db, results, add_log=add_log)
+            if shadow_l0_entries and send_daily_report:
+                self.alert_system.send_shadow_entries(shadow_l0_entries, variant='L0')
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor L0 (non bloccante): {e}")
 

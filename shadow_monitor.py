@@ -12,8 +12,10 @@ Chiamato da monitor.py::run() come step aggiuntivo, avvolto in try/except — un
 qui non deve mai bloccare il ciclo di monitoraggio reale (stesso principio delle altre
 sezioni "informative" già presenti, es. l1_seven_conditions/l1_tiered_entry).
 
-NON invia email — solo log su DB, come deciso esplicitamente (2026-08-07). Il confronto
-va estratto manualmente a fine lockdown con get_shadow_positions().
+Log su DB sempre (etf_shadow_positions). Email sui nuovi ingressi (alerts.py::
+send_shadow_entries) collegata il 2026-08-19 su richiesta esplicita dell'utente —
+prima "nessuna email" era la scelta deliberata (2026-08-07), superata. Il confronto
+completo va comunque estratto manualmente a fine lockdown con get_shadow_positions().
 """
 from datetime import date
 

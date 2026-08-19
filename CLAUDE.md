@@ -1656,12 +1656,19 @@ parametri sweepati, è mancanza strutturale di segnale `smart_6_macd` a monte (v
 > `l1_seven_conditions`/`l1_tiered_entry`/`l1_accelerated_entry` (motori paralleli
 > informativi, non decisionali). Riusa la logica reale (`suggest_level()`,
 > `calculate_sl_suggerito_l1`, `calculate_stop_gain_dynamic`) con i soli parametri di
-> CANDIDATE_MODEL_B sovrascritti — nessuna duplicazione. **Solo le 5 famiglie di `core`**,
-> **nessuna email** (deciso esplicitamente il 2026-08-07) — solo log su
-> `etf_shadow_positions`, da estrarre manualmente al 06/09/2026 per il confronto native_7
-> vs candidato su dati forward reali. Verificato end-to-end su tutti i 155 ticker di `core`
-> senza errori (0 ingressi il primo giorno, coerente con la bassa frequenza attesa del
-> candidato — ~31 trade/2 anni sull'intero cluster). Commit `0be6673`.
+> CANDIDATE_MODEL_B sovrascritti — nessuna duplicazione. **Solo le 5 famiglie di `core`**.
+> Log sempre su `etf_shadow_positions`, da estrarre manualmente al 06/09/2026 per il
+> confronto native_7 vs candidato su dati forward reali. Verificato end-to-end su tutti i
+> 155 ticker di `core` senza errori (0 ingressi il primo giorno, coerente con la bassa
+> frequenza attesa del candidato — ~31 trade/2 anni sull'intero cluster). Commit `0be6673`.
+>
+> ✅ **Aggiornamento 2026-08-19 — email attivata**: la scelta "nessuna email" (2026-08-07)
+> è stata superata su richiesta esplicita dell'utente. `alerts.py::send_shadow_entries()`
+> (esisteva già, mai collegata) ora viene chiamata da `monitor.py` STEP 8/8b quando
+> `run_shadow_monitor()`/`run_shadow_monitor_l0()` aprono una nuova posizione ombra —
+> una mail per L1 (`variant='L1'`) e una per L0 (`variant='L0'`), solo sui nuovi ingressi
+> (non sulle uscite), solo quando `send_daily_report=True` (non sul run silenzioso delle
+> 09:00). Zero impatto sulle decisioni reali, resta puramente informativo.
 >
 > **Estrazione risultati a fine lockdown**:
 > ```sql
@@ -1817,8 +1824,9 @@ L0, vedi whitelist gate sopra):
 > ✅ **Correzione 2026-08-19 — lo Shadow Monitor L0 esiste già ed è live**: la frase sopra era
 > superata. `shadow_monitor_l0.py` è stato aggiunto l'08/08 (stessa sessione di questo
 > candidato, poco dopo) — STEP 8b in `monitor.py::run()`, stesso pattern del sperimentale L1
-> (nessuna email, solo log su `etf_shadow_positions` con `model_name='candidate_model_l0_20260808'`,
-> avvolto in try/except non bloccante). Logga una riga di riepilogo solo quando succede
+> (log sempre su `etf_shadow_positions` con `model_name='candidate_model_l0_20260808'`,
+> avvolto in try/except non bloccante — email sui nuovi ingressi attivata il 2026-08-19,
+> vedi sezione CANDIDATE_MODEL_B_20260807 sopra). Logga una riga di riepilogo solo quando succede
 > qualcosa (apertura/chiusura) — per questo è passato inosservato per giorni, non perché non
 > stesse girando. Estrazione manuale al 06/09/2026, stessa data del candidato L1:
 > ```sql

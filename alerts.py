@@ -156,18 +156,32 @@ class AlertSystem:
         )
         return self._send_email(subject, body_html)
 
-    def send_shadow_entries(self, new_entries: list) -> bool:
-        """Email inviata SOLO quando CANDIDATE_MODEL_B_20260807 (Shadow Monitor, cluster
-        core, solo L1 — non esiste una versione L0 del candidato) apre una nuova posizione
-        ipotetica. new_entries: lista di dict {ticker, isin, nome, famiglia, price}.
-        Nessun impatto sulle decisioni reali — puramente informativa, per seguire il
-        candidato durante il lockdown fino al 06/09/2026. Vedi CLAUDE.md
-        CANDIDATE_MODEL_B_20260807."""
+    def send_shadow_entries(self, new_entries: list, variant: str = 'L1') -> bool:
+        """Email inviata SOLO quando uno Shadow Monitor apre una nuova posizione
+        ipotetica — CANDIDATE_MODEL_B_20260807 (variant='L1', cluster core) o
+        CANDIDATE_MODEL_L0_20260808 (variant='L0', equity_sviluppati). new_entries:
+        lista di dict {ticker, isin, nome, famiglia, price}. Nessun impatto sulle
+        decisioni reali — puramente informativa, per seguire i candidati durante il
+        lockdown fino al 06/09/2026. Vedi CLAUDE.md CANDIDATE_MODEL_B_20260807 /
+        CANDIDATE_MODEL_L0_20260808.
+
+        Collegata il 2026-08-19 su richiesta esplicita — prima le funzioni
+        run_shadow_monitor()/run_shadow_monitor_l0() la lasciavano inutilizzata
+        (decisione "nessuna email" del 2026-08-07/08, superata)."""
         if not new_entries:
             return True
+
+        is_l0 = variant == 'L0'
+        model_label = 'Candidate Model L0' if is_l0 else 'Candidate Model B'
+        params_desc = ('regime_min_days_below_sma200=5 (invece di 10), resto YAML nativo (SL, TP=16%)'
+                        if is_l0 else
+                        'mm200_distance_max=7.0%, adx-4, smart_6_macd, TP=15%')
+        color_main = '#E67E22' if is_l0 else '#8E44AD'
+        color_dark = '#A04000' if is_l0 else '#5B2C6F'
+
         today = datetime.now().strftime('%d/%m/%Y')
         n = len(new_entries)
-        subject = f'🟣 Shadow Monitor: {n} nuovo{"i" if n > 1 else ""} ingresso Candidate Model B — {today}'
+        subject = f'🟣 Shadow Monitor {"L0" if is_l0 else "L1"}: {n} nuovo{"i" if n > 1 else ""} ingresso {model_label} — {today}'
 
         rows = ''
         for i, f in enumerate(new_entries):
@@ -186,17 +200,17 @@ class AlertSystem:
         ts = datetime.now().strftime('%d/%m/%Y %H:%M')
         body_html = (
             f'<html><body style="{_BODY_STYLE}">'
-            f'<div style="background:linear-gradient(135deg,#8E44AD,#5B2C6F);color:white;padding:24px;text-align:center">'
-            f'<h1 style="margin:0;font-size:20px">🟣 SHADOW MONITOR — Candidate Model B</h1>'
+            f'<div style="background:linear-gradient(135deg,{color_main},{color_dark});color:white;padding:24px;text-align:center">'
+            f'<h1 style="margin:0;font-size:20px">🟣 SHADOW MONITOR — {model_label}</h1>'
             f'<p style="margin:6px 0 0;opacity:.9;font-size:14px">{datetime.now().strftime("%A %d %B %Y")}</p>'
             f'</div>'
             f'<div style="padding:20px;background:white">'
             f'<p style="color:#666;font-size:12px;margin:0 0 12px">'
-            f'Ingresso IPOTETICO (mm200_distance_max=7.0%, adx-4, smart_6_macd, TP=15%) — '
+            f'Ingresso IPOTETICO ({params_desc}) — '
             f'non è un acquisto reale, nessuna azione richiesta. Sistema live in lockdown '
-            f'parametri fino al 06/09/2026, decide sempre e solo con native_7.</p>'
+            f'parametri fino al 06/09/2026, decide sempre e solo con i parametri nativi.</p>'
             f'<table style="width:100%;border-collapse:collapse;font-size:13px">'
-            f'<thead><tr style="background:#8E44AD;color:white">'
+            f'<thead><tr style="background:{color_main};color:white">'
             f'<th style="padding:8px;border:1px solid #ddd;text-align:left">ETF</th>'
             f'<th style="padding:8px;border:1px solid #ddd">Famiglia</th>'
             f'<th style="padding:8px;border:1px solid #ddd">Prezzo ingresso</th>'
