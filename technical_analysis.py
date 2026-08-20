@@ -1905,10 +1905,21 @@ class ETFTechnicalAnalyzer:
         SCELTA CONFERMATA: Protezione capitale + graduale riduzione del rischio
 
         Formula:
-        - Profitto < 5%   → SL = entry × 0.98  (non perdere il capitale)
+        - Profitto < 5%   → SL = entry × 0.96  (non perdere il capitale)
         - Profitto 5-15%  → SL = entry × 1.01  (almeno in pareggio)
         - Profitto > 15%  → SL = entry × (1 + profitto - 0.08)
                              (proteggi circa metà del gain accumulato)
+
+        Primo scaglione allargato 2%→4% il 2026-08-20: backtest one-shot su Golden
+        Dataset (batch 2026-08-07, stesso split IN/OUT di CANDIDATE_MODEL_L0_20260808)
+        ha mostrato miglioramento monotono di WR/PF/P&L netto su ogni buffer 2%→6%
+        testato, sia IN che OUT-of-sample (nessun segno di overfitting). Promosso
+        direttamente in produzione su richiesta esplicita dell'utente, in deroga al
+        lockdown parametri fino al 06/09/2026 (trigger: whipsaw reale su BRES/LBRE.DE,
+        uscito a -2.35% col vecchio 2% e rimbalzato quasi a pareggio lo stesso
+        pomeriggio). Trade-off consapevole: la perdita massima teorica per trade
+        raddoppia (2%→4%). Vedi memory/etf_post_lockdown_todo_20260906.md sezione 3 e
+        CLAUDE.md.
 
         Args:
             entry_price: Prezzo di carico
@@ -1923,8 +1934,8 @@ class ETFTechnicalAnalyzer:
         profit_pct = (current_price - entry_price) / entry_price
 
         if profit_pct < 0.05:
-            # < 5% → protezione stretta
-            sl = entry_price * 0.98
+            # < 5% → protezione stretta (4% dal 2026-08-20, era 2%)
+            sl = entry_price * 0.96
             stage = 'protezione_capitale'
         elif profit_pct < 0.15:
             # 5-15% → almeno pareggio

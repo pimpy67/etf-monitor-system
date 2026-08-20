@@ -519,7 +519,7 @@ NON le posizioni comprate davvero):
 
 | Priorità | Regola | Trigger |
 |:---:|--------|---------|
-| 1 | SL trailing | Prezzo ≤ SL suggerito (`calculate_sl_suggerito_l0`: <5% profitto → entry×0.98, 5-15% → pareggio entry×1.01, >15% → protegge metà gain) |
+| 1 | SL trailing | Prezzo ≤ SL suggerito (`calculate_sl_suggerito_l0`: <5% profitto → entry×0.96 [4%, era 2% fino al 2026-08-20], 5-15% → pareggio entry×1.01, >15% → protegge metà gain) |
 | 2 | TP fisso di famiglia | Prezzo ≥ TP suggerito (`calculate_tp_suggerito_l0`, **nuovo 2026-08-05** — target fisso `l0_take_profit_pct` per famiglia, vedi tabella sotto) |
 
 > **Fix 2026-08-05 — stessa contraddizione già risolta su L1**: `check_l0_exit()` chiudeva
@@ -1800,7 +1800,7 @@ L0, vedi whitelist gate sopra):
 | `l0_take_profit_pct` | 16% (invariato, già il valore in produzione) |
 | `flash_crash_window_days` / `flash_crash_zscore_threshold` | invariati (non discriminanti) |
 | `dd_threshold` / `rsi_max` / `recovery_min_pct` (PRAGMATIC) | invariati (mai raggiunti in pratica) |
-| Stop Loss | invariato — formula dinamica a scaglioni esistente (`calculate_sl_suggerito_l0`: <5% profitto → entry×0.98, 5–15% → pareggio entry×1.01, >15% → protegge metà gain). Non sweepata in questo candidato, vedi nota sotto |
+| Stop Loss | invariato rispetto al candidato — formula dinamica a scaglioni esistente (`calculate_sl_suggerito_l0`: <5% profitto → entry×0.96, 5–15% → pareggio entry×1.01, >15% → protegge metà gain). Non sweepata in questo candidato del 08/08, vedi nota sotto — il primo scaglione (2%→4%) è stato poi sweepato e promosso in produzione separatamente il 2026-08-20, vedi CANDIDATE_MODEL_L0_SL_20260820 più sotto |
 
 **Metriche certificate** (Golden Dataset, batch `2026-08-07`, stesso split di
 `CANDIDATE_MODEL_B_20260807`):
@@ -1817,9 +1817,11 @@ L0, vedi whitelist gate sopra):
 > quindi il rischio di deploy è più basso — ma resta comunque **solo backtest**, non ancora
 > validato live, e va comunque attraverso l'attesa del lockdown.
 >
-> **Non ancora fatto**: sweep lato SL per L0 (`calculate_sl_suggerito_l0` ha la formula
-> hardcoded, non parametrizzata per famiglia — richiederebbe modifiche di codice, stesso tipo
-> di lavoro della Fase 2 di L1).
+> ✅ **Aggiornamento 2026-08-20**: il primo scaglione della formula SL (`calculate_sl_suggerito_l0`,
+> profitto<5%) è stato sweepato e **promosso in produzione** — vedi
+> "CANDIDATE_MODEL_L0_SL_20260820" più sotto. Resta comunque non parametrizzato per famiglia
+> (hardcoded, non letto dallo YAML) — irrilevante oggi dato che solo `equity_sviluppati` è
+> raggiungibile via whitelist, ma un gap noto se la whitelist dovesse mai riaprirsi.
 >
 > ✅ **Correzione 2026-08-19 — lo Shadow Monitor L0 esiste già ed è live**: la frase sopra era
 > superata. `shadow_monitor_l0.py` è stato aggiunto l'08/08 (stessa sessione di questo
@@ -1842,6 +1844,58 @@ L0, vedi whitelist gate sopra):
 > nessuno dei due gate (nativo 7/7 o candidato 6/7+MACD) ha trovato un ingresso valido sulle
 > famiglie core — non è che il gate 7/7 sia più selettivo del candidato in questo periodo,
 > è che il mercato non ha offerto setup validi per nessuno dei due.
+
+### CANDIDATE_MODEL_L0_SL_20260820 — PROMOSSO IN PRODUZIONE lo stesso giorno (deroga esplicita al lockdown)
+
+**Origine**: whipsaw reale su BRES/Amundi STOXX Europe 600 Basic Res. (LU1834983550,
+`equity_sviluppati`) — posizione L0 reale, 71 quote, uscita il 2026-08-20 mattina via lo
+stop reale (allora al 2%, `calculate_sl_suggerito_l0` primo scaglione) a -2,35% netto;
+il prezzo è poi rimbalzato quasi a pareggio (140,18€ vs 140,58€ di carico) lo stesso
+pomeriggio. L'utente ha notato il whipsaw e chiesto se il 2% fosse troppo stretto — gap
+genuinamente mai testato prima (diverso dal test del 19/08 sui tier 2/3, quello sì
+respinto, vedi sopra "Evaluated and REJECTED").
+
+**Backtest one-shot** (Golden Dataset congelato batch `2026-08-07`, 106 ETF
+`equity_sviluppati`, stesso split IN/OUT di CANDIDATE_MODEL_L0_20260808, ingressi di
+baseline invariati — solo il primo scaglione della formula SL variato, tiers 2/3 e TP
+invariati). Ogni buffer testato migliora **monotonicamente** WR/PF/rendimento medio/P&L
+netto, sia IN che OUT-of-sample — segnale molto più pulito del test del 19/08:
+
+| Buffer | IN: N / WR / PF / P&L 10k€ | OUT: N / WR / PF / P&L 10k€ |
+|---|---|---|
+| 2% (vecchia produzione) | 146 / 42.5% / 3.18 / +53.602€ | 44 / 50.0% / 4.51 / +22.032€ |
+| 3% | 143 / 57.3% / 4.43 / +80.930€ | 40 / 60.0% / 5.31 / +24.901€ |
+| **4% (scelto)** | **142 / 64.8% / 4.68 / +91.715€** | **37 / 70.3% / 6.18 / +27.819€** |
+| 5% | 140 / 70.0% / 4.86 / +98.423€ | 35 / 77.1% / 7.61 / +29.884€ |
+| 6% | 139 / 72.7% / 4.57 / +99.705€ | 33 / 81.8% / 8.65 / +30.425€ |
+
+4% scelto come ginocchio della curva (cattura la maggior parte del guadagno senza
+spingere il rischio per trade al livello del 6%). Script di sweep scratch-only
+(`optimize_l0_sl_tier1.py`, docker cp'd, eseguito, cancellato — mai entrato nel repo).
+
+**Trade-off consapevole, non gratis**: la perdita massima teorica per singolo trade
+raddoppia (2%→4%) — non catturato dalle metriche aggregate sopra, che misurano solo
+l'effetto medio su tutti i trade.
+
+**Deviazione esplicita dal processo standard**: ogni altro candidato di questo mese
+(`CANDIDATE_MODEL_B_20260807`, `CANDIDATE_MODEL_L0_20260808`, Market Breadth) segue
+backtest → Shadow Monitor live → decisione solo a fine lockdown (06/09/2026). Per
+questo, su richiesta esplicita dell'utente dopo essere stato avvisato del trade-off e
+della rottura di processo, si è promosso **direttamente in produzione lo stesso giorno**
+del backtest — **non ripetere questa scorciatoia per altri candidati senza una richiesta
+altrettanto esplicita**, il lockdown resta la regola per tutto il resto.
+
+**Implementazione**: `technical_analysis.py::calculate_sl_suggerito_l0()`, primo
+scaglione `entry_price * 0.98` → `entry_price * 0.96`. Nessun cambio YAML (la formula è
+hardcoded, non parametrizzata per famiglia — irrilevante oggi dato che solo
+`equity_sviluppati` è raggiungibile via whitelist L0). Lo Shadow Monitor dedicato
+(`shadow_monitor_l0_sl.py`, STEP 8d in `monitor.py`, vissuto meno di un'ora) è stato
+**rimosso lo stesso giorno**: una volta promosso, produzione e candidato coincidono,
+non c'è più una baseline distinta da tracciare in parallelo. Le 2 posizioni ombra che
+aveva aperto al suo unico ciclo (`LBRE.DE` @140,18, `DEFS.PA` @6,36) sono state chiuse
+amministrativamente nel DB (`exit_reason='PROMOTED'`), non per un vero
+tocco di SL/TP. Deploy via `./deploy.sh`. Vedi memory/etf_post_lockdown_todo_20260906.md
+sezione 3 per il dettaglio completo.
 
 ---
 
