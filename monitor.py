@@ -1136,6 +1136,24 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor Breadth (non bloccante): {e}")
 
+        # STEP 8d — Shadow Monitor CANDIDATE_MODEL_L0_SL_20260820 (2026-08-20): isola
+        # SOLO il primo scaglione della formula SL L0 (calculate_sl_suggerito_l0,
+        # profitto<5% -> entry*0.98 in produzione) allargato a entry*0.96 (4% invece
+        # di 2%). Ingresso IDENTICO alla produzione reale (nessun override su
+        # suggest_level_0()) - variabile isolata e' solo l'uscita. Nessuna decisione
+        # reale toccata, solo log su etf_shadow_positions. Origine: whipsaw reale su
+        # BRES/LBRE.DE (uscito oggi a -2.35% netto via questo stesso SL al 2%, poi
+        # rimbalzato quasi al pareggio nello stesso pomeriggio) + backtest one-shot
+        # sul Golden Dataset (ogni buffer 2%->6% migliora monotonicamente WR/PF/P&L
+        # netto sia IN che OUT-of-sample). Vedi shadow_monitor_l0_sl.py per i numeri.
+        try:
+            from shadow_monitor_l0_sl import run_shadow_monitor_l0_sl
+            shadow_l0_sl_entries = run_shadow_monitor_l0_sl(self.db, results, add_log=add_log)
+            if shadow_l0_sl_entries and send_daily_report:
+                self.alert_system.send_shadow_entries(shadow_l0_sl_entries, variant='L0_SL')
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor L0-SL (non bloccante): {e}")
+
         # 7. Invia resoconto portafoglio — DOPO l'aggiornamento SL/TP (fix 2026-08-05:
         # prima veniva inviato PRIMA degli STEP 4/7 sopra, quindi l'email mostrava
         # sempre i valori SL/TP del giorno precedente invece di quelli appena calcolati

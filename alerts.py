@@ -172,6 +172,11 @@ class AlertSystem:
             'params': 'gate 6/7+MACD obbligatorio SOLO quando Market Breadth (EMA20>SMA50 su tutto l\'universo) >=80% (esce sotto 65%) — nessun altro override',
             'color_main': '#1ABC9C', 'color_dark': '#117A65', 'tag': 'Breadth',
         },
+        'L0_SL': {
+            'label': 'Candidate Model L0-SL',
+            'params': 'primo scaglione SL (profitto<5%) allargato a entry×0.96 (4% invece di 2%), ingresso e resto YAML nativo invariati',
+            'color_main': '#2E86C1', 'color_dark': '#1B4F72', 'tag': 'L0-SL',
+        },
     }
 
     def send_shadow_entries(self, new_entries: list, variant: str = 'L1') -> bool:
