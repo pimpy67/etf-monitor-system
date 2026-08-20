@@ -419,12 +419,13 @@ def accept_sl_suggestion():
         sl_value = data.get('sl_value')
         tp_value = data.get('tp_value')
         trigger_value = data.get('trigger_value')
+        shares = data.get('shares')
 
         if not isin:
             return jsonify({'error': 'ISIN required'}), 400
 
-        if sl_value is None and tp_value is None and trigger_value is None:
-            return jsonify({'error': 'Almeno SL, TP o Trigger richiesto'}), 400
+        if sl_value is None and tp_value is None and trigger_value is None and shares is None:
+            return jsonify({'error': 'Almeno SL, TP, Trigger o Quote richiesto'}), 400
 
         # Salva SL/TP/Trigger personale nel database
         conn = db.get_connection()
@@ -446,6 +447,9 @@ def accept_sl_suggestion():
                 if trigger_value is not None:
                     updates.append("stop_trigger_inserted = %s")
                     params.append(float(trigger_value))
+                if shares is not None:
+                    updates.append("shares = %s")
+                    params.append(float(shares))
 
                 params.append(isin)  # WHERE isin = ?
 
@@ -469,6 +473,8 @@ def accept_sl_suggestion():
                         result['tp_inserted'] = float(tp_value)
                     if trigger_value is not None:
                         result['trigger_inserted'] = float(trigger_value)
+                    if shares is not None:
+                        result['shares'] = float(shares)
                     return jsonify(result)
                 else:
                     return jsonify({'error': 'Portfolio entry not found'}), 404
