@@ -494,7 +494,7 @@ class AlertSystem:
             f'</tr>'
         )
 
-    def send_portfolio_report(self, favorites_digest: list = None) -> bool:
+    def send_portfolio_report(self, favorites_digest: list = None, l2_radar: list = None) -> bool:
         """
         STEP 5 — Invia resoconto giornaliero del portafoglio con SL/SG suggerito.
 
@@ -503,6 +503,12 @@ class AlertSystem:
         posizioni reali. Se presente, aggiunge una sezione "Preferiti" alla
         stessa email invece di mandarne una separata (scelta 2026-08-10: un
         digest passivo, niente traffico email aggiuntivo).
+
+        l2_radar: lista opzionale (da monitor.py::_build_l2_radar) — a differenza
+        dei Preferiti (lista curata a mano), scandisce TUTTO l'universo L2 di
+        oggi e mostra quale delle 7 condizioni manca ancora per L1, non solo
+        il conteggio (2026-08-20, "terza via" oltre L0/L1). Stessa scelta di
+        digest passivo nella stessa email, nessun traffico aggiuntivo.
 
         Per ogni posizione L1 attiva, mostra:
         - Prezzo di carico
@@ -786,10 +792,47 @@ class AlertSystem:
                     f'<p style="margin:6px 0 0;font-size:10px;color:#999">🔔 = livello cambiato da ieri · 🔄 = regime cambiato da ieri</p>'
                 )
 
-            if not l1_rows and not l0_rows and not favorites_section:
+            # ── SEZIONE RADAR L2 (universo, quasi pronti per L1) ─────────────────
+            l2_radar_section = ''
+            if l2_radar:
+                radar_rows = []
+                for i, item in enumerate(l2_radar):
+                    bc = item.get('buy_count', 0)
+                    bc_color = '#00B050' if bc >= 7 else ('#FFC107' if bc == 6 else '#888')
+                    missing_str = ', '.join(item.get('missing') or ['—'])
+                    regime = item.get('regime') or '—'
+                    regime_color = '#00B050' if regime == 'BULL' else '#DC3545' if regime == 'BEAR' else '#FFC000'
+
+                    row_bg = "#f8f9fa" if i % 2 == 0 else "white"
+                    radar_rows.append(
+                        f'<tr style="background:{row_bg}">'
+                        f'<td style="padding:8px;border:1px solid #ddd"><strong>{(item.get("nome") or "")[:35]}</strong><br>'
+                        f'<small style="color:#888">{item.get("ticker", "")}</small></td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:center;color:{bc_color}"><strong>{bc}/7</strong></td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:left;font-size:11px">{missing_str}</td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;text-align:center;color:{regime_color}">{regime}</td>'
+                        f'</tr>'
+                    )
+
+                l2_radar_section = (
+                    f'<h2 style="color:#FFC107;margin:16px 0 8px">📡 RADAR L2 — Quasi pronti per L1</h2>'
+                    f'<p style="margin:0 0 8px;font-size:11px;color:#666">'
+                    f'Tutto l\'universo classificato L2 oggi (≥5/7 condizioni, o 7/7 bloccato dal regime/SMA50) — non è una lista curata come i Preferiti, è il radar completo. Ordinato per condizioni soddisfatte.</p>'
+                    f'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+                    f'<tr style="background:#FFC107;color:#333">'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:left">ETF</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:center">Condizioni</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:left">Manca</th>'
+                    f'<th style="padding:8px;border:1px solid #ddd;text-align:center">Regime</th>'
+                    f'</tr>'
+                    f'{"".join(radar_rows)}'
+                    f'</table>'
+                )
+
+            if not l1_rows and not l0_rows and not favorites_section and not l2_radar_section:
                 return True  # Nulla da segnalare
 
-            table_html = l1_section + l0_section + favorites_section
+            table_html = l1_section + l0_section + favorites_section + l2_radar_section
 
             today = datetime.now().strftime('%d/%m/%Y %H:%M')
             subject = f'📊 Portafoglio L1/L0 — {datetime.now().strftime("%d/%m/%Y")}'

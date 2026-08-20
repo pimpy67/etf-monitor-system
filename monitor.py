@@ -1120,9 +1120,14 @@ class ETFMonitor:
                 favorites_digest = self._build_favorites_digest(results)
             except Exception as e:
                 add_log(f"⚠️  Errore digest Preferiti: {e}")
+            l2_radar = []
+            try:
+                l2_radar = self._build_l2_radar(results)
+            except Exception as e:
+                add_log(f"⚠️  Errore Radar L2: {e}")
             try:
                 add_log("Invio resoconto portafoglio...")
-                self.alert_system.send_portfolio_report(favorites_digest=favorites_digest)
+                self.alert_system.send_portfolio_report(favorites_digest=favorites_digest, l2_radar=l2_radar)
             except Exception as e:
                 add_log(f"ERRORE Resoconto portafoglio: {e}")
 
@@ -1453,6 +1458,68 @@ class ETFMonitor:
             self.db.update_favorite_snapshot(isin, buy_count, level, regime)
 
         return digest
+
+    # Etichette leggibili delle 7 condizioni L1 (stesso ordine/nomi di CLAUDE.md
+    # "L1 — Come Si Entra"), usate per tradurre il dict 'conditions' in un elenco
+    # "cosa manca" nel Radar L2.
+    _L1_CONDITION_LABELS = {
+        'allineamento_ok':  'Allineamento',
+        'persistenza_ok':   'Persistenza',
+        'rsi_ok':           'RSI',
+        'distance_ok':      'Distanza EMA20',
+        'adx_ok':           'ADX',
+        'macd_ok':          'MACD',
+        'space_residuo_ok': 'Spazio Residuo',
+    }
+
+    def _build_l2_radar(self, results: list) -> list:
+        """
+        Costruisce il 'Radar L2' per l'email quotidiana: a differenza del digest
+        Preferiti (lista curata a mano dall'utente), questo scandisce TUTTO
+        l'universo classificato L2 oggi (buy_count>=5/7, vedi
+        technical_analysis.py::suggest_level()) e per ognuno mostra quale
+        condizione manca ancora per L1 — non solo il conteggio, come fa invece
+        il tab dashboard.
+
+        Include anche il caso "7/7 ma bloccato dalle fondamenta" (regime non
+        BULL o prezzo<SMA50, vedi CLAUDE.md "FONDAMENTA IRRINUNCIABILI") — qui
+        le 7 condizioni sono tutte vere, quindi 'conditions' non aiuta: il
+        motivo si legge da 'level_reason' (livello 2, buy_count già a 7).
+        """
+        radar = []
+        for r in results:
+            a = r.get('analysis', {}) or {}
+            if a.get('suggested_level') != 2:
+                continue
+
+            buy_count = a.get('buy_count', 0)
+            conditions = a.get('conditions', {}) or {}
+            level_reason = a.get('level_reason', '') or ''
+
+            if buy_count >= 7:
+                if 'non BULL' in level_reason:
+                    missing = ['Regime non BULL']
+                elif '< SMA50' in level_reason:
+                    missing = ['Prezzo < SMA50']
+                else:
+                    missing = ['Fondamenta']
+            else:
+                missing = [label for key, label in self._L1_CONDITION_LABELS.items()
+                           if conditions.get(key) is False]
+                if not missing:
+                    missing = ['—']
+
+            radar.append({
+                'isin':      r.get('isin'),
+                'ticker':    r.get('ticker'),
+                'nome':      r.get('nome'),
+                'buy_count': buy_count,
+                'missing':   missing,
+                'regime':    conditions.get('regime') or a.get('regime'),
+            })
+
+        radar.sort(key=lambda x: (-x['buy_count'], x['ticker'] or ''))
+        return radar[:20]
 
     def _update_portfolio_l1_suggerito(self, results: list):
         """
