@@ -708,6 +708,48 @@ class PriceDatabase:
         finally:
             conn.close()
 
+    def get_breadth_regime_state(self, model_name: str) -> Optional[str]:
+        """Stato di ieri (NORMAL/SUPER_BULL) per l'isteresi del Market Breadth Shadow
+        Monitor — vedi migrations/005_add_breadth_regime_state.sql. None se mai
+        inizializzato (primo giro)."""
+        conn = self._get_connection()
+        if not conn:
+            return None
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT current_state FROM etf_breadth_regime_state WHERE model_name = %s
+                """, (model_name,))
+                row = cur.fetchone()
+                return row[0] if row else None
+        except Exception as e:
+            logging.error(f"Errore get_breadth_regime_state: {e}")
+            return None
+        finally:
+            conn.close()
+
+    def set_breadth_regime_state(self, model_name: str, state: str, breadth_pct: float) -> bool:
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO etf_breadth_regime_state (model_name, current_state, breadth_pct, updated_at)
+                    VALUES (%s, %s, %s, now())
+                    ON CONFLICT (model_name) DO UPDATE
+                        SET current_state = EXCLUDED.current_state,
+                            breadth_pct = EXCLUDED.breadth_pct,
+                            updated_at = now()
+                """, (model_name, state, breadth_pct))
+                conn.commit()
+            return True
+        except Exception as e:
+            logging.error(f"Errore set_breadth_regime_state: {e}")
+            return False
+        finally:
+            conn.close()
+
     def get_ohlcv(self, ticker: str, days: int = 200) -> pd.DataFrame:
         """
         Recupera lo storico OHLCV per un ETF

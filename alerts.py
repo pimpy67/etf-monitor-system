@@ -156,14 +156,33 @@ class AlertSystem:
         )
         return self._send_email(subject, body_html)
 
+    _SHADOW_VARIANTS = {
+        'L1': {
+            'label': 'Candidate Model B',
+            'params': 'mm200_distance_max=7.0%, adx-4, smart_6_macd, TP=15%',
+            'color_main': '#8E44AD', 'color_dark': '#5B2C6F', 'tag': 'L1',
+        },
+        'L0': {
+            'label': 'Candidate Model L0',
+            'params': 'regime_min_days_below_sma200=5 (invece di 10), resto YAML nativo (SL, TP=16%)',
+            'color_main': '#E67E22', 'color_dark': '#A04000', 'tag': 'L0',
+        },
+        'BREADTH': {
+            'label': 'Candidate Breadth',
+            'params': 'gate 6/7+MACD obbligatorio SOLO quando Market Breadth (EMA20>SMA50 su tutto l\'universo) >=80% (esce sotto 65%) — nessun altro override',
+            'color_main': '#1ABC9C', 'color_dark': '#117A65', 'tag': 'Breadth',
+        },
+    }
+
     def send_shadow_entries(self, new_entries: list, variant: str = 'L1') -> bool:
         """Email inviata SOLO quando uno Shadow Monitor apre una nuova posizione
-        ipotetica — CANDIDATE_MODEL_B_20260807 (variant='L1', cluster core) o
-        CANDIDATE_MODEL_L0_20260808 (variant='L0', equity_sviluppati). new_entries:
-        lista di dict {ticker, isin, nome, famiglia, price}. Nessun impatto sulle
-        decisioni reali — puramente informativa, per seguire i candidati durante il
-        lockdown fino al 06/09/2026. Vedi CLAUDE.md CANDIDATE_MODEL_B_20260807 /
-        CANDIDATE_MODEL_L0_20260808.
+        ipotetica — CANDIDATE_MODEL_B_20260807 (variant='L1', cluster core),
+        CANDIDATE_MODEL_L0_20260808 (variant='L0', equity_sviluppati), o il candidato
+        Market Breadth (variant='BREADTH', 2026-08-20, cluster core, solo i trade extra
+        oltre a native_7 — vedi shadow_monitor_breadth.py). new_entries: lista di dict
+        {ticker, isin, nome, famiglia, price}. Nessun impatto sulle decisioni reali —
+        puramente informativa, per seguire i candidati durante il lockdown fino al
+        06/09/2026. Vedi CLAUDE.md e memory/etf_post_lockdown_todo_20260906.md.
 
         Collegata il 2026-08-19 su richiesta esplicita — prima le funzioni
         run_shadow_monitor()/run_shadow_monitor_l0() la lasciavano inutilizzata
@@ -171,17 +190,15 @@ class AlertSystem:
         if not new_entries:
             return True
 
-        is_l0 = variant == 'L0'
-        model_label = 'Candidate Model L0' if is_l0 else 'Candidate Model B'
-        params_desc = ('regime_min_days_below_sma200=5 (invece di 10), resto YAML nativo (SL, TP=16%)'
-                        if is_l0 else
-                        'mm200_distance_max=7.0%, adx-4, smart_6_macd, TP=15%')
-        color_main = '#E67E22' if is_l0 else '#8E44AD'
-        color_dark = '#A04000' if is_l0 else '#5B2C6F'
+        v = self._SHADOW_VARIANTS.get(variant, self._SHADOW_VARIANTS['L1'])
+        model_label = v['label']
+        params_desc = v['params']
+        color_main = v['color_main']
+        color_dark = v['color_dark']
 
         today = datetime.now().strftime('%d/%m/%Y')
         n = len(new_entries)
-        subject = f'🟣 Shadow Monitor {"L0" if is_l0 else "L1"}: {n} nuovo{"i" if n > 1 else ""} ingresso {model_label} — {today}'
+        subject = f'🟣 Shadow Monitor {v["tag"]}: {n} nuovo{"i" if n > 1 else ""} ingresso {model_label} — {today}'
 
         rows = ''
         for i, f in enumerate(new_entries):

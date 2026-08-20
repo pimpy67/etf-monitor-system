@@ -1122,6 +1122,20 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor L0 (non bloccante): {e}")
 
+        # STEP 8c — Shadow Monitor "terza via" Market Breadth (2026-08-20): traccia
+        # SOLO i trade extra che il gate 6/7+MACD aprirebbe rispetto al sistema reale
+        # (native_7), e SOLO quando la breadth di mercato (EMA20>SMA50 su tutto
+        # l'universo) e' >=80% (isteresi: esce sotto 65%). Nessuna decisione reale
+        # toccata. Vedi memory/etf_post_lockdown_todo_20260906.md sezione 3 per il
+        # backtest e lo sweep di soglie che l'hanno preceduto.
+        try:
+            from shadow_monitor_breadth import run_shadow_monitor_breadth
+            shadow_breadth_entries = run_shadow_monitor_breadth(self.db, results, add_log=add_log)
+            if shadow_breadth_entries and send_daily_report:
+                self.alert_system.send_shadow_entries(shadow_breadth_entries, variant='BREADTH')
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor Breadth (non bloccante): {e}")
+
         # 7. Invia resoconto portafoglio — DOPO l'aggiornamento SL/TP (fix 2026-08-05:
         # prima veniva inviato PRIMA degli STEP 4/7 sopra, quindi l'email mostrava
         # sempre i valori SL/TP del giorno precedente invece di quelli appena calcolati
