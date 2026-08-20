@@ -220,6 +220,88 @@ class AlertSystem:
         )
         return self._send_email(subject, body_html)
 
+    def send_tp_proximity_alert(self, events: list) -> bool:
+        """
+        Email dedicata, inviata SUBITO quando una posizione reale (L0 o L1)
+        entra o avanza nella fascia di stringimento tattico dello Stop verso
+        il TP (order_pricing.py, <3%/<1.5% dal target) — 2026-08-20, su
+        richiesta esplicita per non aspettare il resoconto serale
+        (send_portfolio_report, che mostra comunque 🔶 ma solo a fine giornata).
+
+        Gira anche sul run silenzioso del mattino (a differenza degli altri
+        alert), perché è proprio lì che sta il guadagno: arrivare prima del
+        giro schedulato successivo, non prima in senso assoluto — il monitor
+        gira su prezzi 1-2 volte al giorno, non intraday.
+
+        events: lista di dict da monitor.py::_update_portfolio_l0_suggerito /
+        _update_portfolio_l1_suggerito — {isin, ticker, fund_name, variant,
+        current_price, prezzo_stop, prezzo_limite_stop, tp_suggerito, broker}.
+        """
+        if not events:
+            return True
+
+        today = datetime.now().strftime('%d/%m/%Y')
+        n = len(events)
+        subject = f'🔶 Avvicinamento TP: {n} posizion{"i" if n > 1 else "e"} da aggiornare — {today}'
+
+        rows = ''
+        for i, ev in enumerate(events):
+            bg = '#f9f9f9' if i % 2 else 'white'
+            current = ev.get('current_price')
+            tp = ev.get('tp_suggerito')
+            dist_pct = ((tp - current) / current * 100) if (tp and current) else None
+            dist_str = f'{dist_pct:.2f}%' if dist_pct is not None else '—'
+            variant = ev.get('variant', '')
+            variant_color = '#E65100' if variant == 'L0' else '#00B050'
+            stop_str = f'€{ev["prezzo_stop"]:.2f}' if ev.get('prezzo_stop') else '—'
+            lim_str = f'€{ev["prezzo_limite_stop"]:.2f}' if ev.get('prezzo_limite_stop') else '—'
+            tp_str = f'€{tp:.2f}' if tp else '—'
+
+            rows += (
+                f'<tr style="background:{bg}">'
+                f'<td style="padding:8px;border:1px solid #ddd">'
+                f'<strong>{(ev.get("fund_name") or "")[:40]}</strong><br>'
+                f'<small style="color:#888">{ev.get("ticker","")} · {ev.get("isin","")} · {ev.get("broker") or "Directa"}</small></td>'
+                f'<td style="padding:8px;border:1px solid #ddd;text-align:center;color:{variant_color}"><strong>{variant}</strong></td>'
+                f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{current:.2f}</td>'
+                f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{stop_str}</td>'
+                f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{lim_str}</td>'
+                f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-size:12px">{tp_str}</td>'
+                f'<td style="padding:8px;border:1px solid #ddd;text-align:right;color:#FFC107"><strong>{dist_str}</strong></td>'
+                f'</tr>'
+            )
+
+        ts = datetime.now().strftime('%d/%m/%Y %H:%M')
+        body_html = (
+            f'<html><body style="{_BODY_STYLE}">'
+            f'<div style="background:linear-gradient(135deg,#FFC107,#E65100);color:#222;padding:24px;text-align:center">'
+            f'<h1 style="margin:0;font-size:20px">🔶 AVVICINAMENTO TP — AGGIORNA LO STOP</h1>'
+            f'<p style="margin:6px 0 0;opacity:.85;font-size:14px">{datetime.now().strftime("%A %d %B %Y")}</p>'
+            f'</div>'
+            f'<div style="padding:20px;background:white">'
+            f'<p style="color:#666;font-size:12px;margin:0 0 12px">'
+            f'Queste posizioni sono entrate (o avanzate) nella fascia di stringimento verso il TP — '
+            f'cancella lo Stop attuale su Directa e piazzane uno nuovo ai valori sotto. Su un conto cash Directa '
+            f'non puoi tenere Stop e Limite TP attivi insieme: se preferisci provare a catturare il target pieno, '
+            f'cancella lo Stop e piazza un Limite di vendita al prezzo Target TP invece.</p>'
+            f'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+            f'<thead><tr style="background:#FFC107;color:#222">'
+            f'<th style="padding:8px;border:1px solid #ddd;text-align:left">ETF</th>'
+            f'<th style="padding:8px;border:1px solid #ddd">L0/L1</th>'
+            f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Prezzo</th>'
+            f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Nuovo Trigger</th>'
+            f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Nuovo Limite</th>'
+            f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Target TP</th>'
+            f'<th style="padding:8px;border:1px solid #ddd;text-align:right">Dist. da TP</th>'
+            f'</tr></thead><tbody>{rows}</tbody></table>'
+            f'<p style="margin:12px 0 0;font-size:11px;color:#666">'
+            f'<strong>Nuovo Trigger</strong> = Prezzo Stop (Trigger) su Directa · <strong>Nuovo Limite</strong> = Prezzo Limite (esecuzione, 1% sotto il trigger) · '
+            f'<strong>Target TP</strong> = ordine Limite separato di riferimento, non piazzabile in parallelo allo Stop su Directa.</p>'
+            f'</div>'
+            f'{_FOOTER.format(ts=ts)}</body></html>'
+        )
+        return self._send_email(subject, body_html)
+
     # ── 2. Uscita L1 ──────────────────────────────────────────────────────
     def send_l1_exit(self, etf_info: dict) -> bool:
         """Email per uscita da L1: regola triggherata + risultato %."""

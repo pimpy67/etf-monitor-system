@@ -1064,9 +1064,10 @@ class ETFMonitor:
             add_log("Alert saltati (refresh silenzioso)")
 
         # STEP 4 — Aggiorna SL/SG suggerito per portafoglio L1
+        tightening_events = []
         try:
             add_log("Aggiornamento SL/SG suggerito L1...")
-            self._update_portfolio_l1_suggerito(results)
+            tightening_events += self._update_portfolio_l1_suggerito(results) or []
         except Exception as e:
             add_log(f"⚠️  Errore aggiornamento L1 suggerito: {e}")
             add_log(traceback.format_exc())
@@ -1074,10 +1075,21 @@ class ETFMonitor:
         # STEP 7 — Aggiorna SL/TP suggerito per portafoglio L0
         try:
             add_log("Aggiornamento SL/TP suggerito L0...")
-            self._update_portfolio_l0_suggerito(results)
+            tightening_events += self._update_portfolio_l0_suggerito(results) or []
         except Exception as e:
             add_log(f"⚠️  Errore aggiornamento L0 suggerito: {e}")
             add_log(traceback.format_exc())
+
+        # STEP 7b — Alert dedicato "avvicinamento TP" (2026-08-20): invia SUBITO,
+        # non aspetta il resoconto serale (send_daily_report) — questo è il punto,
+        # arrivare prima del giro schedulato successivo. Gira anche sul run
+        # silenzioso del mattino, a differenza del resto degli alert sopra.
+        if tightening_events:
+            try:
+                add_log(f"Invio alert avvicinamento TP ({len(tightening_events)} posizioni)...")
+                self.alert_system.send_tp_proximity_alert(tightening_events)
+            except Exception as e:
+                add_log(f"⚠️  Errore alert avvicinamento TP: {e}")
 
         # STEP 8 — Shadow Monitor CANDIDATE_MODEL_B_20260807 (2026-08-07): traccia
         # posizioni ipotetiche sul cluster 'core' con i parametri del candidato
@@ -1250,9 +1262,14 @@ class ETFMonitor:
 
         return l0_candidates
 
-    def _update_portfolio_l0_suggerito(self, results: list):
+    def _update_portfolio_l0_suggerito(self, results: list) -> list:
         """
         STEP 7 — Aggiorna SL/TP suggeriti per posizioni L0 attive.
+
+        Ritorna la lista dei nuovi eventi di "stringimento tattico" (Stop che
+        entra o avanza nella fascia di avvicinamento al TP, vedi
+        order_pricing.py) rilevati in QUESTO giro — usata da monitor.py per
+        l'alert email dedicato (2026-08-20, non aspettare il resoconto serale).
 
         Fix 2026-08-05: prima l'uscita reale passava da check_l0_exit() (kill switch,
         bear trap RSI<25, stop assoluto min30gg, timeout 45gg) — la stessa contraddizione
@@ -1270,6 +1287,7 @@ class ETFMonitor:
         3. Chiama calculate_tp_suggerito_l0() → TP fisso di famiglia
         4. Uscita reale solo se prezzo tocca SL o TP; altrimenti salva SL/TP e contatori
         """
+        tightening_events = []
         try:
             # Leggi tutte le entry L0 attive
             query = """
@@ -1281,7 +1299,7 @@ class ETFMonitor:
             conn = self.db.get_connection()
             if not conn:
                 add_log("  ⚠️  Nessuna connessione DB")
-                return
+                return tightening_events
 
             try:
                 with conn.cursor() as cur:
@@ -1290,12 +1308,12 @@ class ETFMonitor:
             except Exception as e:
                 add_log(f"  ⚠️  Errore query portfolio L0: {e}")
                 conn.close()
-                return
+                return tightening_events
 
             if not rows:
                 add_log("  — Nessuna posizione L0 da aggiornare")
                 conn.close()
-                return
+                return tightening_events
 
             add_log(f"  Aggiornamento {len(rows)} posizioni L0...")
 
@@ -1383,6 +1401,16 @@ class ETFMonitor:
                         tp_proximity_stop_max = op.get('tp_proximity_stop_max')
                         if op.get('tightened'):
                             add_log(f"    🔶 Stop tattico stretto a {op['prezzo_stop']:.2f}€ (avvicinamento TP)")
+                            prev_val = float(prev_tp_stop_max) if prev_tp_stop_max else None
+                            if prev_val is None or abs(tp_proximity_stop_max - prev_val) > 0.0001:
+                                tightening_events.append({
+                                    'isin': isin, 'ticker': result.get('ticker'),
+                                    'fund_name': fund_name, 'variant': 'L0',
+                                    'current_price': current_price,
+                                    'prezzo_stop': op.get('prezzo_stop'),
+                                    'prezzo_limite_stop': op.get('prezzo_limite_stop'),
+                                    'tp_suggerito': tp_suggerito, 'broker': broker,
+                                })
 
                         # Nessuna uscita — salva SL, TP e contatori
                         with conn.cursor() as cur:
@@ -1411,6 +1439,8 @@ class ETFMonitor:
 
         except Exception as e:
             add_log(f"  ⚠️  Errore generale L0: {e}")
+
+        return tightening_events
 
     def _build_favorites_digest(self, results: list) -> list:
         """
@@ -1521,7 +1551,7 @@ class ETFMonitor:
         radar.sort(key=lambda x: (-x['buy_count'], x['ticker'] or ''))
         return radar[:20]
 
-    def _update_portfolio_l1_suggerito(self, results: list):
+    def _update_portfolio_l1_suggerito(self, results: list) -> list:
         """
         STEP 4 — Aggiorna SL/SG suggerito per posizioni L1 attive.
 
@@ -1533,7 +1563,11 @@ class ETFMonitor:
         4. Marca 'exited' nel DB SOLO se il prezzo tocca SL o scatta il trigger del TP —
            nessun'altra regola (B/C/E/F sono solo segnali dashboard, non vendite reali)
         5. Altrimenti salva sl_suggerito/sg_suggerito aggiornati
+
+        Ritorna la lista dei nuovi eventi di "stringimento tattico" rilevati in
+        QUESTO giro — stesso meccanismo di _update_portfolio_l0_suggerito, vedi lì.
         """
+        tightening_events = []
         try:
             # Leggi tutte le entry L1 attive
             query = """
@@ -1545,7 +1579,7 @@ class ETFMonitor:
             conn = self.db.get_connection()
             if not conn:
                 add_log("  ⚠️  Nessuna connessione DB")
-                return
+                return tightening_events
 
             try:
                 with conn.cursor() as cur:
@@ -1554,12 +1588,12 @@ class ETFMonitor:
             except Exception as e:
                 add_log(f"  ⚠️  Errore query portfolio L1: {e}")
                 conn.close()
-                return
+                return tightening_events
 
             if not rows:
                 add_log("  — Nessuna posizione L1 da aggiornare")
                 conn.close()
-                return
+                return tightening_events
 
             add_log(f"  Aggiornamento {len(rows)} posizioni L1...")
 
@@ -1656,6 +1690,16 @@ class ETFMonitor:
                         tp_proximity_stop_max = op.get('tp_proximity_stop_max')
                         if op.get('tightened'):
                             add_log(f"    🔶 Stop tattico stretto a {op['prezzo_stop']:.2f}€ (avvicinamento TP)")
+                            prev_val = float(prev_tp_stop_max) if prev_tp_stop_max else None
+                            if prev_val is None or abs(tp_proximity_stop_max - prev_val) > 0.0001:
+                                tightening_events.append({
+                                    'isin': isin, 'ticker': result.get('ticker'),
+                                    'fund_name': fund_name, 'variant': 'L1',
+                                    'current_price': current_price,
+                                    'prezzo_stop': op.get('prezzo_stop'),
+                                    'prezzo_limite_stop': op.get('prezzo_limite_stop'),
+                                    'tp_suggerito': sg_suggerito, 'broker': broker,
+                                })
 
                         # Salva SL/SG suggerito — STEP 3 v4.0
                         with conn.cursor() as cur:
@@ -1677,6 +1721,8 @@ class ETFMonitor:
 
         except Exception as e:
             add_log(f"  ⚠️  Errore generale L1: {e}")
+
+        return tightening_events
 
     def _update_portfolio_sl_suggested(self):
         """Aggiorna il stop loss suggerito per tutte le entry attive del portafoglio.
