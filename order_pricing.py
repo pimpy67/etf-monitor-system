@@ -97,7 +97,14 @@ def compute_order_prices(current_price: Optional[float], sl_suggerito: Optional[
 
     stop = float(sl_suggerito) if sl_suggerito else None
 
-    if not parallel_ok and stop and tp_suggerito and tp_suggerito > current_price:
+    if not parallel_ok and stop and tp_suggerito:
+        # Nota: nessun requisito tp_suggerito > current_price — se il prezzo ha
+        # già raggiunto o superato il TP, dist_to_tp_pct sotto è <= 0, quindi
+        # rientra comunque nella fascia "critica" e stringe al massimo. Questo è
+        # voluto: il sistema non chiude mai la posizione da solo (vedi
+        # monitor.py::_update_portfolio_l0_suggerito/_update_portfolio_l1_suggerito),
+        # quindi lo Stop deve continuare a proteggere il target finché l'utente
+        # non conferma manualmente l'uscita reale su Directa.
         is_wide_tier = sl_initial_pct is not None and sl_initial_pct >= WIDE_TIER_SL_INITIAL_PCT
         buffer_critica = TP_PROXIMITY_CRITICA_BUFFER_WIDE if is_wide_tier else TP_PROXIMITY_CRITICA_BUFFER
         buffer_allerta = TP_PROXIMITY_ALLERTA_BUFFER_WIDE if is_wide_tier else TP_PROXIMITY_ALLERTA_BUFFER

@@ -1297,19 +1297,23 @@ class ETFMonitor:
 
         Fix 2026-08-05: prima l'uscita reale passava da check_l0_exit() (kill switch,
         bear trap RSI<25, stop assoluto min30gg, timeout 45gg) — la stessa contraddizione
-        già corretta su L1: il sistema non esegue mai ordini in automatico, l'unica
-        uscita reale è il tocco manuale di SL o TP. Ora la posizione esce SOLO quando
-        il prezzo tocca lo SL trailing (calculate_sl_suggerito_l0) o il TP fisso di
-        famiglia (calculate_tp_suggerito_l0, nuovo — prima L0 non aveva alcun target
-        di uscita al rialzo). La posizione NON viene mai riclassificata a L1/L2: resta
-        in portafoglio L0 finché non tocca uno dei due livelli, coerente con la logica
-        "medio-lungo periodo, esce solo quando perde davvero i requisiti" di L0.
+        già corretta su L1: il sistema non esegue mai ordini in automatico. Sostituito
+        allora con un tocco di SL/TP che marcava 'exited' in automatico nel DB — una
+        contraddizione più sottile ma identica nella sostanza (il prezzo di chiusura
+        calcolato qui non è mai garanzia del prezzo reale eseguito su Directa). Fix
+        2026-08-22: rimosso anche questo automatismo, vedi punto 4. La posizione NON
+        viene mai riclassificata a L1/L2: resta in portafoglio L0 finché l'utente non
+        conferma manualmente l'uscita reale, coerente con la logica "medio-lungo
+        periodo" di L0.
 
         Per ogni entry in portafoglio L0:
         1. Recupera dati di mercato (price, ema20)
         2. Chiama calculate_sl_suggerito_l0() → SL trailing progressivo
         3. Chiama calculate_tp_suggerito_l0() → TP fisso di famiglia
-        4. Uscita reale solo se prezzo tocca SL o TP; altrimenti salva SL/TP e contatori
+        4. Se il prezzo tocca SL o TP: SOLO log/alert informativo (mai 'exited'
+           automatico — l'unica uscita reale è la conferma manuale dell'utente in
+           dashboard col prezzo davvero eseguito su Directa)
+        5. Sempre: salva SL/TP e contatori aggiornati (posizione resta 'active')
         """
         tightening_events = []
         try:
@@ -1395,65 +1399,63 @@ class ETFMonitor:
                     else:
                         days_no_rec = 0
 
-                    # USCITA REALE — solo tocco di SL o TP (nessun automatismo su
-                    # kill switch/bear trap/timeout, sono solo segnali informativi sotto)
+                    # SEGNALI INFORMATIVI — SL/TP raggiunti (SOLO log/alert, MAI un
+                    # automatismo di chiusura: il sistema non esegue mai ordini, l'unica
+                    # uscita reale è la conferma manuale dell'utente in dashboard
+                    # (/api/portfolio/<isin>/exit) col prezzo davvero eseguito su
+                    # Directa — vedi CLAUDE.md "Come opera davvero l'utente". Prima
+                    # questo blocco marcava 'exited' in automatico usando il prezzo di
+                    # chiusura calcolato qui, assumendo che coincidesse col fill reale:
+                    # esattamente la contraddizione già segnalata e corretta su L1 il
+                    # 2026-08-05, qui però era ancora presente. Fix 2026-08-22.
                     sl_hit = sl_suggerito is not None and current_price <= sl_suggerito
                     tp_hit = tp_data.get('trigger', False)
 
-                    if sl_hit or tp_hit:
-                        exit_rule = (f'TP raggiunto: {current_price:.2f}€ ≥ {tp_suggerito:.2f}€'
-                                     if tp_hit else
-                                     f'SL toccato: {current_price:.2f}€ ≤ {sl_suggerito:.2f}€')
-                        with conn.cursor() as cur:
-                            cur.execute("""
-                                UPDATE etf_portfolio_entries
-                                SET status = 'exited', exit_date = now(), exit_price = %s,
-                                    exit_rule = %s
-                                WHERE id = %s
-                            """, (current_price, exit_rule, entry_id))
-                            conn.commit()
-                        icon = '🟢' if tp_hit else '🔴'
-                        add_log(f"    {icon} EXIT L0 {fund_name[:40]:40s} | {exit_rule}")
-                    else:
-                        # Ratchet dello Stop tattico di avvicinamento al TP — vedi commento
-                        # analogo nella sezione L1 sopra, stessa logica.
-                        op = compute_order_prices(
-                            current_price, sl_suggerito, tp_suggerito, broker,
-                            previous_tightened_stop=float(prev_tp_stop_max) if prev_tp_stop_max else None,
-                            sl_initial_pct=sl_initial_pct,
-                        )
-                        tp_proximity_stop_max = op.get('tp_proximity_stop_max')
-                        if op.get('tightened'):
-                            add_log(f"    🔶 Stop tattico stretto a {op['prezzo_stop']:.2f}€ (avvicinamento TP)")
-                            prev_val = float(prev_tp_stop_max) if prev_tp_stop_max else None
-                            if prev_val is None or abs(tp_proximity_stop_max - prev_val) > 0.0001:
-                                tightening_events.append({
-                                    'isin': isin, 'ticker': result.get('ticker'),
-                                    'fund_name': fund_name, 'variant': 'L0',
-                                    'current_price': current_price,
-                                    'prezzo_stop': op.get('prezzo_stop'),
-                                    'prezzo_limite_stop': op.get('prezzo_limite_stop'),
-                                    'tp_suggerito': tp_suggerito, 'broker': broker,
-                                })
+                    # Ratchet dello Stop tattico di avvicinamento al TP (order_pricing.py)
+                    # — gira SEMPRE, anche oltre il TP: dato che non si esce mai da soli,
+                    # lo Stop deve restare stretto a ridosso/oltre il target finché
+                    # l'utente non conferma l'uscita reale.
+                    op = compute_order_prices(
+                        current_price, sl_suggerito, tp_suggerito, broker,
+                        previous_tightened_stop=float(prev_tp_stop_max) if prev_tp_stop_max else None,
+                        sl_initial_pct=sl_initial_pct,
+                    )
+                    tp_proximity_stop_max = op.get('tp_proximity_stop_max')
+                    if op.get('tightened'):
+                        add_log(f"    🔶 Stop tattico stretto a {op['prezzo_stop']:.2f}€ (avvicinamento/superamento TP)")
+                        prev_val = float(prev_tp_stop_max) if prev_tp_stop_max else None
+                        if prev_val is None or abs(tp_proximity_stop_max - prev_val) > 0.0001:
+                            tightening_events.append({
+                                'isin': isin, 'ticker': result.get('ticker'),
+                                'fund_name': fund_name, 'variant': 'L0',
+                                'current_price': current_price,
+                                'prezzo_stop': op.get('prezzo_stop'),
+                                'prezzo_limite_stop': op.get('prezzo_limite_stop'),
+                                'tp_suggerito': tp_suggerito, 'broker': broker,
+                            })
 
-                        # Nessuna uscita — salva SL, TP e contatori
-                        with conn.cursor() as cur:
-                            cur.execute("""
-                                UPDATE etf_portfolio_entries
-                                SET sl_suggerito = %s, sg_suggerito = %s, days_no_recovery = %s,
-                                    stallo_counter = %s, stop_loss_updated_at = now(),
-                                    tp_proximity_stop_max = %s
-                                WHERE id = %s
-                            """, (sl_suggerito, tp_suggerito, days_no_rec, stallo_cnt, tp_proximity_stop_max, entry_id))
-                            conn.commit()
+                    # Salva SL, TP e contatori — MAI 'exited' automaticamente
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            UPDATE etf_portfolio_entries
+                            SET sl_suggerito = %s, sg_suggerito = %s, days_no_recovery = %s,
+                                stallo_counter = %s, stop_loss_updated_at = now(),
+                                tp_proximity_stop_max = %s
+                            WHERE id = %s
+                        """, (sl_suggerito, tp_suggerito, days_no_rec, stallo_cnt, tp_proximity_stop_max, entry_id))
+                        conn.commit()
 
-                        alert_msg = ''
-                        if stallo_cnt and stallo_cnt >= 20:
-                            alert_msg = f' ⚠️ STALLO {stallo_cnt}gg'
-                        elif days_no_rec and days_no_rec >= 40:
-                            alert_msg = f' ⏱️ TIMEOUT {days_no_rec}gg'
+                    alert_msg = ''
+                    if tp_hit:
+                        alert_msg = ' 🟢 TARGET TP RAGGIUNTO — conferma uscita reale manualmente in dashboard'
+                    elif sl_hit:
+                        alert_msg = ' 🔴 SL RAGGIUNTO — conferma uscita reale manualmente in dashboard'
+                    elif stallo_cnt and stallo_cnt >= 20:
+                        alert_msg = f' ⚠️ STALLO {stallo_cnt}gg'
+                    elif days_no_rec and days_no_rec >= 40:
+                        alert_msg = f' ⏱️ TIMEOUT {days_no_rec}gg'
 
-                        add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ ({stage}) | TP: {tp_suggerito:.2f}€{alert_msg}")
+                    add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ ({stage}) | TP: {tp_suggerito:.2f}€{alert_msg}")
 
                 except Exception as e:
                     add_log(f"    ⚠️  Errore L0 {isin}: {type(e).__name__}: {e}")
@@ -1579,14 +1581,18 @@ class ETFMonitor:
         """
         STEP 4 — Aggiorna SL/SG suggerito per posizioni L1 attive.
 
-        Per ogni entry in portafoglio L1 (fix 2026-08-05, modello reale confermato):
+        Per ogni entry in portafoglio L1 (fix 2026-08-05, modello reale confermato;
+        fix 2026-08-22: rimosso l'auto-exit, vedi punto 4):
         1. Recupera dati di mercato (price, ema20, ema20_series, etc)
         2. Chiama calculate_sl_suggerito_l1() → SL
         3. Chiama calculate_stop_gain_dynamic() → TP (unica funzione TP, niente decadimento
            temporale, si muove con lo slope EMA20)
-        4. Marca 'exited' nel DB SOLO se il prezzo tocca SL o scatta il trigger del TP —
-           nessun'altra regola (B/C/E/F sono solo segnali dashboard, non vendite reali)
-        5. Altrimenti salva sl_suggerito/sg_suggerito aggiornati
+        4. Se il prezzo tocca SL o scatta il trigger del TP: SOLO log/alert informativo
+           (mai 'exited' automatico — il sistema non esegue mai ordini, l'unica uscita
+           reale è la conferma manuale dell'utente in dashboard col prezzo davvero
+           eseguito su Directa)
+        5. Sempre: salva sl_suggerito/sg_suggerito aggiornati (posizione resta 'active'
+           finché l'utente non conferma l'uscita reale)
 
         Ritorna la lista dei nuovi eventi di "stringimento tattico" rilevati in
         QUESTO giro — stesso meccanismo di _update_portfolio_l0_suggerito, vedi lì.
@@ -1678,64 +1684,55 @@ class ETFMonitor:
                     else:
                         sg_suggerito = entry_price * (1 + sg_data.get('target_pct', 0.0))
 
-                    # USCITA REALE — SOLO SL o TP toccati (fix 2026-08-05).
-                    # Il portafoglio reale non usa B/C/E/F/kill-switch (quelle sono segnali
-                    # "interni" della dashboard, non vendite): l'utente compra manualmente
-                    # quando un ETF entra in L1, poi aggiorna ogni giorno SL/TP su Directa a
-                    # mano — la posizione esce SOLO quando il prezzo tocca uno dei due.
-                    # Prima questo blocco usava check_l1_exit() (kill switch, trailing,
-                    # stanchezza, ADX debole, + un secondo calcolo SG interno diverso da
-                    # quello mostrato sotto) per marcare 'exited' nel DB — disallineato dal
-                    # modello reale confermato dall'utente.
+                    # SEGNALI INFORMATIVI — SL/TP raggiunti (SOLO log/alert, MAI un
+                    # automatismo di chiusura — stesso principio già applicato qui dal
+                    # 2026-08-05, vedi fix gemello in _update_portfolio_l0_suggerito
+                    # 2026-08-22 per il dettaglio completo). Il portafoglio reale non usa
+                    # B/C/E/F/kill-switch (segnali "interni" della dashboard, non vendite):
+                    # l'utente compra/vende manualmente su Directa, il monitor calcola solo
+                    # cosa impostare — mai marca 'exited' da solo.
                     sl_hit = sl_suggerito is not None and current_price <= sl_suggerito
                     tp_hit = bool(sg_data.get('trigger'))
 
-                    if sl_hit or tp_hit:
-                        exit_rule = 'SL' if sl_hit else 'TP'
-                        # Uscita richiesta — mark come exited nel DB
-                        with conn.cursor() as cur:
-                            cur.execute("""
-                                UPDATE etf_portfolio_entries
-                                SET status = 'exited', exit_date = now(), exit_price = %s,
-                                    exit_rule = %s
-                                WHERE id = %s
-                            """, (current_price, exit_rule, entry_id))
-                            conn.commit()
-                        add_log(f"    🔴 EXIT L1 {fund_name[:40]:40s} | {exit_rule} toccato (prezzo {current_price:.2f})")
-                    else:
-                        # Ratchet dello Stop tattico di avvicinamento al TP (order_pricing.py)
-                        # — solo per calcolare il nuovo tp_proximity_stop_max da persistere,
-                        # non cambia sl_suggerito/l'uscita reale (quella resta SL/TP puri sopra).
-                        op = compute_order_prices(
-                            current_price, sl_suggerito, sg_suggerito, broker,
-                            previous_tightened_stop=float(prev_tp_stop_max) if prev_tp_stop_max else None,
-                            sl_initial_pct=sl_initial_pct,
-                        )
-                        tp_proximity_stop_max = op.get('tp_proximity_stop_max')
-                        if op.get('tightened'):
-                            add_log(f"    🔶 Stop tattico stretto a {op['prezzo_stop']:.2f}€ (avvicinamento TP)")
-                            prev_val = float(prev_tp_stop_max) if prev_tp_stop_max else None
-                            if prev_val is None or abs(tp_proximity_stop_max - prev_val) > 0.0001:
-                                tightening_events.append({
-                                    'isin': isin, 'ticker': result.get('ticker'),
-                                    'fund_name': fund_name, 'variant': 'L1',
-                                    'current_price': current_price,
-                                    'prezzo_stop': op.get('prezzo_stop'),
-                                    'prezzo_limite_stop': op.get('prezzo_limite_stop'),
-                                    'tp_suggerito': sg_suggerito, 'broker': broker,
-                                })
+                    # Ratchet dello Stop tattico di avvicinamento al TP (order_pricing.py)
+                    # — gira SEMPRE, anche oltre il TP (vedi commento gemello in
+                    # _update_portfolio_l0_suggerito).
+                    op = compute_order_prices(
+                        current_price, sl_suggerito, sg_suggerito, broker,
+                        previous_tightened_stop=float(prev_tp_stop_max) if prev_tp_stop_max else None,
+                        sl_initial_pct=sl_initial_pct,
+                    )
+                    tp_proximity_stop_max = op.get('tp_proximity_stop_max')
+                    if op.get('tightened'):
+                        add_log(f"    🔶 Stop tattico stretto a {op['prezzo_stop']:.2f}€ (avvicinamento/superamento TP)")
+                        prev_val = float(prev_tp_stop_max) if prev_tp_stop_max else None
+                        if prev_val is None or abs(tp_proximity_stop_max - prev_val) > 0.0001:
+                            tightening_events.append({
+                                'isin': isin, 'ticker': result.get('ticker'),
+                                'fund_name': fund_name, 'variant': 'L1',
+                                'current_price': current_price,
+                                'prezzo_stop': op.get('prezzo_stop'),
+                                'prezzo_limite_stop': op.get('prezzo_limite_stop'),
+                                'tp_suggerito': sg_suggerito, 'broker': broker,
+                            })
 
-                        # Salva SL/SG suggerito — STEP 3 v4.0
-                        with conn.cursor() as cur:
-                            cur.execute("""
-                                UPDATE etf_portfolio_entries
-                                SET sl_suggerito = %s, sg_suggerito = %s, stop_loss_updated_at = now(),
-                                    tp_proximity_stop_max = %s
-                                WHERE id = %s
-                            """, (sl_suggerito, sg_suggerito, tp_proximity_stop_max, entry_id))
-                            conn.commit()
+                    # Salva SL/SG suggerito — MAI 'exited' automaticamente
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            UPDATE etf_portfolio_entries
+                            SET sl_suggerito = %s, sg_suggerito = %s, stop_loss_updated_at = now(),
+                                tp_proximity_stop_max = %s
+                            WHERE id = %s
+                        """, (sl_suggerito, sg_suggerito, tp_proximity_stop_max, entry_id))
+                        conn.commit()
 
-                        add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ | SG: {sg_suggerito:.2f}€")
+                    alert_msg = ''
+                    if tp_hit:
+                        alert_msg = ' 🟢 TARGET TP RAGGIUNTO — conferma uscita reale manualmente in dashboard'
+                    elif sl_hit:
+                        alert_msg = ' 🔴 SL RAGGIUNTO — conferma uscita reale manualmente in dashboard'
+
+                    add_log(f"    {fund_name[:40]:40s} | SL: {sl_suggerito:.2f}€ | SG: {sg_suggerito:.2f}€{alert_msg}")
 
                 except Exception as e:
                     add_log(f"    ⚠️  Errore L1 {isin}: {type(e).__name__}: {e}")
