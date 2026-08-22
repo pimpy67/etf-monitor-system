@@ -863,10 +863,13 @@ class AlertSystem:
                     flags = ('🔔' if fav.get('level_changed') else '') + ('🔄' if fav.get('regime_changed') else '')
 
                     row_bg = "#f8f9fa" if i % 2 == 0 else "white"
+                    fav_isin = fav.get('isin') or ''
+                    fav_link = f'https://etf.andreapavan.tech/?isin={fav_isin}&ticker={fav["ticker"]}'
                     fav_rows.append(
                         f'<tr style="background:{row_bg}">'
-                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none"><strong>{fav["nome"][:35]}</strong><br>'
-                        f'<small style="color:#888">{fav["ticker"]}</small></td>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none">'
+                        f'<a href="{fav_link}" style="color:#58a6ff;text-decoration:none"><strong>{fav["nome"][:35]}</strong></a><br>'
+                        f'<small style="color:#888">{fav["ticker"]}{" · " + fav_isin if fav_isin else ""}</small></td>'
                         f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:center">{lvl_str}</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:center"><strong>{bc}/7</strong>{delta_str}</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:center;color:{regime_color}">{regime}</td>'
@@ -903,10 +906,14 @@ class AlertSystem:
                     regime_color = '#00B050' if regime == 'BULL' else '#DC3545' if regime == 'BEAR' else '#FFC000'
 
                     row_bg = "#f8f9fa" if i % 2 == 0 else "white"
+                    radar_isin = item.get('isin') or ''
+                    radar_ticker = item.get('ticker', '')
+                    radar_link = f'https://etf.andreapavan.tech/?isin={radar_isin}&ticker={radar_ticker}'
                     radar_rows.append(
                         f'<tr style="background:{row_bg}">'
-                        f'<td style="padding:8px;border:1px solid #ddd"><strong>{(item.get("nome") or "")[:35]}</strong><br>'
-                        f'<small style="color:#888">{item.get("ticker", "")}</small></td>'
+                        f'<td style="padding:8px;border:1px solid #ddd">'
+                        f'<a href="{radar_link}" style="color:#333;text-decoration:none"><strong>{(item.get("nome") or "")[:35]}</strong></a><br>'
+                        f'<small style="color:#888">{radar_ticker}{" · " + radar_isin if radar_isin else ""}</small></td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:center;color:{bc_color}"><strong>{bc}/7</strong></td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:left;font-size:11px">{missing_str}</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;text-align:center;color:{regime_color}">{regime}</td>'

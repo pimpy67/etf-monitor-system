@@ -612,7 +612,6 @@ let pfEditMode = false;      // true = modifica, false = aggiunta
 
 // ── Init ──────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  loadData();
   loadHealth();
   loadPortfolio();
   loadFavorites();
@@ -627,6 +626,15 @@ window.addEventListener('DOMContentLoaded', () => {
   setInterval(loadHealth, 120000);
   setInterval(loadPortfolio, 120000);
   setInterval(loadFavorites, 120000);
+
+  // Deep-link da mail (Preferiti/Radar L2): ?isin=...&ticker=... apre subito il
+  // dettaglio dell'ETF, senza dover cercarlo a mano nella dashboard.
+  loadData().then(() => {
+    const params = new URLSearchParams(window.location.search);
+    const linkIsin = params.get('isin') || '';
+    const linkTicker = params.get('ticker') || '';
+    if (linkIsin || linkTicker) openETFDetail(linkTicker, linkIsin);
+  });
 });
 
 // ── Data loading ──────────────────────────────────────────────────────────
