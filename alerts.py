@@ -75,10 +75,11 @@ class AlertSystem:
             sma200 = f.get('sma200')
             regime = '🟢 Rialzista' if (price and sma200 and price > sma200) else ('🔴 Ribassista' if sma200 else '—')
             bg    = '#f9f9f9' if i % 2 else 'white'
+            _link = f'https://etf.andreapavan.tech/?isin={f.get("isin","")}&ticker={f.get("ticker","")}'
             l1_rows += (
                 f'<tr style="background:{bg}">'
                 f'<td style="padding:8px;border:1px solid #ddd">'
-                f'<strong>{f["nome"][:45]}</strong><br>'
+                f'<a href="{_link}" style="color:#00B050;text-decoration:none"><strong>{f["nome"][:45]}</strong></a><br>'
                 f'<small style="color:#888">{f.get("ticker","")} · {f.get("isin","")}</small></td>'
                 f'<td style="padding:8px;border:1px solid #ddd;font-size:11px;color:#666">{f.get("categoria","")[:28]}</td>'
                 f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:bold">'
@@ -116,10 +117,11 @@ class AlertSystem:
                 rsi   = f.get('rsi')
                 price = f.get('price')
                 pl    = f.get('panic_low')
+                _link = f'https://etf.andreapavan.tech/?isin={f.get("isin","")}&ticker={f.get("ticker","")}'
                 l0_rows += (
                     f'<tr style="background:{bg}">'
                     f'<td style="padding:8px;border:1px solid #ddd">'
-                    f'<strong>{f["nome"][:45]}</strong><br>'
+                    f'<a href="{_link}" style="color:#E65100;text-decoration:none"><strong>{f["nome"][:45]}</strong></a><br>'
                     f'<small style="color:#888">{f.get("ticker","")} · {f.get("isin","")}</small></td>'
                     f'<td style="padding:8px;border:1px solid #ddd;text-align:right">'
                     f'{"€{:.4f}".format(price) if price else "—"}</td>'
@@ -203,10 +205,11 @@ class AlertSystem:
         rows = ''
         for i, f in enumerate(new_entries):
             bg = '#f9f9f9' if i % 2 else 'white'
+            _link = f'https://etf.andreapavan.tech/?isin={f.get("isin","")}&ticker={f.get("ticker","")}'
             rows += (
                 f'<tr style="background:{bg}">'
                 f'<td style="padding:8px;border:1px solid #ddd">'
-                f'<strong>{f.get("nome","")[:45]}</strong><br>'
+                f'<a href="{_link}" style="color:{color_main};text-decoration:none"><strong>{f.get("nome","")[:45]}</strong></a><br>'
                 f'<small style="color:#888">{f.get("ticker","")} · {f.get("isin","")}</small></td>'
                 f'<td style="padding:8px;border:1px solid #ddd;font-size:11px;color:#666">{f.get("famiglia","")}</td>'
                 f'<td style="padding:8px;border:1px solid #ddd;text-align:right;font-weight:bold">'
@@ -274,10 +277,11 @@ class AlertSystem:
             lim_str = f'€{ev["prezzo_limite_stop"]:.2f}' if ev.get('prezzo_limite_stop') else '—'
             tp_str = f'€{tp:.2f}' if tp else '—'
 
+            _link = f'https://etf.andreapavan.tech/?isin={ev.get("isin","")}&ticker={ev.get("ticker","")}'
             rows += (
                 f'<tr style="background:{bg}">'
                 f'<td style="padding:8px;border:1px solid #ddd">'
-                f'<strong>{(ev.get("fund_name") or "")[:40]}</strong><br>'
+                f'<a href="{_link}" style="color:{variant_color};text-decoration:none"><strong>{(ev.get("fund_name") or "")[:40]}</strong></a><br>'
                 f'<small style="color:#888">{ev.get("ticker","")} · {ev.get("isin","")} · {ev.get("broker") or "Directa"}</small></td>'
                 f'<td style="padding:8px;border:1px solid #ddd;text-align:center;color:{variant_color}"><strong>{variant}</strong></td>'
                 f'<td style="padding:8px;border:1px solid #ddd;text-align:right">€{current:.2f}</td>'
@@ -387,7 +391,9 @@ class AlertSystem:
             f'<h1 style="margin:0;font-size:20px">🔴 USCITA ETF DA L1</h1>'
             f'<p style="margin:6px 0 0;opacity:.9;font-size:14px">{today}</p></div>'
             f'<div style="padding:20px;background:white">'
-            f'<h2 style="margin:0 0 4px">{nome}</h2>'
+            f'<h2 style="margin:0 0 4px">'
+            f'<a href="https://etf.andreapavan.tech/?isin={etf_info.get("isin","")}&ticker={etf_info.get("ticker","")}" '
+            f'style="color:#111;text-decoration:none">{nome}</a></h2>'
             f'<p style="color:#666;margin:0 0 18px;font-size:13px">'
             f'{etf_info.get("ticker","")} · {etf_info.get("isin","")} · {etf_info.get("categoria","")}</p>'
             f'<div style="background:{rule_color};color:white;padding:14px 18px;border-radius:8px;margin-bottom:18px">'
@@ -459,7 +465,9 @@ class AlertSystem:
                 f'<div style="font-size:15px;font-weight:bold">{icon} {title}</div>'
                 f'<div style="font-size:12px;opacity:.85;margin-top:3px">{desc}</div></div>'
                 f'<div style="padding:14px 16px;background:white">'
-                f'<div style="font-weight:bold;font-size:14px">{s.get("nome","")[:50]}</div>'
+                f'<div style="font-weight:bold;font-size:14px">'
+                f'<a href="https://etf.andreapavan.tech/?isin={s.get("isin","")}&ticker={s.get("ticker","")}" '
+                f'style="color:#111;text-decoration:none">{s.get("nome","")[:50]}</a></div>'
                 f'<div style="font-size:12px;color:#888;margin:2px 0 10px">'
                 f'{s.get("ticker","")} · {s.get("isin","")} · {s.get("categoria","")[:28]}</div>'
                 f'<table style="width:100%;border-collapse:collapse;font-size:13px"><tr>'
@@ -721,9 +729,11 @@ class AlertSystem:
 
                     row_bg = "#f8f9fa" if l1_etf_idx % 2 == 0 else "white"
                     l1_etf_idx += 1
+                    l1_link = f'https://etf.andreapavan.tech/?isin={isin}'
                     l1_rows.append(
                         f'<tr style="background:{row_bg}">'
-                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none"><strong>{fund_name[:35]}</strong><br>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none">'
+                        f'<a href="{l1_link}" style="color:#00B050;text-decoration:none"><strong>{fund_name[:35]}</strong></a><br>'
                         f'<small style="color:#888">{isin} · {broker or "Directa"}</small></td>'
                         f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right">€{entry_price:.2f}</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right">€{current_price:.2f}</td>'
@@ -778,9 +788,11 @@ class AlertSystem:
 
                     row_bg = "#f8f9fa" if l0_etf_idx % 2 == 0 else "white"
                     l0_etf_idx += 1
+                    l0_link = f'https://etf.andreapavan.tech/?isin={isin}'
                     l0_rows.append(
                         f'<tr style="background:{row_bg}">'
-                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none"><strong>{fund_name[:35]}</strong><br>'
+                        f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none">'
+                        f'<a href="{l0_link}" style="color:#E65100;text-decoration:none"><strong>{fund_name[:35]}</strong></a><br>'
                         f'<small style="color:#888">{isin} · {broker or "Directa"}</small></td>'
                         f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right">€{entry_price:.2f}</td>'
                         f'<td style="padding:8px;border:1px solid #ddd;border-bottom:none;text-align:right">€{current_price:.2f}</td>'
