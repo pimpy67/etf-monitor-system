@@ -60,11 +60,24 @@ WIDE_TIER_SL_INITIAL_PCT = 0.07
 TP_PROXIMITY_CRITICA_BUFFER_WIDE = 0.985  # fase critica, asset volatili → 1.5%
 TP_PROXIMITY_ALLERTA_BUFFER_WIDE = 0.98   # fase allerta, asset volatili → 2.0%
 
+# Soglia ATR14 normalizzato (% del prezzo) sopra la quale un singolo STRUMENTO
+# (non famiglia) è trattato come ad alta volatilità — bypassa sl_initial_pct
+# quando disponibile. Motivato da un caso reale (2026-08-22): PHAG/WisdomTree
+# Physical Silver è in famiglia oro_metalli_preziosi (sl_initial_pct=5%, sotto
+# la soglia sopra) ma ha ATR14 misurato 2,87% — la famiglia raggruppa Oro e
+# Argento sotto un unico sl_initial_pct, ma l'Argento è storicamente molto più
+# volatile e un buffer stretto (1%) rischiava di far scattare lo Stop su un
+# normale movimento intraday. L'ATR è per-strumento, quindi cattura questo
+# caso senza dover spostare l'intera famiglia (che include anche l'Oro, molto
+# meno volatile) su un profilo di rischio diverso.
+WIDE_TIER_ATR_PCT = 2.0
+
 
 def compute_order_prices(current_price: Optional[float], sl_suggerito: Optional[float],
                           tp_suggerito: Optional[float], broker: str = 'Directa',
                           previous_tightened_stop: Optional[float] = None,
-                          sl_initial_pct: Optional[float] = None) -> Dict:
+                          sl_initial_pct: Optional[float] = None,
+                          atr_pct: Optional[float] = None) -> Dict:
     """
     Ritorna i prezzi da inserire sul broker:
       - prezzo_stop / prezzo_limite_stop: la coppia per l'ordine Stop (SL)
@@ -84,7 +97,14 @@ def compute_order_prices(current_price: Optional[float], sl_suggerito: Optional[
       l'avvicinamento al TP, non si allarga più, anche se il prezzo si allontana
       di nuovo dal target prima di toccarlo).
     sl_initial_pct: sl_initial_pct della famiglia (da etf_families.yaml) — sceglie
-      il buffer standard o quello allargato per asset volatili. None → standard.
+      il buffer standard o quello allargato per asset volatili. Usato solo come
+      fallback quando atr_pct non è disponibile. None → standard.
+    atr_pct: ATR14 normalizzato dello STRUMENTO specifico, in % del prezzo (non
+      della famiglia) — se presente ha priorità su sl_initial_pct per scegliere
+      il buffer, perché misura la volatilità reale di quel singolo ETF/ETC
+      invece del proxy di famiglia (che può raggruppare strumenti a volatilità
+      molto diversa, es. Oro e Argento nella stessa famiglia). None → fallback
+      su sl_initial_pct.
     """
     parallel_ok = (broker or 'Directa') in OCO_CAPABLE_BROKERS
     result = {
@@ -105,7 +125,10 @@ def compute_order_prices(current_price: Optional[float], sl_suggerito: Optional[
         # monitor.py::_update_portfolio_l0_suggerito/_update_portfolio_l1_suggerito),
         # quindi lo Stop deve continuare a proteggere il target finché l'utente
         # non conferma manualmente l'uscita reale su Directa.
-        is_wide_tier = sl_initial_pct is not None and sl_initial_pct >= WIDE_TIER_SL_INITIAL_PCT
+        if atr_pct is not None:
+            is_wide_tier = atr_pct >= WIDE_TIER_ATR_PCT
+        else:
+            is_wide_tier = sl_initial_pct is not None and sl_initial_pct >= WIDE_TIER_SL_INITIAL_PCT
         buffer_critica = TP_PROXIMITY_CRITICA_BUFFER_WIDE if is_wide_tier else TP_PROXIMITY_CRITICA_BUFFER
         buffer_allerta = TP_PROXIMITY_ALLERTA_BUFFER_WIDE if is_wide_tier else TP_PROXIMITY_ALLERTA_BUFFER
 

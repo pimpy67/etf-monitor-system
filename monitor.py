@@ -1376,6 +1376,27 @@ class ETFMonitor:
                     # Dati di mercato per SL
                     ema20 = a.get('ema20')
 
+                    # ATR reale dello strumento (non della famiglia) — usato dal ratchet di
+                    # avvicinamento al TP (order_pricing.py) per scegliere il buffer stretto/
+                    # largo. Motivato dal caso reale PHAG/WisdomTree Physical Silver
+                    # (2026-08-22): la famiglia oro_metalli_preziosi ha sl_initial_pct=5%
+                    # (sotto la soglia 7% del buffer largo), ma raggruppa Oro e Argento —
+                    # l'Argento è storicamente molto più volatile del proxy di famiglia
+                    # (ATR14 misurato 2,87% contro un buffer "stretto" pensato per l'1%,
+                    # rischio concreto di whipsaw). L'ATR per-strumento supera questo limite
+                    # senza dover spostare l'intera famiglia (che include anche l'Oro, molto
+                    # meno volatile) su un profilo di rischio diverso.
+                    atr_pct = None
+                    try:
+                        hist_atr = self.db.get_ohlc_by_isin(isin, days=40)
+                        if not hist_atr.empty and len(hist_atr) >= 14:
+                            atr_norm = analyzer._calculate_atr_normalized(
+                                hist_atr['High'], hist_atr['Low'], hist_atr['Close'].astype(float))
+                            if atr_norm is not None:
+                                atr_pct = round(atr_norm * 100, 2)
+                    except Exception as e:
+                        add_log(f"    ⚠️  Errore ATR {isin}: {e}")
+
                     # CALCOLA SL SUGGERITO — trailing progressivo
                     sl_data = analyzer.calculate_sl_suggerito_l0(entry_price, current_price)
                     sl_suggerito = sl_data.get('sl_suggerito')
@@ -1419,6 +1440,7 @@ class ETFMonitor:
                         current_price, sl_suggerito, tp_suggerito, broker,
                         previous_tightened_stop=float(prev_tp_stop_max) if prev_tp_stop_max else None,
                         sl_initial_pct=sl_initial_pct,
+                        atr_pct=atr_pct,
                     )
                     tp_proximity_stop_max = op.get('tp_proximity_stop_max')
                     if op.get('tightened'):
@@ -1662,13 +1684,23 @@ class ETFMonitor:
                     # non la contiene mai (analyze_etf() non imposta quella chiave), quindi la
                     # ricaviamo da uno storico Close indipendente via get_ohlc_by_isin
                     # (fast-path DB, gia' aggiornato in questo stesso run).
+                    # ATR reale dello strumento (non della famiglia) — vedi commento gemello
+                    # in _update_portfolio_l0_suggerito per il caso reale che l'ha motivato
+                    # (PHAG/Silver, 2026-08-22). Riusa lo stesso hist_recent già scaricato
+                    # sopra per l'EMA20 series.
                     ema20_series = None
+                    atr_pct = None
                     try:
                         hist_recent = self.db.get_ohlc_by_isin(isin, days=40)
                         if not hist_recent.empty and len(hist_recent) >= 20:
                             close_recent = hist_recent['Close'].astype(float).dropna()
                             if len(close_recent) >= 20:
                                 ema20_series = analyzer._ema(close_recent, 20).tail(10)
+                        if not hist_recent.empty and len(hist_recent) >= 14:
+                            atr_norm = analyzer._calculate_atr_normalized(
+                                hist_recent['High'], hist_recent['Low'], hist_recent['Close'].astype(float))
+                            if atr_norm is not None:
+                                atr_pct = round(atr_norm * 100, 2)
                     except Exception as e:
                         add_log(f"    ⚠️  Errore EMA20 series {isin}: {e}")
 
@@ -1701,6 +1733,7 @@ class ETFMonitor:
                         current_price, sl_suggerito, sg_suggerito, broker,
                         previous_tightened_stop=float(prev_tp_stop_max) if prev_tp_stop_max else None,
                         sl_initial_pct=sl_initial_pct,
+                        atr_pct=atr_pct,
                     )
                     tp_proximity_stop_max = op.get('tp_proximity_stop_max')
                     if op.get('tightened'):
