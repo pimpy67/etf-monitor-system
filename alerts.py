@@ -179,6 +179,11 @@ class AlertSystem:
             'params': 'L0 (mean-reversion) su oro_metalli_preziosi — whitelist bypassata solo per il test, nessun altro parametro cambiato (dd_threshold/rsi_max/TP nativi)',
             'color_main': '#D4AC0D', 'color_dark': '#7D6608', 'tag': 'L0-Oro',
         },
+        'L0_METALLI': {
+            'label': 'Candidate L0 Metalli Industriali',
+            'params': 'L0 (mean-reversion) su metalli_industriali — whitelist bypassata solo per il test, nessun altro parametro cambiato (dd_threshold/rsi_max/TP nativi)',
+            'color_main': '#935116', 'color_dark': '#5B2E0C', 'tag': 'L0-Metalli',
+        },
     }
 
     def send_shadow_entries(self, new_entries: list, variant: str = 'L1') -> bool:

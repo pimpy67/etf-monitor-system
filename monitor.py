@@ -1162,6 +1162,19 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor L0-oro (non bloccante): {e}")
 
+        # STEP 8e — Shadow Monitor CANDIDATE_L0_METALLI_20260824: stesso principio
+        # dello Shadow Monitor L0-oro sopra, ma per metalli_industriali — whitelist L0
+        # bypassata SOLO in memoria dentro shadow_monitor_l0_metalli.py (mai scritta su
+        # YAML). Backtest 2026-08-24: N=13 (piu' solido dell'oro), WR 53.8%, +5.088€
+        # netti. Vedi memory/etf_family_viability_survey_2026_08_24.md.
+        try:
+            from shadow_monitor_l0_metalli import run_shadow_monitor_l0_metalli
+            shadow_l0_metalli_entries = run_shadow_monitor_l0_metalli(self.db, results, add_log=add_log)
+            if shadow_l0_metalli_entries and send_daily_report:
+                self.alert_system.send_shadow_entries(shadow_l0_metalli_entries, variant='L0_METALLI')
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor L0-metalli (non bloccante): {e}")
+
         # 7. Invia resoconto portafoglio — DOPO l'aggiornamento SL/TP (fix 2026-08-05:
         # prima veniva inviato PRIMA degli STEP 4/7 sopra, quindi l'email mostrava
         # sempre i valori SL/TP del giorno precedente invece di quelli appena calcolati
