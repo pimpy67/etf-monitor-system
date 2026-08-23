@@ -174,6 +174,11 @@ class AlertSystem:
             'params': 'gate 6/7+MACD obbligatorio SOLO quando Market Breadth (EMA20>SMA50 su tutto l\'universo) >=80% (esce sotto 65%) — nessun altro override',
             'color_main': '#1ABC9C', 'color_dark': '#117A65', 'tag': 'Breadth',
         },
+        'L0_ORO': {
+            'label': 'Candidate L0 Oro',
+            'params': 'L0 (mean-reversion) su oro_metalli_preziosi — whitelist bypassata solo per il test, nessun altro parametro cambiato (dd_threshold/rsi_max/TP nativi)',
+            'color_main': '#D4AC0D', 'color_dark': '#7D6608', 'tag': 'L0-Oro',
+        },
     }
 
     def send_shadow_entries(self, new_entries: list, variant: str = 'L1') -> bool:

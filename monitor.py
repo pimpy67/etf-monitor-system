@@ -1146,6 +1146,22 @@ class ETFMonitor:
         # (exit_reason='PROMOTED'). Vedi CLAUDE.md e
         # memory/etf_post_lockdown_todo_20260906.md sezione 3.)
 
+        # STEP 8d — Shadow Monitor CANDIDATE_L0_ORO_20260824: traccia posizioni
+        # ipotetiche di L0 (mean-reversion) su oro_metalli_preziosi, whitelist L0
+        # bypassata SOLO in memoria dentro shadow_monitor_l0_oro.py (mai scritta su
+        # YAML) — nessuna decisione reale toccata. Nato da un backtest 2026-08-24 che
+        # ha mostrato L0 promettente sull'oro (N=3, WR 66.7%, +2.096€ netti) ma con
+        # campione troppo piccolo per essere conclusivo — questo Shadow Monitor
+        # accumula dati forward reali prima di decidere se aprire davvero la
+        # whitelist. Vedi memory/etf_family_viability_survey_2026_08_24.md.
+        try:
+            from shadow_monitor_l0_oro import run_shadow_monitor_l0_oro
+            shadow_l0_oro_entries = run_shadow_monitor_l0_oro(self.db, results, add_log=add_log)
+            if shadow_l0_oro_entries and send_daily_report:
+                self.alert_system.send_shadow_entries(shadow_l0_oro_entries, variant='L0_ORO')
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor L0-oro (non bloccante): {e}")
+
         # 7. Invia resoconto portafoglio — DOPO l'aggiornamento SL/TP (fix 2026-08-05:
         # prima veniva inviato PRIMA degli STEP 4/7 sopra, quindi l'email mostrava
         # sempre i valori SL/TP del giorno precedente invece di quelli appena calcolati
