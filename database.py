@@ -365,10 +365,26 @@ class PriceDatabase:
             return 0
 
         saved = 0
+        skipped_outliers = 0
         try:
             with conn.cursor() as cur:
+                # Guardia anti-corruzione: scarta prezzi implausibili rispetto allo storico
+                # esistente per questo ticker (es. errori di scraping/provider dati — trovato
+                # 2026-08-23 un valore di ~9x il normale reintrodotto ad ogni refetch storico)
+                cur.execute(
+                    "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY close) FROM etf_price_history WHERE ticker = %s",
+                    (ticker,)
+                )
+                row0 = cur.fetchone()
+                median_close = float(row0[0]) if row0 and row0[0] is not None else None
+
                 for date_idx, row in df.iterrows():
                     date_str = date_idx.strftime('%Y-%m-%d') if hasattr(date_idx, 'strftime') else str(date_idx)
+                    close_val = float(row['Close'])
+                    if median_close and median_close > 0 and \
+                       (close_val > median_close * 5 or close_val < median_close * 0.2):
+                        skipped_outliers += 1
+                        continue
                     try:
                         cur.execute("""
                             INSERT INTO etf_price_history (ticker, date, open, high, low, close, volume, source, isin)
@@ -380,7 +396,7 @@ class PriceDatabase:
                                           isin = COALESCE(EXCLUDED.isin, etf_price_history.isin)
                         """, (ticker, date_str,
                               float(row.get('Open', 0)), float(row.get('High', 0)),
-                              float(row.get('Low', 0)), float(row['Close']),
+                              float(row.get('Low', 0)), close_val,
                               int(row.get('Volume', 0)), source, isin))
                         saved += 1
                     except Exception:
@@ -390,6 +406,9 @@ class PriceDatabase:
             print(f"Errore salvataggio bulk {ticker}: {e}")
         finally:
             conn.close()
+
+        if skipped_outliers:
+            print(f"⚠️  {ticker}: {skipped_outliers} prezzi scartati (implausibili, oltre 5x/0.2x la mediana storica {median_close})")
 
         return saved
 
@@ -410,11 +429,24 @@ class PriceDatabase:
             return 0
 
         saved = 0
+        skipped_outliers = 0
         try:
             with conn.cursor() as cur:
+                # Guardia anti-corruzione: vedi save_ohlcv_bulk (stesso problema, trovato 2026-08-23)
+                cur.execute(
+                    "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY close) FROM etf_price_history WHERE ticker = %s",
+                    (isin,)
+                )
+                row0 = cur.fetchone()
+                median_close = float(row0[0]) if row0 and row0[0] is not None else None
+
                 for date_idx, row in df.iterrows():
                     date_str = date_idx.strftime('%Y-%m-%d') if hasattr(date_idx, 'strftime') else str(date_idx)
                     close_val = float(row['Close'])
+                    if median_close and median_close > 0 and \
+                       (close_val > median_close * 5 or close_val < median_close * 0.2):
+                        skipped_outliers += 1
+                        continue
                     try:
                         cur.execute("""
                             INSERT INTO etf_price_history (ticker, isin, date, close, source)
@@ -431,6 +463,9 @@ class PriceDatabase:
             print(f"Errore salvataggio bulk {isin}: {e}")
         finally:
             conn.close()
+
+        if skipped_outliers:
+            print(f"⚠️  {isin}: {skipped_outliers} prezzi scartati (implausibili, oltre 5x/0.2x la mediana storica {median_close})")
 
         return saved
 
