@@ -220,7 +220,7 @@ def etf_detail():
         cond     = etf_info.get('conditions', {})
         etf_type = etf_info.get('etf_type', 'equity_developed')
         from technical_analysis import ETFTechnicalAnalyzer
-        analyzer = ETFTechnicalAnalyzer(etf_type)
+        analyzer = ETFTechnicalAnalyzer(famiglia=etf_type)
         p = analyzer.p
 
         l1_conditions = {

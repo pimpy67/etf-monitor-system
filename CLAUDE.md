@@ -1075,6 +1075,47 @@ Storico: salvato in l1_exit_history
 6. **`alerts.py` non toccato** — revisione rimandata al prossimo sprint.
 7. **`min_buy_count=6` NON è più raccomandato come "alternativa validata pronta all'uso"** — i dati a 3 anni mostrano che l'edge è fragile/regime-dipendente (positivo nel 2025, negativo nel 2024). Prima di riconsiderarlo servono o (a) un modello fiscale con compensazione minus/plus per capire il vero netto, o (b) un filtro che escluda selettivamente i trade deboli (vedi sistema tiered sotto).
 
+### ⚠️ Aggiornamento 2026-08-23 — da scadenza fissa (06/09/2026) a checkpoint ricorrente
+
+**La data fissa "lockdown fino al 06/09/2026" citata più sotto in questo documento (per
+`CANDIDATE_MODEL_B_20260807`, `CANDIDATE_MODEL_L0_20260808`, Market Breadth) è superata come
+unico momento di decisione.** Non viene cancellata perché è il motivo per cui il lockdown è
+iniziato ed è tuttora valida come primo checkpoint — ma non è più l'unica occasione per
+guardare i dati né il presupposto per continuare a tracciare gli Shadow Monitor.
+
+**Cosa cambia:**
+- Gli Shadow Monitor (`shadow_monitor.py`, `shadow_monitor_l0.py`,
+  `shadow_monitor_breadth.py`) **restano accesi indefinitamente** in background, sempre
+  agganciati al ciclo giornaliero del monitor (STEP 8/8b/8c) — non c'è una data in cui si
+  "spengono" o "scadono". Continuano a loggare su `etf_shadow_positions` a prescindere da
+  qualunque scadenza.
+- Al posto di una singola data fissa, il punto di riferimento diventa un **checkpoint
+  ricorrente** (indicativamente mensile, o comunque non prima del 06/09/2026 per il primo
+  giro): si estrae lo stato di `etf_shadow_positions` per ciascun `model_name`, si confronta
+  con i nuovi ingressi reali `native_7` nello stesso periodo (query in
+  `memory/etf_post_lockdown_todo_20260906.md`), e si riporta lo stato — senza che il
+  raggiungimento di una data o di un numero di trade inneschi automaticamente una modifica.
+- **Soglia di fiducia per qualunque promozione a produzione: N≥30 trade chiusi**, coerente
+  con la soglia già usata in ogni sweep/backtest di questo documento (non 15-20 come
+  ipotizzato in una discussione con un'altra AI il 2026-08-23) — sotto quella soglia il
+  progetto ha già visto più volte pattern belli in-sample che si sono rivelati overfitting
+  (es. `mm200_delta=-1` su L1, la zona "85% enter" sul breadth). Un candidato con N ancora
+  piccolo a un checkpoint resta "in osservazione", non promosso né scartato.
+- **Nessuna promozione automatica**: anche quando un candidato raggiunge N≥30 con metriche
+  favorevoli, la modifica allo YAML resta una decisione esplicita dell'utente al momento del
+  checkpoint — stessa filosofia "nessun automatismo" già applicata al trading reale (SL/TP
+  toccati manualmente, non auto-vendita, vedi [[etf_no_auto_exit_real_positions]]). L'unica
+  eccezione concessa finora è stata `CANDIDATE_MODEL_L0_SL_20260820`, promossa in produzione
+  su richiesta esplicita e immediata dell'utente lo stesso giorno del backtest — resta un
+  caso singolo, non un precedente per abbassare la soglia N≥30.
+
+**Perché**: la finestra 2026-08-05→2026-09-06 si è rivelata talmente povera di segnali per
+il gate nativo 7/7 (0 nuovi ingressi L1, 0 nuovi ingressi L0 in 18 giorni, verificato
+2026-08-23) che aspettare una singola data per decidere avrebbe quasi certamente prodotto
+"ancora troppo pochi dati" di nuovo — il problema non è la durata della finestra, è la rarità
+strutturale del segnale 7/7. Un checkpoint ricorrente lascia raccogliere evidenza più a
+lungo senza dover rifissare una nuova scadenza ogni volta che quella attuale scade a vuoto.
+
 ### Punto di decisione successivo — AGGIORNATO dopo il test reale "smart 6/7 MACD" (vedi sotto, 2026-08-05)
 
 Il test reale (non solo statistico) della variante "MACD obbligatorio anche a 6/7"
