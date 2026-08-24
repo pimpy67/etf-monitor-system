@@ -1116,6 +1116,62 @@ il gate nativo 7/7 (0 nuovi ingressi L1, 0 nuovi ingressi L0 in 18 giorni, verif
 strutturale del segnale 7/7. Un checkpoint ricorrente lascia raccogliere evidenza più a
 lungo senza dover rifissare una nuova scadenza ogni volta che quella attuale scade a vuoto.
 
+### Survey completo 14 famiglie (2026-08-24) + blocco L1 su 5 famiglie difensive
+
+Su richiesta dell'utente ("quali altre famiglie non entrano mai, e come li gestiamo"),
+survey di tutte le 14 famiglie su `native_7`/`smart_6_macd` (Golden Dataset, 3 anni) via
+`optimize_hyperparameters.py`. Risultato completo in
+`memory/etf_family_viability_survey_2026_08_24.md`. Sintesi:
+
+| Gruppo | Famiglie | Trade 3yr | Esito |
+|---|---|---:|---|
+| Motore attivo | equity_sviluppati, settoriali_growth | 38+10 | Unici driver reali |
+| In prova (L0, non L1) | oro_metalli_preziosi, metalli_industriali | 0 su L1 | Vedi sezione L0 sotto |
+| **Bloccate 2026-08-24** | bond_governativi, bond_corp_hy_em, settoriali_difensivi, real_estate_reit, private_equity_buffer | 4 (tutte perdite) | `min_buy_count: 8` |
+| Già escluse | leva_single_stock, commodities, crypto_digital_assets | 0-12 | Zero segnali o track record negativo |
+| Diverso by design | monetario_liquidita | n/a | Non trend-following |
+
+**Blocco applicato oggi**: le 5 famiglie difensive/bond avevano acceso il gate `native_7`
+solo 4 volte in 3 anni — **tutte e 4 in perdita** (0% win rate: `bond_governativi` 2/2 perse,
+`bond_corp_hy_em` 1/1, `private_equity_buffer` 1/1; `settoriali_difensivi` e
+`real_estate_reit` già a 0 trade). Stesso trattamento già dato a `leva_single_stock`
+(commit storico): `min_buy_count: 7` → **`8`** in `config/etf_families.yaml` per tutte e 5
+— irraggiungibile su un gate a 7 condizioni, blocca solo la promozione a L1 (restano
+tracciate normalmente in L0/L2/L3/dashboard, nessuna rimozione). Non serve un fix
+parametrico: la diagnosi (vedi memory) è che l'impianto trend-following (EMA/SMA allineate +
+persistenza + MACD in salita) non si adatta a strumenti a bassa volatilità come i bond — non
+è un problema di soglie sbagliate.
+
+⚠️ **Legenda tabella famiglie più sotto in questo documento va aggiornata di conseguenza**:
+`min_buy_count` non è più "7 per tutte le 14 famiglie" — oggi è **8 per 6 famiglie**
+(`leva_single_stock` + le 5 appena bloccate) e **7 per le restanti 8**. Stesso discorso per
+il CLAUDE.md di root (`../CLAUDE.md`, tabella "Profili parametri FAMIGLIE ETF").
+
+**Roadmap L0 sulle famiglie "morte" per L1 — decisa 2026-08-24**: la stessa disattivazione
+per L1 non significa "chiuso per sempre" — per `oro_metalli_preziosi`/`metalli_industriali`
+un meccanismo diverso (L0 mean-reversion, whitelist bypassata solo in memoria per il test)
+ha già dato un segnale promettente (vedi sezione dedicata "Grid Search L0" più sotto e
+`shadow_monitor_l0_oro.py`/`shadow_monitor_l0_metalli.py`, live dal 2026-08-24). **Estensione
+decisa oggi**: testare lo stesso approccio (`backtest_l0_v2.py::simulate_l0()`, whitelist
+bypassata solo nello script, nessun impatto produzione) sulle **restanti 8 famiglie mai
+provate su L0** (i 5 bond/difensivi appena bloccati + i 3 speculativi
+`commodities`/`leva_single_stock`/`crypto_digital_assets`) — L0 è un meccanismo
+strutturalmente diverso (mean-reversion su drawdown, non momentum), quindi il fatto che L1
+non si adatti a questi asset non implica automaticamente che L0 fallisca allo stesso modo;
+va verificato con lo stesso metodo, non assunto. Vedi risultato del test in
+`memory/etf_family_viability_survey_2026_08_24.md` (aggiornato dopo l'esecuzione) —
+qualunque famiglia con segnale incoraggiante segue lo stesso percorso di oro/metalli
+(Shadow Monitor dedicato, non promozione diretta).
+
+**Item aperto, non ancora progettato**: l'utente diversifica il portafoglio reale
+75%/25% azionario/bond — con le 5 famiglie bond bloccate su L1 e non ancora testate su L0,
+oggi la quota "bond" del portafoglio non ha nessun meccanismo di ingresso/uscita attivo
+dedicato (solo monitoraggio prezzo passivo). Se il test L0 sopra non dà risultati
+utilizzabili, resta aperta l'ipotesi di un meccanismo terzo pensato apposta per bond a bassa
+volatilità (soglie molto più strette, o un approccio duration/carry non basato su
+momentum) — non progettato né backtestato, richiede un progetto dedicato quando/se si
+vuole procedere.
+
 ### Punto di decisione successivo — AGGIORNATO dopo il test reale "smart 6/7 MACD" (vedi sotto, 2026-08-05)
 
 Il test reale (non solo statistico) della variante "MACD obbligatorio anche a 6/7"

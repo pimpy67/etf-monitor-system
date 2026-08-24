@@ -231,7 +231,7 @@ families:
     aum_min: 50
     days_above_ema: 3
     mm200_filter: true
-    min_buy_count: 7
+    min_buy_count: 8
     ema20_slope_min: 0.4
     sl_initial_pct: 0.04
     sl_atr_multiplier: 1.8
@@ -292,7 +292,7 @@ families:
     aum_min: 100
     days_above_ema: 3
     mm200_filter: false
-    min_buy_count: 7
+    min_buy_count: 8
     ema20_slope_min: 0.15
     sl_initial_pct: 0.025
     sl_atr_multiplier: 1.5
@@ -353,7 +353,7 @@ families:
     aum_min: 50
     days_above_ema: 3
     mm200_filter: false
-    min_buy_count: 7
+    min_buy_count: 8
     ema20_slope_min: 0.2
     sl_initial_pct: 0.03
     sl_atr_multiplier: 1.6
@@ -597,7 +597,7 @@ families:
     aum_min: 50
     days_above_ema: 3
     mm200_filter: false
-    min_buy_count: 7
+    min_buy_count: 8
     ema20_slope_min: 0.25
     sl_initial_pct: 0.035
     sl_atr_multiplier: 1.8
@@ -781,7 +781,7 @@ families:
     aum_min: 50
     days_above_ema: 3
     mm200_filter: false
-    min_buy_count: 7
+    min_buy_count: 8
     ema20_slope_min: 0.2
     sl_initial_pct: 0.035
     sl_atr_multiplier: 1.7
