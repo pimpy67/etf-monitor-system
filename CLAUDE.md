@@ -1198,47 +1198,57 @@ Uscita: **riusa le funzioni reali di L1 senza modifiche** — `calculate_sl_sugg
 `target_max_pct` molto più piccolo del 15% equity — l'upside realistico di un bond è
 ordini di grandezza inferiore).
 
-**Grid search** (`backtest_bond_trend.py`, scratch, stesso Golden Dataset, split IN
-2023-08-05→2025-08-05 / OUT 2025-08-05→2026-08-05, stesso modello costi/tasse di
-`backtest_l1.py`): testate combinazioni di persistenza (5/8/12/15/20gg) × distanza max
-(0.3/0.5/1.0/1.5%) × target TP (3%/5%). Pattern chiaro: **allargare la distanza o il target
-peggiora l'out-of-sample** (stessa firma di overfitting già vista altrove in questo
-documento — es. `mm200_delta=-1` su L1), mentre persistenza più lunga (12-20gg, contro i 3
-usati da equity) è più stabile, coerente con trend di tassi che si muovono su settimane/mesi
-non giorni.
+**Grid search iniziale (pooled)** (`backtest_bond_trend.py`, scratch, stesso Golden
+Dataset, split IN 2023-08-05→2025-08-05 / OUT 2025-08-05→2026-08-05, stesso modello
+costi/tasse di `backtest_l1.py`): testate combinazioni di persistenza (5/8/12/15/20gg) ×
+distanza max (0.3/0.5/1.0/1.5%) × target TP (3%/5%) sulle 5 famiglie MESCOLATE (61 ticker).
+Risultato pooled: IN N=191 WR=60.8% PF=1.71 | OUT N=76 WR=45.2% PF=1.68 con
+persistence=20/dist_max=0.5%/target=3%.
 
-**Parametri scelti** (il PF più stabile IN→OUT tra tutte le combinazioni testate, preferito
-a candidati con PF in-sample più alto ma che crollava fuori campione):
+⚠️ **Corretto poche ore dopo lo stesso giorno — il risultato pooled nascondeva un problema
+serio**: su richiesta dell'utente ("non dovrebbero avere parametri diversi rispetto agli
+azionari?"), grid search RIPETUTO segmentato PER FAMIGLIA (non più mescolate) con
+`backtest_bond_trend_perfamily.py` (scratch). Risultato:
+
+| Famiglia | IN: WR/PF | OUT: WR/PF | Verdetto |
+|---|---|---|---|
+| **bond_corp_hy_em** | 70-76% / 2,65-3,67 | 67-80% / **4,22-6,24** | Solido su ogni combinazione — PF out-of-sample sistematicamente MIGLIORE dell'in-sample |
+| bond_governativi | 54-60% / 1,54-2,19 | **7-13% / 0,01-0,18** | Crolla quasi a zero fuori campione |
+| settoriali_difensivi | 25-46% / 0,27-0,73 | misto, N=4 ticker | Troppo piccolo per essere significativo |
+| real_estate_reit | 40-55% / 0,54-0,93 | misto, N=3 ticker | Troppo piccolo per essere significativo |
+| private_equity_buffer | 20-33% / 0,21-0,5 | 25-33% / 0,31-0,41 | Perde sempre, entrambe le finestre |
+
+Il pooled sembrava a posto solo perché l'ottima performance di `bond_corp_hy_em`
+compensava nella media il crollo di `bond_governativi` — mescolarle nascondeva un rischio
+reale (posizioni ombra su governativi sarebbero state fuorvianti). **Modello ristretto a
+`bond_corp_hy_em` soltanto**, unica famiglia con edge forte, coerente su ogni combinazione
+testata, e col pattern anti-overfitting più pulito visto in questo progetto (OOS > IN).
+
+**Parametri finali** (ottimizzati per `bond_corp_hy_em` specificamente, non più pooled):
 
 | Parametro | Valore |
 |---|---|
-| `persistence_days` | 20 |
-| `dist_max_pct` | 0.5% |
-| `target_max_pct` (TP dinamico) | 3% |
-| `target_floor_pct` | 2% |
-| `slope_window` / `slope_sensitivity` (decadimento TP) | 3 / 0.15 (stessa convenzione delle famiglie equity) |
+| `families` | **solo `bond_corp_hy_em`** |
+| `persistence_days` | 12 (era 20 nel pooled) |
+| `dist_max_pct` | 0.3% (era 0.5%) |
+| `target_max_pct` (TP dinamico) | 3% (invariato) |
+| `target_floor_pct` | 2% (invariato) |
+| `slope_window` / `slope_sensitivity` (decadimento TP) | 3 / 0.15 (stessa convenzione delle famiglie equity, non sweepato) |
 
-**Metriche** (Golden Dataset, batch `2026-08-07`, 61 ticker cluster difensivo):
+**Metriche finali** (Golden Dataset, batch `2026-08-07`, 26 ticker `bond_corp_hy_em`):
 
 | | In-Sample | Out-of-Sample |
 |---|---|---|
-| N trade | 191 | 76 |
-| Win rate netto | 60.8% | 45.2% |
-| Profit Factor | 1.71 | 1.68 |
-| P&L netto (10k€/trade) | +8.604€ | +2.267€ |
+| N trade | 83 | 45 |
+| Win rate netto | 72.6% | 77.3% |
+| Profit Factor | 3.43 | **5.89** |
+| P&L netto (10k€/trade) | +7.306€ | +5.147€ |
 
-N enormemente superiore a qualunque altro candidato di questo documento (191/76 contro i
-tipici 3-40) — ma con una riserva importante: **molti trade aprono sugli stessi giorni su
-ticker diversi della stessa famiglia** (es. 10 bond governativi tutti entrano il
-2023-11-07÷10) perché i bond della stessa asset class si muovono insieme guidati dallo
-stesso fattore macro (tassi) — il campione reale indipendente è quindi più vicino a ~15-20
-"eventi di mercato" che a 191 scommesse scorrelate. Il PF resta comunque solido e coerente
-IN→OUT, ma va letto con questa cautela in più rispetto ai candidati su singoli titoli equity.
-
-**Parametri NON testati in profondità**: `slope_window`/`slope_sensitivity` per il
-decadimento del TP dinamico sono stati presi per convenzione dalle famiglie equity (3gg /
-0.15), non sweepati — impatto verificato trascurabile su un test di conferma, non escluso
-un margine di miglioramento qui.
+Riserva che resta valida anche ristretto a una famiglia sola: **molti trade aprono sugli
+stessi giorni su ticker diversi** (i bond corporate/HY della stessa asset class si muovono
+insieme sulle notizie di credito/tassi) — il campione indipendente reale è più vicino a
+~15-20 "eventi di mercato" che a 83+45 scommesse scorrelate. Il PF resta comunque solido e
+coerente IN→OUT.
 
 ⚠️ **NON promosso in produzione** — stessa disciplina di ogni altro candidato: Shadow
 Monitor prima, promozione solo dopo N≥30 su dati forward reali e decisione esplicita
@@ -1249,7 +1259,9 @@ dell'utente. **Shadow Monitor implementato e live lo stesso giorno**:
 `min_buy_count`/`native_7` — meccanismo completamente separato). Email sui nuovi ingressi
 via `alerts.py::send_shadow_entries(variant='BOND_TREND')`, stesso meccanismo già attivo per
 gli altri 4 candidati. Verificato: import puliti, smoke test su `_get_params()` OK, deploy
-via `./deploy.sh`.
+via `./deploy.sh`. Le 4 posizioni ombra aperte al primo ciclo (AFRN.PA, EFRN.DE, ECR3.DE,
+AFLT.PA) erano già tutte `bond_corp_hy_em` — nessuna posizione su famiglie escluse da
+ripulire dopo la restrizione.
 
 **Estrazione risultati al prossimo checkpoint** (stesso pattern degli altri candidati):
 ```sql
@@ -2002,9 +2014,17 @@ L0, vedi whitelist gate sopra):
 >
 > ✅ **Aggiornamento 2026-08-20**: il primo scaglione della formula SL (`calculate_sl_suggerito_l0`,
 > profitto<5%) è stato sweepato e **promosso in produzione** — vedi
-> "CANDIDATE_MODEL_L0_SL_20260820" più sotto. Resta comunque non parametrizzato per famiglia
-> (hardcoded, non letto dallo YAML) — irrilevante oggi dato che solo `equity_sviluppati` è
-> raggiungibile via whitelist, ma un gap noto se la whitelist dovesse mai riaprirsi.
+> "CANDIDATE_MODEL_L0_SL_20260820" più sotto.
+>
+> ✅ **Gap chiuso 2026-08-24**: `calculate_sl_suggerito_l0` ora legge tutti e 3 gli scaglioni
+> dallo YAML per famiglia (`l0_sl_tier1_threshold_pct`/`l0_sl_tier1_buffer_pct`/
+> `l0_sl_tier2_threshold_pct`/`l0_sl_tier2_markup_pct`/`l0_sl_tier3_giveback_pct`), con
+> default via `self.p.get(...)` = ai valori hardcoded precedenti (5%/4%/15%/1%/8%) — zero
+> cambio di comportamento verificato (stessi identici SL su 3 casi di test). Valori espliciti
+> aggiunti nello YAML per `equity_sviluppati`/`oro_metalli_preziosi`/`metalli_industriali`
+> (le uniche famiglie con attività L0 reale o Shadow); le altre 11 restano sul default
+> implicito, invariato. Rilevante ora per gli Shadow Monitor L0 su oro/metalli (bypassano la
+> whitelist per il test ma prima usavano comunque questi parametri "a taglia unica").
 >
 > ✅ **Correzione 2026-08-19 — lo Shadow Monitor L0 esiste già ed è live**: la frase sopra era
 > superata. `shadow_monitor_l0.py` è stato aggiunto l'08/08 (stessa sessione di questo

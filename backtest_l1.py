@@ -110,7 +110,7 @@ def make_analyzer(famiglia, min_buy_override=None):
 
 
 def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, require_macd=False,
-             precomputed_full=None, macd_skip_mask=None):
+             precomputed_full=None, macd_skip_mask=None, volume_ok_mask=None):
     """Ingresso via suggest_level() (7/7 o 6/7). Uscita: SOLO SL o TP, ricalcolati e
     controllati una volta al giorno sul Close (come il monitor reale). Nessuna regola B/C/E/F.
 
@@ -135,7 +135,16 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, 
     falsa l'ingresso e' impossibile a prescindere dalle altre 6 — si salta la chiamata a
     suggest_level() invece di scartarne il risultato dopo (stesso esito, meno lavoro). E' uno
     skip certo (non un'euristica): se require_macd=False il parametro viene ignorato, perche'
-    in quel caso macd_ok puo' essere la condizione mancante e saltare sarebbe scorretto."""
+    in quel caso macd_ok puo' essere la condizione mancante e saltare sarebbe scorretto.
+
+    volume_ok_mask (2026-08-24, per il test RVOL dei "4 pilastri"): Series booleana
+    allineata a hist_index, True dove il volume del giorno soddisfa una soglia di
+    espansione (es. volume/media_20gg >= 1.2) — un gate VERO sull'ingresso (non uno
+    skip-di-performance come macd_skip_mask sopra): se presente e False oggi, l'ingresso
+    e' bloccato indipendentemente dalle 7 condizioni di suggest_level(), perche' il
+    volume non e' una delle condizioni native — e' un filtro aggiuntivo esterno testato
+    per vedere se migliora la qualita' dei trade. None (default) = nessun filtro,
+    comportamento identico a prima per tutti i chiamanti esistenti."""
     holding = False
     entry_price = None
     entry_date = None
@@ -157,6 +166,8 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, 
             if not holding:
                 if require_macd and macd_skip_mask is not None and not bool(macd_skip_mask.iloc[pos]):
                     continue  # macd_ok obbligatorio e falso oggi: ingresso impossibile, skip certo
+                if volume_ok_mask is not None and not bool(volume_ok_mask.iloc[pos]):
+                    continue  # filtro RVOL: volume insufficiente oggi, ingresso bloccato
                 precomputed_today = None
                 if precomputed_full is not None:
                     precomputed_today = {

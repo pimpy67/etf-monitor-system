@@ -186,7 +186,7 @@ class AlertSystem:
         },
         'BOND_TREND': {
             'label': 'Candidate Bond Trend',
-            'params': 'Terzo meccanismo (no RSI/ADX/MACD) per bond_governativi/bond_corp_hy_em/settoriali_difensivi/real_estate_reit/private_equity_buffer — persistenza 20gg, dist_max 0.5%, TP dinamico target 3%',
+            'params': 'Terzo meccanismo (no RSI/ADX/MACD) ristretto a bond_corp_hy_em (unica famiglia con edge robusto su 5 testate — bond_governativi crolla out-of-sample) — persistenza 12gg, dist_max 0.3%, TP dinamico target 3%',
             'color_main': '#2E86C1', 'color_dark': '#1B4F72', 'tag': 'Bond-Trend',
         },
     }

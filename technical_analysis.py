@@ -1555,16 +1555,16 @@ class ETFTechnicalAnalyzer:
         }
 
     def suggest_bond_trend_entry(self, close: pd.Series, ema20: pd.Series,
-                                  persistence_days: int = 20,
-                                  dist_max_pct: float = 0.5) -> Dict:
+                                  persistence_days: int = 12,
+                                  dist_max_pct: float = 0.3) -> Dict:
         """
-        CANDIDATE_BOND_TREND_20260824 — meccanismo di ingresso separato per le 5
-        famiglie difensive/bond bloccate da L1 (min_buy_count: 8, 2026-08-24), dove
-        il gate nativo a 7 condizioni non si attiva MAI: 0 giorni su 40.711
-        ticker-giorni testati sul Golden Dataset a 3 anni (vedi
-        memory/etf_family_viability_survey_2026_08_24.md). Diagnosticato che il
-        blocco strutturale sono allineamento_ok (EMA20>SMA50, vero solo il 19.1%
-        dei giorni) e rsi_ok (24.8%) — filtri di momentum calibrati su equity,
+        CANDIDATE_BOND_TREND_20260824 — meccanismo di ingresso separato, oggi
+        applicato SOLO a `bond_corp_hy_em` (ristretto lo stesso giorno, poche ore
+        dopo il primo deploy — vedi sotto), dove il gate nativo a 7 condizioni non
+        si attiva MAI: 0 giorni su 40.711 ticker-giorni testati sul Golden Dataset a
+        3 anni (vedi memory/etf_family_viability_survey_2026_08_24.md). Diagnosticato
+        che il blocco strutturale sono allineamento_ok (EMA20>SMA50, vero solo il
+        19.1% dei giorni) e rsi_ok (24.8%) — filtri di momentum calibrati su equity,
         non su strumenti a bassa volatilita' come i bond.
 
         Non e' una modifica a suggest_level()/native_7 — e' un meccanismo
@@ -1579,15 +1579,24 @@ class ETFTechnicalAnalyzer:
           3. 0% <= distanza da EMA20 <= dist_max_pct (ingresso non esteso)
           4. no kill switch (calo giornaliero <= -3%)
 
-        Backtestato sul Golden Dataset (batch 2026-08-07), 61 ticker del cluster
-        difensivo, split IN 2023-08-05->2025-08-05 / OUT 2025-08-05->2026-08-05,
-        uscita via calculate_sl_suggerito_l1/calculate_stop_gain_dynamic (stesse
-        funzioni reali di L1, nessuna duplicazione): con i default sopra,
-        IN N=191 WR=60.8% PF=1.71 P&L=+8.604€ (10k€/trade) | OUT N=76 WR=45.2%
-        PF=1.68 P&L=+2.267€ — il PF piu' stabile (1.71->1.68) tra tutte le
-        combinazioni testate nel grid search, preferito a candidati con PF
-        in-sample piu' alto ma che crollava out-of-sample (stessa disciplina
-        anti-overfitting usata altrove in questo file).
+        ⚠️ **Ristretto a `bond_corp_hy_em` lo stesso giorno del primo deploy**: il
+        primo backtest era sul cluster "difensivo" intero (5 famiglie mescolate, IN
+        N=191 PF=1.71 | OUT N=76 PF=1.68). Segmentando PER FAMIGLIA su richiesta
+        dell'utente e' emerso che il risultato pooled nascondeva un problema serio:
+        `bond_governativi` sembra profittevole in-sample (PF 1.5-2.2) ma **crolla
+        quasi a zero out-of-sample** (WR 7-13%, PF 0.01-0.18) — le altre 3 famiglie
+        (settoriali_difensivi, real_estate_reit, private_equity_buffer) hanno troppo
+        pochi ticker (2-4) o sono chiaramente perdenti. Solo `bond_corp_hy_em` mostra
+        un edge forte e coerente su OGNI combinazione testata, col pattern piu'
+        pulito visto in questo progetto — PF OUT-of-sample sistematicamente
+        MIGLIORE dell'in-sample (l'opposto dell'overfitting):
+
+        Backtestato sul Golden Dataset (batch 2026-08-07), 26 ticker `bond_corp_hy_em`,
+        split IN 2023-08-05->2025-08-05 / OUT 2025-08-05->2026-08-05, uscita via
+        calculate_sl_suggerito_l1/calculate_stop_gain_dynamic (stesse funzioni reali
+        di L1): con i default sopra (persistence=12, dist_max=0.3%), IN N=83
+        WR=72.6% PF=3.43 P&L=+7.306€ (10k€/trade) | OUT N=45 WR=77.3% PF=**5.89**
+        P&L=+5.147€.
         """
         if ema20 is None or close is None or len(close) < 2:
             return {'entry_ok': False}
@@ -1986,6 +1995,17 @@ class ETFTechnicalAnalyzer:
         raddoppia (2%→4%). Vedi memory/etf_post_lockdown_todo_20260906.md sezione 3 e
         CLAUDE.md.
 
+        Parametrizzato per famiglia dal 2026-08-24 (gap noto, mai chiuso prima):
+        `l0_sl_tier1_buffer_pct`/`l0_sl_tier1_threshold_pct`/`l0_sl_tier2_markup_pct`/
+        `l0_sl_tier2_threshold_pct`/`l0_sl_tier3_giveback_pct` nello YAML, con default
+        = ai valori hardcoded qui sotto (4%/5%/1%/15%/8%) — nessun comportamento
+        cambiato per `equity_sviluppati` (unica famiglia oggi raggiungibile via
+        whitelist L0). Prima era hardcoded uguale per tutte, irrilevante finché solo
+        equity_sviluppati era raggiungibile — ora rilevante anche per gli Shadow
+        Monitor L0 su oro/metalli (`shadow_monitor_l0_oro.py`/`_metalli.py`), che
+        bypassano la whitelist per il test ma usavano comunque questi stessi
+        parametri "a taglia unica".
+
         Args:
             entry_price: Prezzo di carico
             current_price: Prezzo corrente
@@ -1998,17 +2018,23 @@ class ETFTechnicalAnalyzer:
 
         profit_pct = (current_price - entry_price) / entry_price
 
-        if profit_pct < 0.05:
-            # < 5% → protezione stretta (4% dal 2026-08-20, era 2%)
-            sl = entry_price * 0.96
+        tier1_threshold = self.p.get('l0_sl_tier1_threshold_pct', 0.05)
+        tier1_buffer     = self.p.get('l0_sl_tier1_buffer_pct', 0.04)
+        tier2_threshold  = self.p.get('l0_sl_tier2_threshold_pct', 0.15)
+        tier2_markup     = self.p.get('l0_sl_tier2_markup_pct', 0.01)
+        tier3_giveback   = self.p.get('l0_sl_tier3_giveback_pct', 0.08)
+
+        if profit_pct < tier1_threshold:
+            # < soglia tier1 → protezione stretta (4% dal 2026-08-20, era 2%)
+            sl = entry_price * (1 - tier1_buffer)
             stage = 'protezione_capitale'
-        elif profit_pct < 0.15:
-            # 5-15% → almeno pareggio
-            sl = entry_price * 1.01
+        elif profit_pct < tier2_threshold:
+            # soglia tier1-tier2 → almeno pareggio
+            sl = entry_price * (1 + tier2_markup)
             stage = 'pareggio'
         else:
-            # > 15% → protezione metà gain
-            sl = entry_price * (1 + profit_pct - 0.08)
+            # > soglia tier2 → protezione parziale del gain accumulato
+            sl = entry_price * (1 + profit_pct - tier3_giveback)
             stage = 'protezione_guadagno'
 
         return {

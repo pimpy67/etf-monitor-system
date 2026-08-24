@@ -316,17 +316,34 @@ def experiment_1_position_sizing(native7_trades, candb_trades, candl0_trades):
                 risk_total += t_risk['net_gain_eur']
                 flat_capital += size_flat
                 risk_capital += size_risk
+            # FIX 2026-08-24: il confronto originale (solo P&L assoluto) non era equo —
+            # flat_capital e risk_capital sono cumulati su size DIVERSE per trade (il
+            # risk-parity sovrappesa i trade a rischio piccolo fino a 3x flat_size), quindi
+            # risk-parity impegna sistematicamente PIU' capitale totale nel periodo. Un P&L
+            # assoluto piu' alto a parita' di "capitale impegnato cumulato" diverso non dice
+            # se il metodo sia davvero migliore o solo piu' grande. Il confronto corretto e'
+            # il ROI (P&L netto / capitale impegnato) — normalizza per la scala e risponde
+            # alla domanda reale: "a parita' di euro investiti, quale rende di piu'?"
+            flat_roi = flat_total / flat_capital if flat_capital else None
+            risk_roi = risk_total / risk_capital if risk_capital else None
             print(f"\n[{label}] budget rischio {budget_pct:.0%} ({budget_eur}EUR) — "
                   f"{len(rows)} trade con SL noto (skip {skipped_no_sl} senza SL calcolabile)")
             print(f"  Flat {flat_size}EUR/trade:    P&L netto totale {flat_total:+.2f}EUR "
-                  f"| capitale impegnato cumulato {flat_capital:.0f}EUR")
+                  f"| capitale impegnato cumulato {flat_capital:.0f}EUR "
+                  f"| ROI {flat_roi*100 if flat_roi is not None else 0:+.2f}%")
             print(f"  Risk-parity ({budget_pct:.0%}): P&L netto totale {risk_total:+.2f}EUR "
                   f"| capitale impegnato cumulato {risk_capital:.0f}EUR "
-                  f"| size media {risk_capital/len(rows) if rows else 0:.0f}EUR")
+                  f"| size media {risk_capital/len(rows) if rows else 0:.0f}EUR "
+                  f"| ROI {risk_roi*100 if risk_roi is not None else 0:+.2f}%")
+            winner = 'risk-parity' if (risk_roi or -9e9) > (flat_roi or -9e9) else 'flat'
+            print(f"  -> A PARITA' DI CAPITALE (ROI%), vince: {winner}")
             results.setdefault(label, {})[f'{budget_pct:.0%}'] = {
                 'n_trades': len(rows), 'flat_net_eur': round(flat_total, 2),
                 'risk_parity_net_eur': round(risk_total, 2),
                 'flat_capital_eur': round(flat_capital, 2), 'risk_capital_eur': round(risk_capital, 2),
+                'flat_roi_pct': round(flat_roi * 100, 3) if flat_roi is not None else None,
+                'risk_parity_roi_pct': round(risk_roi * 100, 3) if risk_roi is not None else None,
+                'winner_by_roi': winner,
             }
     return results
 

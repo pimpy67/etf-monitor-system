@@ -9,8 +9,25 @@ survey_2026_08_24.md) che il blocco strutturale di native_7 e' allineamento_ok
 (EMA20>SMA50) e rsi_ok — filtri di momentum calibrati su equity, non su bond a bassa
 volatilita'. `ETFTechnicalAnalyzer.suggest_bond_trend_entry()` (technical_analysis.py)
 implementa un gate molto piu' semplice (solo trend+persistenza+distanza, niente
-RSI/ADX/MACD/SMA50), backtestato sul Golden Dataset: IN N=191 WR=60.8% PF=1.71 | OUT
-N=76 WR=45.2% PF=1.68 — il candidato piu' stabile del grid search fatto lo stesso giorno.
+RSI/ADX/MACD/SMA50).
+
+⚠️ **Ristretto a `bond_corp_hy_em` SOLO lo stesso giorno** (2026-08-24, poche ore dopo
+il primo deploy): il primo backtest era sul cluster "difensivo" intero (5 famiglie
+mescolate, IN N=191 PF=1.71 | OUT N=76 PF=1.68) — un secondo giro, segmentato PER
+FAMIGLIA su richiesta dell'utente, ha rivelato che il risultato pooled nascondeva un
+problema serio: `bond_governativi` sembra profittevole in-sample (PF 1.5-2.2) ma
+**crolla quasi a zero out-of-sample** (WR 7-13%, PF 0.01-0.18) — qualcosa si e' rotto
+strutturalmente per i governativi nella finestra 2025-2026, mascherato nel pooled
+dall'ottima performance di `bond_corp_hy_em`. Le altre 3 famiglie (settoriali_difensivi,
+real_estate_reit, private_equity_buffer) hanno troppo pochi ticker (2-4) per essere
+significative o sono chiaramente perdenti. Solo `bond_corp_hy_em` mostra un edge forte
+e coerente su OGNI combinazione di parametri testata: IN WR 70-76% PF 2.65-3.67 | OUT
+WR 67-80% PF **4.22-6.24** (PF out-of-sample sistematicamente MIGLIORE dell'in-sample —
+il pattern opposto dell'overfitting, il piu' pulito visto in questo progetto).
+Parametri aggiornati di conseguenza (persistenza 12gg, distanza max 0,3% — ottimizzati
+per questa famiglia specifica, non piu' quelli pooled). Le 4 posizioni ombra aperte al
+primo ciclo (AFRN.PA, EFRN.DE, ECR3.DE, AFLT.PA) erano gia' tutte `bond_corp_hy_em` —
+nessuna posizione su famiglie escluse da ripulire.
 
 Stessa filosofia "no automazione" e stesso pattern non invasivo degli altri Shadow
 Monitor (candidate_model_b, candidate_model_l0, candidate_l0_oro/metalli): logga solo
@@ -31,12 +48,11 @@ MODEL_NAME = 'candidate_bond_trend_20260824'
 
 
 def _get_params():
-    analyzer = ETFTechnicalAnalyzer(famiglia='bond_governativi')
+    analyzer = ETFTechnicalAnalyzer(famiglia='bond_corp_hy_em')
     gp = analyzer._FAMILIES_CONFIG.get('global_params', {})
     return gp.get('bond_trend_model', {
-        'families': ['bond_governativi', 'bond_corp_hy_em', 'settoriali_difensivi',
-                     'real_estate_reit', 'private_equity_buffer'],
-        'persistence_days': 20, 'dist_max_pct': 0.5,
+        'families': ['bond_corp_hy_em'],
+        'persistence_days': 12, 'dist_max_pct': 0.3,
         'target_max_pct': 0.03, 'target_floor_pct': 0.02,
         'slope_window': 3, 'slope_sensitivity': 0.15,
     })
