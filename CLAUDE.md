@@ -1304,7 +1304,23 @@ giorno erano sbagliati.** Rifatti tutti i test:
 (non 13). Estendendo la finestra al massimo storico disponibile nel batch congelato
 (dati fino al 2022-02-15/03-08, mai usati da nessun backtest finora — tutti partivano da
 2023-08-05) fino a 2023-02-01 (margine di sicurezza per i 220gg di warm-up SMA200):
-**oro N=14, metalli N=31** (metalli supera la soglia N≥30 già nel solo backtest).
+**oro N=14, metalli N=31** su finestra unica continua.
+
+⚠️ **Split IN/OUT-of-sample sulla finestra estesa fatto subito dopo, stesso giorno — indebolisce
+il caso invece di rafforzarlo**: IN 2023-02-01→2025-08-05 / OUT 2025-08-05→2026-08-05.
+- Oro: IN N=14 WR=38,5% | **OUT N=0** — tutta l'attività recente è rimasta come posizioni
+  ancora aperte nella finestra IN, zero trade chiusi da validare fuori campione.
+- Metalli: IN N=29 WR=**19,2%** avg=**-2,03%** (P&L -5.283€, negativo) | OUT N=4 WR=100%
+  avg+14,15%. I 6 mesi aggiunti (feb-mag 2023) rivelano un cluster di 6 perdite consecutive
+  che ribalta l'in-sample da positivo a negativo; il fuori-campione resta forte ma N=4 è
+  troppo piccolo per contare da solo.
+
+**Conclusione**: allargare lo storico non rafforza oro/metalli — se possibile aggiunge una
+cautela reale (il quadro pluriennale di metalli include un tratto perdente che la finestra
+più corta escludeva). Nessuna modifica ai parametri live degli Shadow Monitor (restano
+quelli nativi YAML) — continuano a girare e accumulare dati forward reali, più affidabili
+di ulteriori tagli di backtest su questi due asset rumorosi. Filone chiuso — non riaprire
+senza nuovi dati o un approccio diverso.
 
 **8 famiglie "morte" — 5 su 8 mostrano segnale positivo**, non zero:
 
