@@ -48,18 +48,28 @@ L0_ORO_FAMILIES = {'oro_metalli_preziosi'}
 def _whitelist_gold_temporarily():
     """Aggiunge oro_metalli_preziosi alla whitelist L0 SOLO in memoria (mutazione del
     dict di classe condiviso). Restituisce una funzione di ripristino da chiamare
-    sempre in finally — non scrive mai su config/etf_families.yaml."""
+    sempre in finally — non scrive mai su config/etf_families.yaml.
+
+    FIX 2026-08-24 (bug reale, mai emerso finche' non e' stato notato che questo Shadow
+    Monitor non aveva MAI aperto una posizione): suggest_level_0() controlla whitelist E
+    blacklist in modo indipendente (technical_analysis.py:927-933) — bypassare solo la
+    whitelist non basta se la famiglia e' ANCHE nella blacklist, che la blocca comunque
+    (L0_DISABLED_BLACKLISTED). oro_metalli_preziosi e' in ENTRAMBE le liste nello YAML
+    attuale. Ora bypassa anche la blacklist per la durata della chiamata."""
     if ETFTechnicalAnalyzer._FAMILIES_CONFIG is None:
         ETFTechnicalAnalyzer._FAMILIES_CONFIG = ETFTechnicalAnalyzer._load_families_config()
     gp = ETFTechnicalAnalyzer._FAMILIES_CONFIG.setdefault('global_params', {})
     original_whitelist = list(gp.get('l0_whitelist', ['equity_sviluppati']))
+    original_blacklist = list(gp.get('l0_blacklist', []))
     temp_whitelist = list(original_whitelist)
     if 'oro_metalli_preziosi' not in temp_whitelist:
         temp_whitelist.append('oro_metalli_preziosi')
     gp['l0_whitelist'] = temp_whitelist
+    gp['l0_blacklist'] = [f for f in original_blacklist if f != 'oro_metalli_preziosi']
 
     def restore():
         gp['l0_whitelist'] = original_whitelist
+        gp['l0_blacklist'] = original_blacklist
 
     return restore
 

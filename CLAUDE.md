@@ -1163,12 +1163,19 @@ va verificato con lo stesso metodo, non assunto. Vedi risultato del test in
 qualunque famiglia con segnale incoraggiante segue lo stesso percorso di oro/metalli
 (Shadow Monitor dedicato, non promozione diretta).
 
-**Aggiornamento stesso giorno — L0 testato su tutte e 8: zero segnali, terzo meccanismo
-costruito**: il test L0 sulle 8 famiglie bloccate (stesso metodo di oro/metalli, whitelist
-bypassata solo in memoria, script one-off mai committato) ha dato **0 trade su tutte e 8,
-78 ticker, 3 anni** — un negativo pulito, ancora più netto di oro/metalli. Nemmeno il
-mean-reversion su drawdown trova nulla su questi asset. Vedi
-`memory/etf_family_viability_survey_2026_08_24.md` per i dettagli.
+**Aggiornamento stesso giorno — L0 testato su tutte e 8, poi CORRETTO poche ore dopo**: il
+primo test L0 sulle 8 famiglie bloccate (whitelist bypassata solo in memoria, script one-off
+mai committato) aveva dato **0 trade su tutte e 8** — risultato poi scoperto **falso, causato
+da un bug**: lo script bypassava solo `l0_whitelist` ma non `l0_blacklist`, e tutte e 8 le
+famiglie sono ANCHE in blacklist (`suggest_level_0()` controlla entrambe indipendentemente,
+technical_analysis.py:927-933 — stesso identico bug trovato poco dopo negli Shadow Monitor
+L0-oro/metalli già live, vedi sezione dedicata più sotto). Con **entrambe** le liste
+bypassate correttamente, il risultato vero è l'opposto: **5 famiglie su 8 mostrano un
+segnale L0 potenzialmente positivo** (bond_governativi, bond_corp_hy_em, real_estate_reit,
+commodities, crypto_digital_assets), 3 negative (settoriali_difensivi, private_equity_buffer,
+leva_single_stock). Dettagli, dato corrotto trovato in `3LAM.MI` (falsava la media di
+`leva_single_stock` a +101,9%/trade — escluso), e test IN/OUT-of-sample di conferma in
+`memory/etf_family_viability_survey_2026_08_24.md`.
 
 Per il gap di diversificazione (portafoglio reale 75%/25% azionario/bond, con la quota bond
 senza alcun meccanismo attivo), l'utente ha chiesto esplicitamente di procedere con un terzo
@@ -1269,6 +1276,76 @@ SELECT ticker, entry_date, exit_date, exit_reason, gross_pct_gain, status
 FROM etf_shadow_positions WHERE model_name = 'candidate_bond_trend_20260824'
 ORDER BY entry_date;
 ```
+
+### 🔴 Bug reale trovato e corretto 2026-08-24 — bypass whitelist L0 senza bypass blacklist
+
+Investigando perché `shadow_monitor_l0_oro.py`/`shadow_monitor_l0_metalli.py` (live dal
+giorno prima) non avessero mai aperto una posizione, e perché il test "L0 su 8 famiglie
+morte" desse 0 trade ovunque: `suggest_level_0()` controlla whitelist e blacklist **in modo
+indipendente** (technical_analysis.py:927-933) — se la famiglia è ANCHE in blacklist, resta
+bloccata anche se aggiunta alla whitelist. Sia i due Shadow Monitor live sia lo script di
+test delle 8 famiglie bypassavano solo `l0_whitelist`, mai `l0_blacklist` — ma
+`oro_metalli_preziosi`, `metalli_industriali` e tutte le altre 8 famiglie testate sono
+**tutte** in `l0_blacklist` nello YAML attuale. Risultato: bloccate comunque, sempre,
+indipendentemente da quanto tempo passa.
+
+**Impatto**: i due Shadow Monitor oro/metalli, deployati la sera prima, non avrebbero MAI
+potuto aprire una posizione — bug silenzioso, stesso pattern del bug whitelist-mai-attiva
+scoperto il 2026-08-07 (`self.p` vs `self._FAMILIES_CONFIG`), ma su un meccanismo diverso.
+Fix: entrambe le funzioni di bypass ora svuotano anche la blacklist per la famiglia
+interessata, oltre ad aggiungerla alla whitelist. Deployato in hot-fix nel container prima
+ancora del prossimo `./deploy.sh` pianificato, poi committato normalmente.
+
+**Con il bug corretto, tutti i numeri "L0 negativo/zero" riportati in precedenza lo stesso
+giorno erano sbagliati.** Rifatti tutti i test:
+
+**Oro/metalli — numeri veri, molto meglio dei 3/13 riportati inizialmente**: stessa finestra
+2023-08-05→oggi, whitelist E blacklist bypassate: **oro N=12** (non 3), **metalli N=23**
+(non 13). Estendendo la finestra al massimo storico disponibile nel batch congelato
+(dati fino al 2022-02-15/03-08, mai usati da nessun backtest finora — tutti partivano da
+2023-08-05) fino a 2023-02-01 (margine di sicurezza per i 220gg di warm-up SMA200):
+**oro N=14, metalli N=31** (metalli supera la soglia N≥30 già nel solo backtest).
+
+**8 famiglie "morte" — 5 su 8 mostrano segnale positivo**, non zero:
+
+| Famiglia | N (2023-08-05→oggi) | Win rate | Rend. medio | P&L (10k€/trade) |
+|---|---:|---:|---:|---:|
+| bond_corp_hy_em | 11 | 75,0% | +6,43% | +5.143€ |
+| crypto_digital_assets | 26 | 32,0% | +7,41% | +18.531€ |
+| commodities | 13 | 38,5% | +3,11% | +4.049€ |
+| real_estate_reit | 10 | 50,0% | +2,61% | +2.612€ |
+| bond_governativi | 11 | 71,4% | +2,28% | +1.597€ |
+| private_equity_buffer | 9 | 25,0% | -1,27% | -1.020€ |
+| settoriali_difensivi | 14 | 27,3% | -1,27% | -1.395€ |
+| leva_single_stock | 124* | 22,1% | -0,61% | -7.410€ |
+
+*Trovato e scartato un dato corrotto su `3LAM.MI` (entry 0,13€→exit 25,58€, +19.147% su un
+singolo trade — chiaramente un errore di dati, non un movimento di mercato reale) che da
+solo falsava la media dell'intera famiglia a +101,9%/trade e P&L a +1,4M€. Numero sopra già
+pulito. `leva_single_stock` resta negativo anche corretto, coerente col suo track record
+già noto altrove in questo documento.
+
+✅ **Verifica IN/OUT-of-sample fatta subito dopo, stesso giorno — nessuna delle 5 regge**:
+
+| Famiglia | IN: N/WR/avg | OUT: N/WR/avg | Verdetto |
+|---|---|---|---|
+| bond_governativi | 7/100%/+4,94% | 4/**0%**/-4,45% | Ribaltamento completo |
+| bond_corp_hy_em | 4/33%/-0,91% | 7/100%/+12,08% | N troppo piccolo entrambi i lati |
+| real_estate_reit | 9/29%/-0,43% | 2/100%/+9,71% | N=2 fuori campione, rumore |
+| commodities | 11/**0%**/-4,65% | 3/100%/+15,75% | In-sample già a 0% WR su 11 trade |
+| crypto_digital_assets | 21/47%/+13,56% | 7/**0%**/-5,06% | Firma classica di overfitting (bene dentro, crolla fuori) |
+
+Il numero aggregato "5 famiglie positive" su finestra unica era statisticamente fragile —
+bastava dividere in IN/OUT perché ogni singolo caso si ribaltasse o si rivelasse rumore puro
+(N troppo piccolo). **Conclusione finale: nessuna delle 8 famiglie bloccate merita uno
+Shadow Monitor L0** — non per il motivo sbagliato di prima (bug, 0 segnali), ma per il
+motivo giusto ora verificato (segnale non riproducibile fuori campione). Per
+`crypto_digital_assets`/`commodities` questo conferma retroattivamente perché la whitelist
+originale li escludeva (fallimenti reali durante bear market, coerenti con l'OOS negativo
+qui). `bond_corp_hy_em` resta comunque coperta — meglio, con N=83/45 solido IN/OUT — dal
+modello Bond-Trend dedicato (vedi sopra), non serve un secondo meccanismo L0 per la stessa
+famiglia. Nessun nuovo Shadow Monitor costruito. Vedi
+`memory/etf_family_viability_survey_2026_08_24.md` per il dettaglio completo.
 
 ### Punto di decisione successivo — AGGIORNATO dopo il test reale "smart 6/7 MACD" (vedi sotto, 2026-08-05)
 
