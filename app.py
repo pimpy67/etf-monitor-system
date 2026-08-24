@@ -1048,10 +1048,11 @@ def get_pac():
         if current_value is not None:
             total_value_pac += current_value
 
-    # Confronto separato PAC vs L1 vs L0 (etf_portfolio_entries, posizioni 'active',
-    # divise per portfolio_type — prima erano unite in un unico blocco "attivo", su
-    # richiesta esplicita ora servono tre sleeve distinte con ranking visivo).
+    # Confronto separato PAC vs L1 vs L0 (etf_portfolio_entries, divise per portfolio_type
+    # — prima erano unite in un unico blocco "attivo", su richiesta esplicita ora servono
+    # tre sleeve distinte con ranking visivo).
     active_entries = db.get_portfolio_entries()
+    exited_entries = db.get_exited_portfolio_entries()
     sleeves = {
         'pac': {'invested': total_invested_pac, 'value': total_value_pac, 'n': len(contributions)},
         'l1': {'invested': 0.0, 'value': 0.0, 'n': 0},
@@ -1071,6 +1072,22 @@ def get_pac():
         current_price = float(df_p.iloc[-1]['Close']) if not df_p.empty else entry_price
         sleeves[ptype]['invested'] += shares * entry_price
         sleeves[ptype]['value'] += shares * current_price
+        sleeves[ptype]['n'] += 1
+
+    # Posizioni chiuse: il guadagno/perdita realizzato va sommato con lo stesso peso
+    # (quote × prezzo), altrimenti il confronto perde la storia dei trade già venduti
+    # ogni volta che una posizione L1/L0 esce (vedi nota in get_exited_portfolio_entries).
+    for e in exited_entries:
+        shares = float(e.get('shares') or 0)
+        entry_price = float(e.get('entry_price') or 0)
+        exit_price = float(e.get('exit_price') or 0)
+        if not shares or not entry_price or not exit_price:
+            continue
+        ptype = (e.get('portfolio_type') or 'L1').lower()
+        if ptype not in ('l1', 'l0'):
+            continue
+        sleeves[ptype]['invested'] += shares * entry_price
+        sleeves[ptype]['value'] += shares * exit_price
         sleeves[ptype]['n'] += 1
 
     comparison = {}

@@ -1297,6 +1297,31 @@ class PriceDatabase:
         finally:
             conn.close()
 
+    def get_exited_portfolio_entries(self) -> List[Dict]:
+        """Restituisce le posizioni CHIUSE (status='exited') con shares/entry_price/
+        exit_price — usata dal confronto PAC vs L1/L0 (2026-08-24) per includere il
+        guadagno/perdita realizzato dei trade già venduti, non solo le posizioni ancora
+        aperte. Senza questo, il confronto perdeva la storia dei trade chiusi ogni volta
+        che una posizione L1/L0 usciva (survivorship: mostrava solo ciò che è aperto ora)."""
+        conn = self._get_connection()
+        if not conn:
+            return []
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT isin, fund_name, entry_date, entry_price, shares,
+                           exit_date, exit_price, portfolio_type
+                    FROM etf_portfolio_entries
+                    WHERE status = 'exited' AND exit_price IS NOT NULL
+                    ORDER BY exit_date DESC
+                """)
+                return [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            logging.error(f"Errore get_exited_portfolio_entries: {e}")
+            return []
+        finally:
+            conn.close()
+
     def get_portfolio_entries_by_type(self, portfolio_type: str = 'L1') -> list:
         """Restituisce ETF del portafoglio filtrati per tipo (L1 o L0)."""
         conn = self._get_connection()
