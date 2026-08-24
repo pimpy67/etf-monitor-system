@@ -1554,6 +1554,71 @@ class ETFTechnicalAnalyzer:
             'reason': reason
         }
 
+    def suggest_bond_trend_entry(self, close: pd.Series, ema20: pd.Series,
+                                  persistence_days: int = 20,
+                                  dist_max_pct: float = 0.5) -> Dict:
+        """
+        CANDIDATE_BOND_TREND_20260824 — meccanismo di ingresso separato per le 5
+        famiglie difensive/bond bloccate da L1 (min_buy_count: 8, 2026-08-24), dove
+        il gate nativo a 7 condizioni non si attiva MAI: 0 giorni su 40.711
+        ticker-giorni testati sul Golden Dataset a 3 anni (vedi
+        memory/etf_family_viability_survey_2026_08_24.md). Diagnosticato che il
+        blocco strutturale sono allineamento_ok (EMA20>SMA50, vero solo il 19.1%
+        dei giorni) e rsi_ok (24.8%) — filtri di momentum calibrati su equity,
+        non su strumenti a bassa volatilita' come i bond.
+
+        Non e' una modifica a suggest_level()/native_7 — e' un meccanismo
+        completamente separato, usato SOLO dallo Shadow Monitor dedicato
+        (shadow_monitor_bond_trend.py), mai dal gate reale.
+
+        4 condizioni, tutte obbligatorie (niente RSI/ADX/MACD/SMA50 — il
+        diagnostico ha mostrato che sono i filtri sbagliati per questo asset
+        class, non semplicemente tarati male):
+          1. price > EMA20
+          2. giorni_sopra_EMA20 >= persistence_days E slope(EMA20, 10gg) > 0
+          3. 0% <= distanza da EMA20 <= dist_max_pct (ingresso non esteso)
+          4. no kill switch (calo giornaliero <= -3%)
+
+        Backtestato sul Golden Dataset (batch 2026-08-07), 61 ticker del cluster
+        difensivo, split IN 2023-08-05->2025-08-05 / OUT 2025-08-05->2026-08-05,
+        uscita via calculate_sl_suggerito_l1/calculate_stop_gain_dynamic (stesse
+        funzioni reali di L1, nessuna duplicazione): con i default sopra,
+        IN N=191 WR=60.8% PF=1.71 P&L=+8.604€ (10k€/trade) | OUT N=76 WR=45.2%
+        PF=1.68 P&L=+2.267€ — il PF piu' stabile (1.71->1.68) tra tutte le
+        combinazioni testate nel grid search, preferito a candidati con PF
+        in-sample piu' alto ma che crollava out-of-sample (stessa disciplina
+        anti-overfitting usata altrove in questo file).
+        """
+        if ema20 is None or close is None or len(close) < 2:
+            return {'entry_ok': False}
+
+        current = float(close.iloc[-1])
+        ema20_v = self._fval(ema20)
+        if ema20_v is None or ema20_v <= 0:
+            return {'entry_ok': False}
+
+        prev = float(close.iloc[-2])
+        daily_chg = (current - prev) / prev * 100 if prev else 0.0
+        kill_switch = daily_chg <= -3.0
+
+        price_above = current > ema20_v
+        days_above = self._days_above(close, ema20, max_check=persistence_days + 5)
+        slope = self._slope(ema20, window=10)
+        dist_pct = (current - ema20_v) / ema20_v * 100
+        dist_ok = 0 <= dist_pct <= dist_max_pct
+        persistence_ok = days_above >= persistence_days and slope > 0
+
+        entry_ok = (not kill_switch) and price_above and persistence_ok and dist_ok
+
+        return {
+            'entry_ok': entry_ok,
+            'price_above_ema20': price_above,
+            'days_above_ema20': days_above,
+            'ema20_slope': round(slope, 6),
+            'dist_ema20_pct': round(dist_pct, 3),
+            'kill_switch': kill_switch,
+        }
+
     def check_position_add(self, position_data: Dict, current_quality: int) -> Dict:
         """
         Valuta se aggiungere capitale a una posizione L1 parziale.

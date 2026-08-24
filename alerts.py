@@ -184,6 +184,11 @@ class AlertSystem:
             'params': 'L0 (mean-reversion) su metalli_industriali — whitelist bypassata solo per il test, nessun altro parametro cambiato (dd_threshold/rsi_max/TP nativi)',
             'color_main': '#935116', 'color_dark': '#5B2E0C', 'tag': 'L0-Metalli',
         },
+        'BOND_TREND': {
+            'label': 'Candidate Bond Trend',
+            'params': 'Terzo meccanismo (no RSI/ADX/MACD) per bond_governativi/bond_corp_hy_em/settoriali_difensivi/real_estate_reit/private_equity_buffer — persistenza 20gg, dist_max 0.5%, TP dinamico target 3%',
+            'color_main': '#2E86C1', 'color_dark': '#1B4F72', 'tag': 'Bond-Trend',
+        },
     }
 
     def send_shadow_entries(self, new_entries: list, variant: str = 'L1') -> bool:

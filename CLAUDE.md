@@ -1163,14 +1163,100 @@ va verificato con lo stesso metodo, non assunto. Vedi risultato del test in
 qualunque famiglia con segnale incoraggiante segue lo stesso percorso di oro/metalli
 (Shadow Monitor dedicato, non promozione diretta).
 
-**Item aperto, non ancora progettato**: l'utente diversifica il portafoglio reale
-75%/25% azionario/bond — con le 5 famiglie bond bloccate su L1 e non ancora testate su L0,
-oggi la quota "bond" del portafoglio non ha nessun meccanismo di ingresso/uscita attivo
-dedicato (solo monitoraggio prezzo passivo). Se il test L0 sopra non dà risultati
-utilizzabili, resta aperta l'ipotesi di un meccanismo terzo pensato apposta per bond a bassa
-volatilità (soglie molto più strette, o un approccio duration/carry non basato su
-momentum) — non progettato né backtestato, richiede un progetto dedicato quando/se si
-vuole procedere.
+**Aggiornamento stesso giorno — L0 testato su tutte e 8: zero segnali, terzo meccanismo
+costruito**: il test L0 sulle 8 famiglie bloccate (stesso metodo di oro/metalli, whitelist
+bypassata solo in memoria, script one-off mai committato) ha dato **0 trade su tutte e 8,
+78 ticker, 3 anni** — un negativo pulito, ancora più netto di oro/metalli. Nemmeno il
+mean-reversion su drawdown trova nulla su questi asset. Vedi
+`memory/etf_family_viability_survey_2026_08_24.md` per i dettagli.
+
+Per il gap di diversificazione (portafoglio reale 75%/25% azionario/bond, con la quota bond
+senza alcun meccanismo attivo), l'utente ha chiesto esplicitamente di procedere con un terzo
+meccanismo — **fatto lo stesso giorno**, vedi sezione dedicata sotto.
+
+### CANDIDATE_BOND_TREND_20260824 — terzo meccanismo per le 5 famiglie bond/difensive
+
+Diagnosticato PRIMA di progettare (`diagnose_bond_conditions.py`, scratch, walk giorno-per-
+giorno delle 7 condizioni `native_7` su 40.711 ticker-giorni, 61 ticker del cluster
+difensivo, Golden Dataset 3 anni): **7/7 non accade MAI** (0.00%), **6/7 solo 85 giorni su
+40.711 (0.21%)**. Frequenza TRUE per condizione: `allineamento_ok` 19.1% (EMA20>SMA50 —
+il blocco dominante), `rsi_ok` 24.8%, `macd_ok` 27.2%, `space_residuo_ok` 25.0%,
+`persistenza_ok` 51.5%, `distance_ok` 60.6%, `adx_ok` 78.7%. Nei rari giorni a 6/7, il
+blocco è quasi sempre `allineamento_ok` (43.5%) o `rsi_ok` (40.0%) insieme — i filtri di
+momentum equity (RSI/ADX/MACD/incrocio EMA20-SMA50) semplicemente non si adattano a
+strumenti che oscillano in bande strette guidate dai tassi, non da trend equity-style.
+
+**Meccanismo progettato**: `ETFTechnicalAnalyzer.suggest_bond_trend_entry()`
+(`technical_analysis.py`) — 4 condizioni, niente RSI/ADX/MACD/SMA50:
+1. price > EMA20
+2. giorni_sopra_EMA20 ≥ `persistence_days` E slope(EMA20, finestra 10gg) > 0
+3. 0% ≤ distanza da EMA20 ≤ `dist_max_pct` (ingresso non esteso)
+4. no kill switch (calo giornaliero ≤ −3%)
+
+Uscita: **riusa le funzioni reali di L1 senza modifiche** — `calculate_sl_suggerito_l1`
+(trailing EMA20-based) e `calculate_stop_gain_dynamic` (target dinamico, ma con
+`target_max_pct` molto più piccolo del 15% equity — l'upside realistico di un bond è
+ordini di grandezza inferiore).
+
+**Grid search** (`backtest_bond_trend.py`, scratch, stesso Golden Dataset, split IN
+2023-08-05→2025-08-05 / OUT 2025-08-05→2026-08-05, stesso modello costi/tasse di
+`backtest_l1.py`): testate combinazioni di persistenza (5/8/12/15/20gg) × distanza max
+(0.3/0.5/1.0/1.5%) × target TP (3%/5%). Pattern chiaro: **allargare la distanza o il target
+peggiora l'out-of-sample** (stessa firma di overfitting già vista altrove in questo
+documento — es. `mm200_delta=-1` su L1), mentre persistenza più lunga (12-20gg, contro i 3
+usati da equity) è più stabile, coerente con trend di tassi che si muovono su settimane/mesi
+non giorni.
+
+**Parametri scelti** (il PF più stabile IN→OUT tra tutte le combinazioni testate, preferito
+a candidati con PF in-sample più alto ma che crollava fuori campione):
+
+| Parametro | Valore |
+|---|---|
+| `persistence_days` | 20 |
+| `dist_max_pct` | 0.5% |
+| `target_max_pct` (TP dinamico) | 3% |
+| `target_floor_pct` | 2% |
+| `slope_window` / `slope_sensitivity` (decadimento TP) | 3 / 0.15 (stessa convenzione delle famiglie equity) |
+
+**Metriche** (Golden Dataset, batch `2026-08-07`, 61 ticker cluster difensivo):
+
+| | In-Sample | Out-of-Sample |
+|---|---|---|
+| N trade | 191 | 76 |
+| Win rate netto | 60.8% | 45.2% |
+| Profit Factor | 1.71 | 1.68 |
+| P&L netto (10k€/trade) | +8.604€ | +2.267€ |
+
+N enormemente superiore a qualunque altro candidato di questo documento (191/76 contro i
+tipici 3-40) — ma con una riserva importante: **molti trade aprono sugli stessi giorni su
+ticker diversi della stessa famiglia** (es. 10 bond governativi tutti entrano il
+2023-11-07÷10) perché i bond della stessa asset class si muovono insieme guidati dallo
+stesso fattore macro (tassi) — il campione reale indipendente è quindi più vicino a ~15-20
+"eventi di mercato" che a 191 scommesse scorrelate. Il PF resta comunque solido e coerente
+IN→OUT, ma va letto con questa cautela in più rispetto ai candidati su singoli titoli equity.
+
+**Parametri NON testati in profondità**: `slope_window`/`slope_sensitivity` per il
+decadimento del TP dinamico sono stati presi per convenzione dalle famiglie equity (3gg /
+0.15), non sweepati — impatto verificato trascurabile su un test di conferma, non escluso
+un margine di miglioramento qui.
+
+⚠️ **NON promosso in produzione** — stessa disciplina di ogni altro candidato: Shadow
+Monitor prima, promozione solo dopo N≥30 su dati forward reali e decisione esplicita
+dell'utente. **Shadow Monitor implementato e live lo stesso giorno**:
+`shadow_monitor_bond_trend.py`, STEP 8f in `monitor.py::run()`, `model_name` =
+`candidate_bond_trend_20260824`, parametri letti da
+`global_params.bond_trend_model` in `config/etf_families.yaml` (mai una modifica a
+`min_buy_count`/`native_7` — meccanismo completamente separato). Email sui nuovi ingressi
+via `alerts.py::send_shadow_entries(variant='BOND_TREND')`, stesso meccanismo già attivo per
+gli altri 4 candidati. Verificato: import puliti, smoke test su `_get_params()` OK, deploy
+via `./deploy.sh`.
+
+**Estrazione risultati al prossimo checkpoint** (stesso pattern degli altri candidati):
+```sql
+SELECT ticker, entry_date, exit_date, exit_reason, gross_pct_gain, status
+FROM etf_shadow_positions WHERE model_name = 'candidate_bond_trend_20260824'
+ORDER BY entry_date;
+```
 
 ### Punto di decisione successivo — AGGIORNATO dopo il test reale "smart 6/7 MACD" (vedi sotto, 2026-08-05)
 

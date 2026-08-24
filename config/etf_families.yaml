@@ -18,6 +18,19 @@ global_params:
   - private_equity_buffer
   - monetario_liquidita
   l0_regime_required: BULL
+  bond_trend_model:
+    families:
+    - bond_governativi
+    - bond_corp_hy_em
+    - settoriali_difensivi
+    - real_estate_reit
+    - private_equity_buffer
+    persistence_days: 20
+    dist_max_pct: 0.5
+    target_max_pct: 0.03
+    target_floor_pct: 0.02
+    slope_window: 3
+    slope_sensitivity: 0.15
 l2_readiness:
   threshold_enter: 70
   threshold_exit: 60

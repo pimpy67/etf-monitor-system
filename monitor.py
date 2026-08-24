@@ -1175,6 +1175,24 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor L0-metalli (non bloccante): {e}")
 
+        # STEP 8f — Shadow Monitor CANDIDATE_BOND_TREND_20260824: terzo meccanismo
+        # (ne' L1 momentum ne' L0 mean-reversion) per le 5 famiglie difensive/bond
+        # bloccate lo stesso giorno da L1 (min_buy_count: 8) — native_7 non si attiva
+        # MAI su questi asset (0/40.711 ticker-giorni, allineamento_ok/rsi_ok tarati
+        # su equity). Gate a 4 condizioni (trend+persistenza+distanza, niente
+        # RSI/ADX/MACD/SMA50) via ETFTechnicalAnalyzer.suggest_bond_trend_entry() —
+        # non tocca mai suggest_level()/native_7. Backtest Golden Dataset: IN N=191
+        # WR=60.8% PF=1.71 | OUT N=76 WR=45.2% PF=1.68 (parametri in
+        # global_params.bond_trend_model). Vedi memory/etf_family_viability_survey_
+        # 2026_08_24.md per il grid search completo.
+        try:
+            from shadow_monitor_bond_trend import run_shadow_monitor_bond_trend
+            shadow_bond_trend_entries = run_shadow_monitor_bond_trend(self.db, results, add_log=add_log)
+            if shadow_bond_trend_entries and send_daily_report:
+                self.alert_system.send_shadow_entries(shadow_bond_trend_entries, variant='BOND_TREND')
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor Bond-Trend (non bloccante): {e}")
+
         # 7. Invia resoconto portafoglio — DOPO l'aggiornamento SL/TP (fix 2026-08-05:
         # prima veniva inviato PRIMA degli STEP 4/7 sopra, quindi l'email mostrava
         # sempre i valori SL/TP del giorno precedente invece di quelli appena calcolati
