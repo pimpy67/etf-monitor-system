@@ -1965,6 +1965,50 @@ parametri sweepati, è mancanza strutturale di segnale `smart_6_macd` a monte (v
 > ORDER BY entry_date;
 > ```
 
+> ✅ **PROMOSSO IN PRODUZIONE 2026-08-24** — deroga esplicita al lockdown, su richiesta
+> diretta dell'utente, con Shadow Monitor ancora a N=1 (ben sotto la soglia N≥30 — stesso
+> tipo di eccezione già concessa una volta per `CANDIDATE_MODEL_L0_SL_20260820`, non un
+> nuovo precedente generale). Contesto della decisione: nella stessa sessione è stato
+> costruito un confronto diretto "PAC passivo su VWCE.DE vs sistema attivo" con la stessa
+> cassa mensile simulata (€1.000/mese, 3 anni) — `native_7` (1 solo trade nel periodo)
+> rendeva +1,03% contro il +23,34% del PAC; `smart_6_macd` (13 trade presi) rendeva +7,02%,
+> ancora sotto il PAC ma molto più vicino — motivando la richiesta di attivarlo subito
+> invece di aspettare il 06/09.
+>
+> **Applicato esattamente il bundle certificato**, su tutte e 5 le famiglie `core`
+> (scelta esplicita dell'utente tra due alternative proposte — solo `equity_sviluppati` era
+> l'opzione più prudente, scartata):
+> ```yaml
+> # per ciascuna delle 5 famiglie core (equity_sviluppati, mercati_emergenti,
+> # settoriali_growth, oro_metalli_preziosi, metalli_industriali):
+> use_smart_6_7_macd: true
+> mm200_distance_max: 7.0        # assoluto, sostituisce il valore per-famiglia precedente
+> adx_entry: <baseline famiglia> - 4   # es. equity_sviluppati 22->18, settoriali_growth 25->21
+> l1_stop_gain_dynamic.target_max_pct: 0.15   # sostituisce il valore per-famiglia precedente
+> ```
+> ⚠️ **Rischio noto, accettato esplicitamente**: il sondaggio delle 14 famiglie (stesso
+> giorno) aveva già declassato `oro_metalli_preziosi` (0 giorni raggiunge mai smart_6_macd
+> nel suo storico) e `mercati_emergenti` ("da motore a monitorare, edge fragile/regime-
+> dipendente") — il bundle certificato N=151/31/18 le include comunque perché il backtest
+> originale del 07/08 era sull'intero cluster insieme, non segmentato per famiglia (lo
+> stesso tipo di rischio "pooled" isolato due volte in questa sessione — Bond-Trend e L0 sulle
+> 8 famiglie morte). Non risegmentato prima della promozione — deciso di procedere comunque
+> su richiesta esplicita, monitorare i risultati reali family-by-family al prossimo
+> checkpoint invece di ritardare l'attivazione.
+>
+> **Cleanup eseguito lo stesso giorno** (produzione e candidato ora coincidono, stesso schema
+> di `CANDIDATE_MODEL_L0_SL_20260820`): `shadow_monitor.py` rimosso dal repo e dalla chiamata
+> STEP 8 in `monitor.py::run()`; variante `'L1'` rimossa da
+> `alerts.py::_SHADOW_VARIANTS` (default di fallback spostato su `'L0'`). L'unica posizione
+> ombra esistente (`LGQM.DE`, aperta 2026-08-22) chiusa amministrativamente nel DB
+> (`exit_reason='PROMOTED'`, non un vero tocco di SL/TP). Deployato via `./deploy.sh`.
+>
+> **Da fare al prossimo checkpoint**: monitorare gli ingressi reali family-by-family (via
+> `etf_l1_tracking`) per verificare se `oro_metalli_preziosi`/`mercati_emergenti` si
+> comportano come temuto (segnali rari o di bassa qualità) — se confermato, valutare di
+> restringere `use_smart_6_7_macd` alle sole famiglie che si dimostrano valide, stessa
+> disciplina già applicata a Bond-Trend lo stesso giorno.
+
 ### Sessione fix 2026-08-07 (riassunto) — bug regime_ok, 10 ticker delistati, chiusura discrepanza 80 vs 3
 
 - **Fix `UnboundLocalError: regime_ok`** in `suggest_level_0()`: la variabile veniva letta ai

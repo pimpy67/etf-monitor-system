@@ -159,11 +159,8 @@ class AlertSystem:
         return self._send_email(subject, body_html)
 
     _SHADOW_VARIANTS = {
-        'L1': {
-            'label': 'Candidate Model B',
-            'params': 'mm200_distance_max=7.0%, adx-4, smart_6_macd, TP=15%',
-            'color_main': '#8E44AD', 'color_dark': '#5B2C6F', 'tag': 'L1',
-        },
+        # 'L1' (CANDIDATE_MODEL_B_20260807) rimossa 2026-08-24 — promossa in
+        # produzione lo stesso giorno, non piu' un candidato da tracciare in ombra.
         'L0': {
             'label': 'Candidate Model L0',
             'params': 'regime_min_days_below_sma200=5 (invece di 10), resto YAML nativo (SL, TP=16%)',
@@ -207,7 +204,7 @@ class AlertSystem:
         if not new_entries:
             return True
 
-        v = self._SHADOW_VARIANTS.get(variant, self._SHADOW_VARIANTS['L1'])
+        v = self._SHADOW_VARIANTS.get(variant, self._SHADOW_VARIANTS['L0'])
         model_label = v['label']
         params_desc = v['params']
         color_main = v['color_main']

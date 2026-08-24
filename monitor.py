@@ -1091,20 +1091,15 @@ class ETFMonitor:
             except Exception as e:
                 add_log(f"⚠️  Errore alert avvicinamento TP: {e}")
 
-        # STEP 8 — Shadow Monitor CANDIDATE_MODEL_B_20260807 (2026-08-07): traccia
-        # posizioni ipotetiche sul cluster 'core' con i parametri del candidato
-        # (mm200_distance_max=7.0%, adx-4, smart_6_macd, TP=15%) senza toccare NESSUNA
-        # decisione reale — solo log su etf_shadow_positions per il confronto
-        # native_7 vs candidato a fine lockdown (06/09/2026). Email sui nuovi ingressi
-        # collegata il 2026-08-19 su richiesta esplicita (prima "nessuna email").
-        # Vedi CLAUDE.md "CANDIDATE_MODEL_B_20260807".
-        try:
-            from shadow_monitor import run_shadow_monitor
-            shadow_l1_entries = run_shadow_monitor(self.db, results, add_log=add_log)
-            if shadow_l1_entries and send_daily_report:
-                self.alert_system.send_shadow_entries(shadow_l1_entries, variant='L1')
-        except Exception as e:
-            add_log(f"⚠️  Errore Shadow Monitor (non bloccante): {e}")
+        # STEP 8 — RIMOSSO 2026-08-24: CANDIDATE_MODEL_B_20260807 (smart_6_macd +
+        # mm200_distance_max=7.0% assoluto + adx-4 + TP=15%) e' stato promosso in
+        # produzione lo stesso giorno su richiesta esplicita dell'utente, in deroga al
+        # lockdown parametri (N=1 nello Shadow Monitor, ben sotto la soglia N≥30 —
+        # eccezione motivata dal confronto PAC-vs-attivo dello stesso giorno, non un
+        # nuovo precedente generale). Produzione e candidato ora coincidono, niente
+        # piu' da tracciare in parallelo — stesso schema gia' usato per
+        # CANDIDATE_MODEL_L0_SL_20260820. shadow_monitor.py rimosso dal repo, variante
+        # 'L1' rimossa da alerts.py::_SHADOW_VARIANTS. Vedi CLAUDE.md.
 
         # STEP 8b — Shadow Monitor CANDIDATE_MODEL_L0_20260808 (2026-08-08): stesso
         # principio dello Shadow Monitor L1 sopra, ma per L0 — traccia posizioni

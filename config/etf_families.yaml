@@ -46,14 +46,14 @@ families:
   equity_sviluppati:
     description: Equity sviluppati — Large cap, ACWI, All-World
     entry_mode: STANDARD
-    use_smart_6_7_macd: false
+    use_smart_6_7_macd: true
     rsi_entry_low: 45
     rsi_entry_high: 58
     rsi_exit_min: 40
     rsi_overbought: 78
-    adx_entry: 22
+    adx_entry: 18
     ema_dist_max: 4.0
-    mm200_distance_max: 3.0
+    mm200_distance_max: 7.0
     lateral_band: 0.01
     atr_max: 0.03
     aum_min: 50
@@ -105,7 +105,7 @@ families:
       squeeze_threshold_pct: 0.008
       squeeze_percentile_threshold: 20
     l1_stop_gain_dynamic:
-      target_max_pct: 0.05
+      target_max_pct: 0.15
       target_floor_pct: 0.025
       slope_window: 3
       slope_sensitivity: 0.15
@@ -115,9 +115,9 @@ families:
     rsi_entry_high: 58
     rsi_exit_min: 38
     rsi_overbought: 76
-    adx_entry: 22
+    adx_entry: 18
     ema_dist_max: 5.0
-    mm200_distance_max: 4.0
+    mm200_distance_max: 7.0
     lateral_band: 0.012
     atr_max: 0.04
     aum_min: 50
@@ -164,9 +164,9 @@ families:
       squeeze_threshold_pct: 0.01
       squeeze_percentile_threshold: 20
     entry_mode: STANDARD
-    use_smart_6_7_macd: false
+    use_smart_6_7_macd: true
     l1_stop_gain_dynamic:
-      target_max_pct: 0.065
+      target_max_pct: 0.15
       target_floor_pct: 0.03
       slope_window: 3
       slope_sensitivity: 0.12
@@ -176,9 +176,9 @@ families:
     rsi_entry_high: 60
     rsi_exit_min: 38
     rsi_overbought: 78
-    adx_entry: 25
+    adx_entry: 21
     ema_dist_max: 5.0
-    mm200_distance_max: 4.0
+    mm200_distance_max: 7.0
     lateral_band: 0.015
     atr_max: 0.05
     aum_min: 50
@@ -225,9 +225,9 @@ families:
       squeeze_threshold_pct: 0.012
       squeeze_percentile_threshold: 20
     entry_mode: STANDARD
-    use_smart_6_7_macd: false
+    use_smart_6_7_macd: true
     l1_stop_gain_dynamic:
-      target_max_pct: 0.07
+      target_max_pct: 0.15
       target_floor_pct: 0.03
       slope_window: 3
       slope_sensitivity: 0.12
@@ -481,9 +481,9 @@ families:
     rsi_entry_high: 52
     rsi_exit_min: 38
     rsi_overbought: 68
-    adx_entry: 18
+    adx_entry: 14
     ema_dist_max: 2.5
-    mm200_distance_max: 2.0
+    mm200_distance_max: 7.0
     lateral_band: 0.015
     atr_max: 0.04
     aum_min: 50
@@ -535,9 +535,9 @@ families:
       squeeze_threshold_pct: 0.01
       squeeze_percentile_threshold: 20
     entry_mode: STANDARD
-    use_smart_6_7_macd: false
+    use_smart_6_7_macd: true
     l1_stop_gain_dynamic:
-      target_max_pct: 0.055
+      target_max_pct: 0.15
       target_floor_pct: 0.025
       slope_window: 4
       slope_sensitivity: 0.14
@@ -547,9 +547,9 @@ families:
     rsi_entry_high: 50
     rsi_exit_min: 38
     rsi_overbought: 65
-    adx_entry: 20
+    adx_entry: 16
     ema_dist_max: 3.0
-    mm200_distance_max: 2.4
+    mm200_distance_max: 7.0
     lateral_band: 0.012
     atr_max: 0.05
     aum_min: 30
@@ -601,9 +601,9 @@ families:
       squeeze_threshold_pct: 0.012
       squeeze_percentile_threshold: 20
     entry_mode: STANDARD
-    use_smart_6_7_macd: false
+    use_smart_6_7_macd: true
     l1_stop_gain_dynamic:
-      target_max_pct: 0.06
+      target_max_pct: 0.15
       target_floor_pct: 0.025
       slope_window: 3
       slope_sensitivity: 0.13
