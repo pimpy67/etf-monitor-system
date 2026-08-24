@@ -1532,6 +1532,15 @@ versamento a mano nella nuova pagina. Il sistema non piazza né simula alcun ord
 Verificato end-to-end (POST/GET/DELETE) con un versamento di prova, poi rimosso (non era
 un acquisto reale). Deployato via `./deploy.sh`.
 
+**Aggiornamento stesso giorno — confronto a tre vie con frecce**: su richiesta, il
+confronto non è più "PAC vs Attivo" unico ma **tre sleeve separate** (PAC, L1, L0), lette
+da `portfolio_type` in `etf_portfolio_entries`. Ogni card mostra una freccia (🔼 dove
+pesare di più, 🔽 dove pesare di meno, ➡️ differenza minima o campione troppo piccolo) —
+la freccia scatta solo se lo scarto tra la migliore e la peggiore è ≥3 punti percentuali
+**e** tutte le sleeve coinvolte hanno almeno 3 posizioni/versamenti, altrimenti resta
+neutra di proposito (stessa cautela già discussa sul non reagire a un campione piccolo
+tipo "6 mesi, 2 trade").
+
 ---
 
 ## Infrastruttura Tecnica

@@ -1330,6 +1330,13 @@ class ETFTechnicalAnalyzer:
             if missing_conditions and macd_ok:  # MACD è presente
                 smart_6_7_triggered = True
                 buy_count = 7  # Simula 7/7 completando con smart logic
+                # FIX 2026-08-24: 'conditions' e' stato costruito PRIMA di questo blocco con
+                # il valore iniziale (False) di smart_6_7_triggered — riassegnare la variabile
+                # locale sopra non aggiorna la voce gia' scritta nel dizionario (bug di sola
+                # visualizzazione, mai emerso finche' use_smart_6_7_macd e' rimasto false in
+                # produzione). buy_count era comunque corretto: la decisione reale non era
+                # toccata, solo questo campo diagnostico restava sempre False.
+                conditions['smart_6_7_triggered'] = True
 
         # ── REGIME A 3 STATI (INFORMATIVO, SENZA PENALITÀ) ───────────────────────────────
         # Calcola il regime per dashboard/reporting, ma NON penalizza il buy_count

@@ -61,8 +61,8 @@
 
         .subtitle { color: var(--color-text-muted); font-size: 14px; margin-bottom: 24px; }
 
-        .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
-        @media (max-width: 640px) { .compare-grid { grid-template-columns: 1fr; } }
+        .compare-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 12px; }
+        @media (max-width: 800px) { .compare-grid { grid-template-columns: 1fr; } }
 
         .compare-card {
             background: var(--color-bg-secondary);
@@ -70,15 +70,33 @@
             border-radius: 12px;
             padding: 20px;
             box-shadow: var(--shadow-sm);
+            position: relative;
         }
         .compare-card.pac { border-top: 3px solid var(--color-primary); }
-        .compare-card.active { border-top: 3px solid var(--color-warning); }
+        .compare-card.l1 { border-top: 3px solid var(--color-warning); }
+        .compare-card.l0 { border-top: 3px solid #a855f7; }
         .compare-card h3 { font-size: 15px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
         .compare-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: var(--color-text-muted); }
         .compare-row .val { color: var(--color-text-primary); font-weight: 600; }
         .compare-row.big .val { font-size: 20px; }
         .gain-pos { color: var(--color-safe) !important; }
         .gain-neg { color: var(--color-danger) !important; }
+        .n-badge { font-size: 11px; color: var(--color-text-muted); }
+
+        .signal-arrow {
+            position: absolute; top: 16px; right: 16px;
+            font-size: 22px; line-height: 1;
+        }
+        .signal-up { color: var(--color-safe); }
+        .signal-down { color: var(--color-danger); }
+        .signal-neutral { color: var(--color-neutral); font-size: 18px; }
+        .signal-caption {
+            font-size: 11px; font-weight: 600; margin-top: 4px; text-align: right;
+        }
+        .thin-sample-note {
+            text-align: center; font-size: 12px; color: var(--color-text-muted);
+            margin-bottom: 24px; font-style: italic;
+        }
 
         .winner-banner {
             text-align: center;
@@ -147,18 +165,31 @@
 
     <div class="compare-grid">
         <div class="compare-card pac">
+            <div class="signal-arrow" id="pacArrow"></div>
             <h3>📈 PAC (VWCE.DE)</h3>
             <div class="compare-row"><span>Versato</span><span class="val" id="pacInvested">—</span></div>
             <div class="compare-row"><span>Valore attuale</span><span class="val" id="pacValue">—</span></div>
             <div class="compare-row big"><span>Rendimento</span><span class="val" id="pacGain">—</span></div>
+            <div class="n-badge" id="pacN"></div>
         </div>
-        <div class="compare-card active">
-            <h3>⚡ Portafoglio Attivo</h3>
-            <div class="compare-row"><span>Versato</span><span class="val" id="activeInvested">—</span></div>
-            <div class="compare-row"><span>Valore attuale</span><span class="val" id="activeValue">—</span></div>
-            <div class="compare-row big"><span>Rendimento</span><span class="val" id="activeGain">—</span></div>
+        <div class="compare-card l1">
+            <div class="signal-arrow" id="l1Arrow"></div>
+            <h3>⚡ L1 — Trend Sicuro</h3>
+            <div class="compare-row"><span>Versato</span><span class="val" id="l1Invested">—</span></div>
+            <div class="compare-row"><span>Valore attuale</span><span class="val" id="l1Value">—</span></div>
+            <div class="compare-row big"><span>Rendimento</span><span class="val" id="l1Gain">—</span></div>
+            <div class="n-badge" id="l1N"></div>
+        </div>
+        <div class="compare-card l0">
+            <div class="signal-arrow" id="l0Arrow"></div>
+            <h3>🔍 L0 — Deep Recovery</h3>
+            <div class="compare-row"><span>Versato</span><span class="val" id="l0Invested">—</span></div>
+            <div class="compare-row"><span>Valore attuale</span><span class="val" id="l0Value">—</span></div>
+            <div class="compare-row big"><span>Rendimento</span><span class="val" id="l0Gain">—</span></div>
+            <div class="n-badge" id="l0N"></div>
         </div>
     </div>
+    <div class="thin-sample-note">🔼 = dove pesare di più · 🔽 = dove pesare di meno · ➡️ = differenza minima o campione troppo piccolo per reagire</div>
 
     <div class="card">
         <div class="section-title" style="margin-top:0;">➕ Registra versamento del mese</div>
@@ -245,26 +276,40 @@ async function loadPac() {
     }
 }
 
-function renderComparison(cmp) {
-    document.getElementById('pacInvested').textContent = fmtEur(cmp.pac.total_invested);
-    document.getElementById('pacValue').textContent = fmtEur(cmp.pac.total_value);
-    const pacGainEl = document.getElementById('pacGain');
-    pacGainEl.textContent = fmtPct(cmp.pac.gain_pct);
-    pacGainEl.className = 'val ' + (cmp.pac.gain_pct >= 0 ? 'gain-pos' : 'gain-neg');
+const SLEEVE_LABELS = { pac: 'PAC', l1: 'L1', l0: 'L0' };
+const ARROW_ICON = { up: '🔼', down: '🔽', neutral: '➡️', 'n/a': '' };
+const ARROW_CLASS = { up: 'signal-up', down: 'signal-down', neutral: 'signal-neutral', 'n/a': '' };
 
-    document.getElementById('activeInvested').textContent = fmtEur(cmp.active.total_invested);
-    document.getElementById('activeValue').textContent = fmtEur(cmp.active.total_value);
-    const activeGainEl = document.getElementById('activeGain');
-    activeGainEl.textContent = fmtPct(cmp.active.gain_pct);
-    activeGainEl.className = 'val ' + (cmp.active.gain_pct >= 0 ? 'gain-pos' : 'gain-neg');
+function renderSleeve(prefix, data) {
+    document.getElementById(prefix + 'Invested').textContent = fmtEur(data.total_invested);
+    document.getElementById(prefix + 'Value').textContent = fmtEur(data.total_value);
+    const gainEl = document.getElementById(prefix + 'Gain');
+    gainEl.textContent = fmtPct(data.gain_pct);
+    gainEl.className = 'val ' + (data.gain_pct === null ? '' : (data.gain_pct >= 0 ? 'gain-pos' : 'gain-neg'));
+    document.getElementById(prefix + 'N').textContent =
+        data.n_positions > 0 ? `${data.n_positions} posizion${data.n_positions === 1 ? 'e' : 'i'}` : 'nessuna posizione';
+
+    const arrowEl = document.getElementById(prefix + 'Arrow');
+    arrowEl.innerHTML = ARROW_ICON[data.signal] || '';
+    arrowEl.className = 'signal-arrow ' + (ARROW_CLASS[data.signal] || '');
+}
+
+function renderComparison(cmp) {
+    renderSleeve('pac', cmp.pac);
+    renderSleeve('l1', cmp.l1);
+    renderSleeve('l0', cmp.l0);
 
     const banner = document.getElementById('winnerBanner');
-    if (cmp.pac.gain_pct !== null && cmp.active.gain_pct !== null) {
-        const diff = cmp.pac.gain_pct - cmp.active.gain_pct;
-        const winner = diff > 0 ? 'PAC' : (diff < 0 ? 'Sistema Attivo' : 'Pareggio');
-        banner.textContent = diff === 0
-            ? '⚖️ PAC e Sistema Attivo alla pari'
-            : `🏆 In vantaggio: ${winner} (${Math.abs(diff).toFixed(2)} punti percentuali)`;
+    const withGain = ['pac', 'l1', 'l0'].filter(k => cmp[k].gain_pct !== null);
+    if (withGain.length >= 2) {
+        const ranked = withGain.slice().sort((a, b) => cmp[b].gain_pct - cmp[a].gain_pct);
+        const best = ranked[0], worst = ranked[ranked.length - 1];
+        const spread = cmp[best].gain_pct - cmp[worst].gain_pct;
+        if (spread < 3) {
+            banner.textContent = '⚖️ Rendimenti troppo vicini (o campione ancora piccolo) per indicare dove pesare di più';
+        } else {
+            banner.textContent = `🏆 In vantaggio: ${SLEEVE_LABELS[best]} (+${spread.toFixed(2)} punti percentuali su ${SLEEVE_LABELS[worst]})`;
+        }
         banner.style.display = 'block';
     } else {
         banner.style.display = 'none';

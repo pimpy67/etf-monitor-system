@@ -1043,10 +1043,15 @@ def get_pac():
         if current_value is not None:
             total_value_pac += current_value
 
-    # Confronto con il portafoglio attivo reale (etf_portfolio_entries, posizioni 'active')
+    # Confronto separato PAC vs L1 vs L0 (etf_portfolio_entries, posizioni 'active',
+    # divise per portfolio_type — prima erano unite in un unico blocco "attivo", su
+    # richiesta esplicita ora servono tre sleeve distinte con ranking visivo).
     active_entries = db.get_portfolio_entries()
-    total_invested_active = 0.0
-    total_value_active = 0.0
+    sleeves = {
+        'pac': {'invested': total_invested_pac, 'value': total_value_pac, 'n': len(contributions)},
+        'l1': {'invested': 0.0, 'value': 0.0, 'n': 0},
+        'l0': {'invested': 0.0, 'value': 0.0, 'n': 0},
+    }
     for e in active_entries:
         if e.get('status') != 'active':
             continue
@@ -1054,25 +1059,45 @@ def get_pac():
         entry_price = float(e.get('entry_price') or 0)
         if not shares or not entry_price:
             continue
+        ptype = (e.get('portfolio_type') or 'L1').lower()
+        if ptype not in ('l1', 'l0'):
+            continue
         df_p = db.get_close_by_isin(e['isin'], days=5)
         current_price = float(df_p.iloc[-1]['Close']) if not df_p.empty else entry_price
-        total_invested_active += shares * entry_price
-        total_value_active += shares * current_price
+        sleeves[ptype]['invested'] += shares * entry_price
+        sleeves[ptype]['value'] += shares * current_price
+        sleeves[ptype]['n'] += 1
 
-    comparison = {
-        'pac': {
-            'total_invested': round(total_invested_pac, 2),
-            'total_value': round(total_value_pac, 2),
-            'gain_pct': round(100 * (total_value_pac - total_invested_pac) / total_invested_pac, 2)
-                        if total_invested_pac else None,
-        },
-        'active': {
-            'total_invested': round(total_invested_active, 2),
-            'total_value': round(total_value_active, 2),
-            'gain_pct': round(100 * (total_value_active - total_invested_active) / total_invested_active, 2)
-                        if total_invested_active else None,
-        },
-    }
+    comparison = {}
+    for key, s in sleeves.items():
+        gain_pct = (round(100 * (s['value'] - s['invested']) / s['invested'], 2)
+                    if s['invested'] else None)
+        comparison[key] = {
+            'total_invested': round(s['invested'], 2),
+            'total_value': round(s['value'], 2),
+            'gain_pct': gain_pct,
+            'n_positions': s['n'],
+        }
+
+    # Ranking + frecce: solo tra le sleeve che hanno almeno un versamento/posizione E un
+    # gain_pct calcolabile. Differenza minima (<3 punti tra migliore e peggiore) o campione
+    # troppo piccolo (n<3) -> nessuna freccia netta, per non spingere a reagire su rumore
+    # (stessa cautela già discussa: 6 mesi/pochi trade non bastano per un'inversione).
+    ranked = [(k, v['gain_pct']) for k, v in comparison.items() if v['gain_pct'] is not None]
+    ranked.sort(key=lambda x: x[1], reverse=True)
+    for k in comparison:
+        comparison[k]['signal'] = 'n/a'
+    if len(ranked) >= 2:
+        spread = ranked[0][1] - ranked[-1][1]
+        min_n_ok = all(comparison[k]['n_positions'] >= 3 for k, _ in ranked)
+        if spread < 3 or not min_n_ok:
+            for k, _ in ranked:
+                comparison[k]['signal'] = 'neutral'
+        else:
+            comparison[ranked[0][0]]['signal'] = 'up'
+            comparison[ranked[-1][0]]['signal'] = 'down'
+            for k, _ in ranked[1:-1]:
+                comparison[k]['signal'] = 'neutral'
 
     return jsonify({
         'positions': positions,
