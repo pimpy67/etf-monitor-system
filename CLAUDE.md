@@ -1496,6 +1496,44 @@ operativo.
 
 ---
 
+## PAC — confronto con portafoglio attivo (2026-08-24)
+
+Feature reale (non backtest) nata dallo stesso confronto PAC-vs-attivo che ha motivato la
+promozione di `smart_6_macd` (vedi sopra). L'utente vuole verificare nella realtà, con
+soldi veri, se un PAC passivo su un paniere diversificato batte il portafoglio attivo del
+sistema — stessa domanda del backtest, ma tracciata live invece che simulata.
+
+**Paniere scelto**: solo `VWCE.DE` (Vanguard FTSE All-World, ISIN `IE00BK5BQT80`) — un solo
+ETF, deliberatamente, perché il punto del PAC è azzerare le decisioni. Era già
+nell'universo monitorato (nessuna aggiunta necessaria).
+
+**Disciplina di esecuzione — stessa filosofia "nessun automatismo" di tutto il resto**:
+l'utente esegue davvero l'acquisto su Directa **lo stesso giorno fisso di ogni mese**
+(mai "il minimo del mese" — non è conoscibile in anticipo, e cercarlo reintrodurrebbe
+esattamente il market-timing che il PAC è pensato per eliminare), poi registra il
+versamento a mano nella nuova pagina. Il sistema non piazza né simula alcun ordine.
+
+**Implementazione**:
+- `migrations/006_add_pac_contributions.sql` — tabella `etf_pac_contributions` (isin,
+  ticker, data, importo, prezzo, quote, broker), `UNIQUE(isin, contribution_date)` evita
+  doppioni sullo stesso mese.
+- `database.py`: `add_pac_contribution()` / `get_pac_contributions()` /
+  `remove_pac_contribution()`. `get_portfolio_entries()` ora seleziona anche la colonna
+  `shares` (mancava — serviva per calcolare il capitale investito reale nel confronto,
+  aggiunta additiva, nessun impatto sui chiamanti esistenti).
+- `app.py`: `GET/POST /api/pac`, `DELETE /api/pac/<id>` — la GET calcola sia le posizioni
+  PAC aggregate (quote totali, costo medio, valore attuale) sia il confronto diretto con
+  il portafoglio attivo reale (`etf_portfolio_entries` status='active', capitale versato
+  vs valore attuale, stesso principio del backtest ma su dati veri).
+- `templates/pac.html` — nuova pagina `/pac`, link "💰 PAC" aggiunto alla nav bar di
+  `dashboard.html`. Form di registrazione versamento, tabella posizioni, storico
+  versamenti, due card affiancate PAC vs Attivo con il rendimento % a confronto.
+
+Verificato end-to-end (POST/GET/DELETE) con un versamento di prova, poi rimosso (non era
+un acquisto reale). Deployato via `./deploy.sh`.
+
+---
+
 ## Infrastruttura Tecnica
 
 ### VPS & Percorsi

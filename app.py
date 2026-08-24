@@ -39,6 +39,10 @@ def index():
 def portfolio():
     return send_file('templates/portfolio.html')
 
+@app.route('/pac')
+def pac_page():
+    return send_file('templates/pac.html')
+
 @app.route('/data/<path:filename>')
 def serve_data(filename):
     return send_from_directory('data', filename)
@@ -997,6 +1001,124 @@ def delete_portfolio_event_route(event_id):
     if ok:
         return jsonify({'status': 'ok', 'id': event_id})
     return jsonify({'error': 'Errore eliminazione'}), 503
+
+
+@app.route('/api/pac', methods=['GET'])
+def get_pac():
+    """PAC (Piano di Accumulo Capitale) — versamenti reali registrati a mano dall'utente
+    dopo ogni acquisto su Directa, più il confronto con il portafoglio attivo del sistema
+    (stesso capitale versato nel tempo, valore finale affiancato — vedi CLAUDE.md sezione
+    PAC). Nessun automatismo: qui si legge solo quanto già registrato manualmente."""
+    contributions = db.get_pac_contributions()
+
+    by_isin = {}
+    for c in contributions:
+        by_isin.setdefault(c['isin'], []).append(c)
+
+    positions = []
+    total_invested_pac = 0.0
+    total_value_pac = 0.0
+    for isin, contribs in by_isin.items():
+        total_shares = sum(float(c['shares']) for c in contribs)
+        total_amount = sum(float(c['amount_eur']) for c in contribs)
+        df_p = db.get_close_by_isin(isin, days=5)
+        current_price = float(df_p.iloc[-1]['Close']) if not df_p.empty else None
+        current_value = total_shares * current_price if current_price else None
+        gain_eur = (current_value - total_amount) if current_value is not None else None
+        gain_pct = (100 * gain_eur / total_amount) if (gain_eur is not None and total_amount) else None
+        positions.append({
+            'isin': isin,
+            'ticker': contribs[-1]['ticker'],
+            'fund_name': contribs[-1]['fund_name'],
+            'n_contributions': len(contribs),
+            'total_shares': round(total_shares, 6),
+            'total_invested': round(total_amount, 2),
+            'avg_cost': round(total_amount / total_shares, 4) if total_shares else None,
+            'current_price': current_price,
+            'current_value': round(current_value, 2) if current_value is not None else None,
+            'gain_eur': round(gain_eur, 2) if gain_eur is not None else None,
+            'gain_pct': round(gain_pct, 2) if gain_pct is not None else None,
+        })
+        total_invested_pac += total_amount
+        if current_value is not None:
+            total_value_pac += current_value
+
+    # Confronto con il portafoglio attivo reale (etf_portfolio_entries, posizioni 'active')
+    active_entries = db.get_portfolio_entries()
+    total_invested_active = 0.0
+    total_value_active = 0.0
+    for e in active_entries:
+        if e.get('status') != 'active':
+            continue
+        shares = float(e.get('shares') or 0)
+        entry_price = float(e.get('entry_price') or 0)
+        if not shares or not entry_price:
+            continue
+        df_p = db.get_close_by_isin(e['isin'], days=5)
+        current_price = float(df_p.iloc[-1]['Close']) if not df_p.empty else entry_price
+        total_invested_active += shares * entry_price
+        total_value_active += shares * current_price
+
+    comparison = {
+        'pac': {
+            'total_invested': round(total_invested_pac, 2),
+            'total_value': round(total_value_pac, 2),
+            'gain_pct': round(100 * (total_value_pac - total_invested_pac) / total_invested_pac, 2)
+                        if total_invested_pac else None,
+        },
+        'active': {
+            'total_invested': round(total_invested_active, 2),
+            'total_value': round(total_value_active, 2),
+            'gain_pct': round(100 * (total_value_active - total_invested_active) / total_invested_active, 2)
+                        if total_invested_active else None,
+        },
+    }
+
+    return jsonify({
+        'positions': positions,
+        'contributions': [{
+            'id': c['id'], 'isin': c['isin'], 'ticker': c['ticker'],
+            'contribution_date': str(c['contribution_date']), 'amount_eur': float(c['amount_eur']),
+            'price': float(c['price']), 'shares': float(c['shares']), 'broker': c['broker'],
+        } for c in contributions],
+        'comparison': comparison,
+    })
+
+
+@app.route('/api/pac', methods=['POST'])
+def add_pac():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Dati mancanti'}), 400
+    isin = (data.get('isin') or '').strip().upper()
+    ticker = (data.get('ticker') or '').strip().upper()
+    contribution_date = data.get('contribution_date', '')
+    amount_eur = data.get('amount_eur')
+    price = data.get('price')
+    fund_name = (data.get('fund_name') or '').strip()
+    broker = (data.get('broker') or 'Directa').strip() or 'Directa'
+    if not isin or not ticker or not contribution_date or amount_eur is None or price is None:
+        return jsonify({'error': 'isin, ticker, contribution_date, amount_eur e price obbligatori'}), 400
+    try:
+        amount_eur = float(amount_eur)
+        price = float(price)
+        if price <= 0 or amount_eur <= 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        return jsonify({'error': 'amount_eur e price devono essere numeri positivi'}), 400
+    ok = db.add_pac_contribution(isin, ticker, contribution_date, amount_eur, price,
+                                  fund_name=fund_name, broker=broker)
+    if ok:
+        return jsonify({'status': 'ok', 'isin': isin})
+    return jsonify({'error': 'Errore salvataggio'}), 503
+
+
+@app.route('/api/pac/<int:contribution_id>', methods=['DELETE'])
+def delete_pac(contribution_id):
+    ok = db.remove_pac_contribution(contribution_id)
+    if ok:
+        return jsonify({'status': 'ok', 'id': contribution_id})
+    return jsonify({'error': 'Errore rimozione'}), 503
 
 
 @app.route('/api/favorites', methods=['GET'])

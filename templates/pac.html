@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAC — ETF Monitor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --color-text-primary: #1f2937;
+            --color-text-muted: #6b7280;
+            --color-border: #e5e7eb;
+            --color-hover: #f3f4f6;
+            --color-bg: #ffffff;
+            --color-bg-secondary: #f9fafb;
+            --color-safe: #10b981;
+            --color-warning: #f59e0b;
+            --color-danger: #ef4444;
+            --color-neutral: #9ca3af;
+            --color-primary: #3b82f6;
+            --color-primary-hover: #1d4ed8;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --color-text-primary: #f9fafb;
+                --color-text-muted: #d1d5db;
+                --color-border: #374151;
+                --color-hover: #1f2937;
+                --color-bg: #111827;
+                --color-bg-secondary: #1f2937;
+                --color-safe: #34d399;
+                --color-warning: #fbbf24;
+                --color-danger: #f87171;
+                --color-neutral: #9ca3af;
+                --color-primary: #3b82f6;
+                --color-primary-hover: #1d4ed8;
+                --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+                --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+            }
+        }
+
+        html {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            color-scheme: light dark;
+        }
+        body {
+            background-color: var(--color-bg);
+            color: var(--color-text-primary);
+            line-height: 1.6;
+        }
+        .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
+
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+        .header-title { font-size: 24px; font-weight: 700; }
+        .back-link { color: var(--color-primary); text-decoration: none; font-size: 14px; font-weight: 600; }
+        .back-link:hover { text-decoration: underline; }
+
+        .subtitle { color: var(--color-text-muted); font-size: 14px; margin-bottom: 24px; }
+
+        .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+        @media (max-width: 640px) { .compare-grid { grid-template-columns: 1fr; } }
+
+        .compare-card {
+            background: var(--color-bg-secondary);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: var(--shadow-sm);
+        }
+        .compare-card.pac { border-top: 3px solid var(--color-primary); }
+        .compare-card.active { border-top: 3px solid var(--color-warning); }
+        .compare-card h3 { font-size: 15px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+        .compare-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: var(--color-text-muted); }
+        .compare-row .val { color: var(--color-text-primary); font-weight: 600; }
+        .compare-row.big .val { font-size: 20px; }
+        .gain-pos { color: var(--color-safe) !important; }
+        .gain-neg { color: var(--color-danger) !important; }
+
+        .winner-banner {
+            text-align: center;
+            padding: 14px;
+            border-radius: 10px;
+            background: var(--color-hover);
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 28px;
+        }
+
+        .section-title { font-size: 17px; font-weight: 700; margin: 28px 0 14px; }
+
+        .card {
+            background: var(--color-bg-secondary);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 14px; }
+        .form-group label { display: block; font-size: 12px; color: var(--color-text-muted); margin-bottom: 4px; }
+        .form-group input {
+            width: 100%; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 8px;
+            background: var(--color-bg); color: var(--color-text-primary); font-size: 14px;
+        }
+        .btn {
+            padding: 10px 18px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+            cursor: pointer; transition: background 0.15s;
+        }
+        .btn-primary { background: var(--color-primary); color: white; }
+        .btn-primary:hover { background: var(--color-primary-hover); }
+        .btn-danger-outline {
+            background: transparent; color: var(--color-danger); border: 1px solid var(--color-danger);
+            padding: 4px 10px; font-size: 12px; border-radius: 6px; cursor: pointer;
+        }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--color-border); }
+        th { color: var(--color-text-muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+        td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+        .empty-note { color: var(--color-text-muted); font-size: 13px; padding: 12px 0; }
+        .error-banner {
+            display: none; background: var(--color-danger); color: white; padding: 10px 14px;
+            border-radius: 8px; margin-bottom: 16px; font-size: 13px;
+        }
+        .hint { font-size: 12px; color: var(--color-text-muted); margin-top: 10px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header-top">
+        <div>
+            <div class="header-title">💰 PAC vs Sistema Attivo</div>
+            <div class="subtitle">Versamenti reali su un paniere diversificato, a confronto con il portafoglio attivo del sistema — stesso principio del backtest, ma con dati veri.</div>
+        </div>
+        <a href="/" class="back-link">← Torna alla dashboard</a>
+    </div>
+
+    <div id="errorBanner" class="error-banner"></div>
+
+    <div id="winnerBanner" class="winner-banner" style="display:none;"></div>
+
+    <div class="compare-grid">
+        <div class="compare-card pac">
+            <h3>📈 PAC (VWCE.DE)</h3>
+            <div class="compare-row"><span>Versato</span><span class="val" id="pacInvested">—</span></div>
+            <div class="compare-row"><span>Valore attuale</span><span class="val" id="pacValue">—</span></div>
+            <div class="compare-row big"><span>Rendimento</span><span class="val" id="pacGain">—</span></div>
+        </div>
+        <div class="compare-card active">
+            <h3>⚡ Portafoglio Attivo</h3>
+            <div class="compare-row"><span>Versato</span><span class="val" id="activeInvested">—</span></div>
+            <div class="compare-row"><span>Valore attuale</span><span class="val" id="activeValue">—</span></div>
+            <div class="compare-row big"><span>Rendimento</span><span class="val" id="activeGain">—</span></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="section-title" style="margin-top:0;">➕ Registra versamento del mese</div>
+        <div class="hint" style="margin-top:0;margin-bottom:14px;">Esegui davvero l'acquisto su Directa lo stesso giorno fisso ogni mese, poi registralo qui — nessun ordine viene piazzato dal sistema.</div>
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Data</label>
+                <input type="date" id="fContribDate">
+            </div>
+            <div class="form-group">
+                <label>Importo (€)</label>
+                <input type="number" id="fAmount" value="1000" step="10">
+            </div>
+            <div class="form-group">
+                <label>Prezzo pagato (€)</label>
+                <input type="number" id="fPrice" step="0.0001" placeholder="es. 165.74">
+            </div>
+            <div class="form-group">
+                <label>Ticker</label>
+                <input type="text" id="fTicker" value="VWCE.DE">
+            </div>
+            <div class="form-group">
+                <label>ISIN</label>
+                <input type="text" id="fIsin" value="IE00BK5BQT80">
+            </div>
+        </div>
+        <button class="btn btn-primary" id="addContribBtn">Registra versamento</button>
+    </div>
+
+    <div class="section-title">Posizioni PAC</div>
+    <div class="card">
+        <table id="positionsTable">
+            <thead>
+                <tr><th>ETF</th><th class="num">Quote</th><th class="num">Costo medio</th><th class="num">Prezzo attuale</th><th class="num">Valore</th><th class="num">Gain/Loss</th></tr>
+            </thead>
+            <tbody id="positionsBody"></tbody>
+        </table>
+        <div id="positionsEmpty" class="empty-note" style="display:none;">Nessun versamento ancora registrato.</div>
+    </div>
+
+    <div class="section-title">Storico versamenti</div>
+    <div class="card">
+        <table id="contribTable">
+            <thead>
+                <tr><th>Data</th><th>ETF</th><th class="num">Importo</th><th class="num">Prezzo</th><th class="num">Quote</th><th></th></tr>
+            </thead>
+            <tbody id="contribBody"></tbody>
+        </table>
+        <div id="contribEmpty" class="empty-note" style="display:none;">Nessun versamento ancora registrato.</div>
+    </div>
+</div>
+
+<script>
+const CONFIG = { apiBase: '' };
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('fContribDate').valueAsDate = new Date();
+    loadPac();
+    document.getElementById('addContribBtn').addEventListener('click', addContribution);
+});
+
+function fmtEur(v) {
+    if (v === null || v === undefined) return '—';
+    return v.toLocaleString('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+}
+function fmtPct(v) {
+    if (v === null || v === undefined) return '—';
+    return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+}
+
+async function loadPac() {
+    const errEl = document.getElementById('errorBanner');
+    errEl.style.display = 'none';
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/pac`);
+        if (!res.ok) throw new Error(`API error ${res.status}`);
+        const data = await res.json();
+        renderComparison(data.comparison);
+        renderPositions(data.positions);
+        renderContributions(data.contributions);
+    } catch (e) {
+        errEl.textContent = 'Errore nel caricamento: ' + e.message;
+        errEl.style.display = 'block';
+    }
+}
+
+function renderComparison(cmp) {
+    document.getElementById('pacInvested').textContent = fmtEur(cmp.pac.total_invested);
+    document.getElementById('pacValue').textContent = fmtEur(cmp.pac.total_value);
+    const pacGainEl = document.getElementById('pacGain');
+    pacGainEl.textContent = fmtPct(cmp.pac.gain_pct);
+    pacGainEl.className = 'val ' + (cmp.pac.gain_pct >= 0 ? 'gain-pos' : 'gain-neg');
+
+    document.getElementById('activeInvested').textContent = fmtEur(cmp.active.total_invested);
+    document.getElementById('activeValue').textContent = fmtEur(cmp.active.total_value);
+    const activeGainEl = document.getElementById('activeGain');
+    activeGainEl.textContent = fmtPct(cmp.active.gain_pct);
+    activeGainEl.className = 'val ' + (cmp.active.gain_pct >= 0 ? 'gain-pos' : 'gain-neg');
+
+    const banner = document.getElementById('winnerBanner');
+    if (cmp.pac.gain_pct !== null && cmp.active.gain_pct !== null) {
+        const diff = cmp.pac.gain_pct - cmp.active.gain_pct;
+        const winner = diff > 0 ? 'PAC' : (diff < 0 ? 'Sistema Attivo' : 'Pareggio');
+        banner.textContent = diff === 0
+            ? '⚖️ PAC e Sistema Attivo alla pari'
+            : `🏆 In vantaggio: ${winner} (${Math.abs(diff).toFixed(2)} punti percentuali)`;
+        banner.style.display = 'block';
+    } else {
+        banner.style.display = 'none';
+    }
+}
+
+function renderPositions(positions) {
+    const body = document.getElementById('positionsBody');
+    const empty = document.getElementById('positionsEmpty');
+    body.innerHTML = '';
+    if (!positions || positions.length === 0) {
+        empty.style.display = 'block';
+        return;
+    }
+    empty.style.display = 'none';
+    positions.forEach(p => {
+        const gainClass = (p.gain_pct ?? 0) >= 0 ? 'gain-pos' : 'gain-neg';
+        body.innerHTML += `<tr>
+            <td>${p.ticker}<br><small style="color:var(--color-text-muted)">${p.fund_name || ''}</small></td>
+            <td class="num">${p.total_shares.toFixed(4)}</td>
+            <td class="num">${p.avg_cost !== null ? p.avg_cost.toFixed(4) + '€' : '—'}</td>
+            <td class="num">${p.current_price !== null ? p.current_price.toFixed(4) + '€' : '—'}</td>
+            <td class="num">${fmtEur(p.current_value)}</td>
+            <td class="num ${gainClass}">${fmtEur(p.gain_eur)} (${fmtPct(p.gain_pct)})</td>
+        </tr>`;
+    });
+}
+
+function renderContributions(contribs) {
+    const body = document.getElementById('contribBody');
+    const empty = document.getElementById('contribEmpty');
+    body.innerHTML = '';
+    if (!contribs || contribs.length === 0) {
+        empty.style.display = 'block';
+        return;
+    }
+    empty.style.display = 'none';
+    contribs.slice().reverse().forEach(c => {
+        body.innerHTML += `<tr>
+            <td>${c.contribution_date}</td>
+            <td>${c.ticker}</td>
+            <td class="num">${fmtEur(c.amount_eur)}</td>
+            <td class="num">${c.price.toFixed(4)}€</td>
+            <td class="num">${c.shares.toFixed(4)}</td>
+            <td><button class="btn-danger-outline" onclick="deleteContribution(${c.id})">Rimuovi</button></td>
+        </tr>`;
+    });
+}
+
+async function addContribution() {
+    const isin = document.getElementById('fIsin').value.trim().toUpperCase();
+    const ticker = document.getElementById('fTicker').value.trim().toUpperCase();
+    const contribution_date = document.getElementById('fContribDate').value;
+    const amount_eur = parseFloat(document.getElementById('fAmount').value);
+    const price = parseFloat(document.getElementById('fPrice').value);
+    const errEl = document.getElementById('errorBanner');
+
+    if (!isin || !ticker || !contribution_date || !amount_eur || !price) {
+        errEl.textContent = 'Compila tutti i campi (data, importo, prezzo).';
+        errEl.style.display = 'block';
+        return;
+    }
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/pac`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isin, ticker, contribution_date, amount_eur, price }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Errore salvataggio');
+        document.getElementById('fPrice').value = '';
+        errEl.style.display = 'none';
+        loadPac();
+    } catch (e) {
+        errEl.textContent = 'Errore: ' + e.message;
+        errEl.style.display = 'block';
+    }
+}
+
+async function deleteContribution(id) {
+    if (!confirm('Rimuovere questo versamento?')) return;
+    try {
+        const res = await fetch(`${CONFIG.apiBase}/api/pac/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Errore rimozione');
+        loadPac();
+    } catch (e) {
+        alert('Errore: ' + e.message);
+    }
+}
+</script>
+</body>
+</html>
