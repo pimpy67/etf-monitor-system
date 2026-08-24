@@ -41,6 +41,17 @@ OCO_CAPABLE_BROKERS = {'Webank'}
 # all'esecuzione anche se il prezzo scende oltre il trigger in un solo scatto.
 STOP_LIMIT_GAP_PCT = 0.01  # 1%
 
+# Margine allargato per strumenti ad alta volatilità (stesso criterio wide-tier
+# usato sotto per il buffer di avvicinamento al TP — ATR14 o, in fallback,
+# sl_initial_pct di famiglia). Motivato da un caso reale (2026-08-24): su PHAG
+# (Argento, ATR14 ~2,87%) l'1% standard tra Trigger e Limite (~0,53€ su 53€)
+# lascia meno margine reale di quanto sembri, perché l'escursione giornaliera
+# tipica dello strumento è già dello stesso ordine di grandezza del gap stesso
+# — un salto veloce può bucare l'intera forbice senza eseguire l'ordine. Su un
+# ETF calmo come MEU (equity Europa) lo stesso 1% è ampiamente sufficiente
+# perché il movimento tipico è molto più piccolo del gap.
+STOP_LIMIT_GAP_PCT_WIDE = 0.02  # 2%
+
 # Zona di avvicinamento al TP (solo broker senza OCO): sotto queste soglie si
 # stringe lo Stop verso il prezzo corrente invece di lasciarlo al valore
 # "ufficiale" (pensato per il medio periodo, non per blindare un target
@@ -117,6 +128,13 @@ def compute_order_prices(current_price: Optional[float], sl_suggerito: Optional[
 
     stop = float(sl_suggerito) if sl_suggerito else None
 
+    # Classificazione volatilità dello strumento — usata sia per il buffer di
+    # avvicinamento al TP sia per il gap Trigger/Limite (vedi STOP_LIMIT_GAP_PCT_WIDE).
+    if atr_pct is not None:
+        is_wide_tier = atr_pct >= WIDE_TIER_ATR_PCT
+    else:
+        is_wide_tier = sl_initial_pct is not None and sl_initial_pct >= WIDE_TIER_SL_INITIAL_PCT
+
     if not parallel_ok and stop and tp_suggerito:
         # Nota: nessun requisito tp_suggerito > current_price — se il prezzo ha
         # già raggiunto o superato il TP, dist_to_tp_pct sotto è <= 0, quindi
@@ -125,10 +143,6 @@ def compute_order_prices(current_price: Optional[float], sl_suggerito: Optional[
         # monitor.py::_update_portfolio_l0_suggerito/_update_portfolio_l1_suggerito),
         # quindi lo Stop deve continuare a proteggere il target finché l'utente
         # non conferma manualmente l'uscita reale su Directa.
-        if atr_pct is not None:
-            is_wide_tier = atr_pct >= WIDE_TIER_ATR_PCT
-        else:
-            is_wide_tier = sl_initial_pct is not None and sl_initial_pct >= WIDE_TIER_SL_INITIAL_PCT
         buffer_critica = TP_PROXIMITY_CRITICA_BUFFER_WIDE if is_wide_tier else TP_PROXIMITY_CRITICA_BUFFER
         buffer_allerta = TP_PROXIMITY_ALLERTA_BUFFER_WIDE if is_wide_tier else TP_PROXIMITY_ALLERTA_BUFFER
 
@@ -151,8 +165,9 @@ def compute_order_prices(current_price: Optional[float], sl_suggerito: Optional[
                 result['tightened'] = True
 
     if stop:
+        gap_pct = STOP_LIMIT_GAP_PCT_WIDE if is_wide_tier else STOP_LIMIT_GAP_PCT
         result['prezzo_stop'] = round(stop, 4)
-        result['prezzo_limite_stop'] = round(stop * (1 - STOP_LIMIT_GAP_PCT), 4)
+        result['prezzo_limite_stop'] = round(stop * (1 - gap_pct), 4)
     if tp_suggerito:
         result['prezzo_limite_tp'] = round(float(tp_suggerito), 4)
 
