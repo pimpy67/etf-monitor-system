@@ -1020,7 +1020,11 @@ def get_pac():
     total_value_pac = 0.0
     for isin, contribs in by_isin.items():
         total_shares = sum(float(c['shares']) for c in contribs)
-        total_amount = sum(float(c['amount_eur']) for c in contribs)
+        # Capitale investito reale = controvalore quote + commissioni pagate (2026-08-24:
+        # senza le commissioni il confronto PAC vs L1/L0 era otticamente migliore di
+        # quanto sia davvero — prima esecuzione reale, VWCE.DE su Xetra, 9,50EUR contro i
+        # 5EUR assunti in tutti i backtest).
+        total_amount = sum(float(c['amount_eur']) + float(c.get('fee_eur') or 0) for c in contribs)
         df_p = db.get_close_by_isin(isin, days=5)
         current_price = float(df_p.iloc[-1]['Close']) if not df_p.empty else None
         current_value = total_shares * current_price if current_price else None
@@ -1033,6 +1037,7 @@ def get_pac():
             'n_contributions': len(contribs),
             'total_shares': round(total_shares, 6),
             'total_invested': round(total_amount, 2),
+            'total_fees': round(sum(float(c.get('fee_eur') or 0) for c in contribs), 2),
             'avg_cost': round(total_amount / total_shares, 4) if total_shares else None,
             'current_price': current_price,
             'current_value': round(current_value, 2) if current_value is not None else None,
@@ -1105,6 +1110,7 @@ def get_pac():
             'id': c['id'], 'isin': c['isin'], 'ticker': c['ticker'],
             'contribution_date': str(c['contribution_date']), 'amount_eur': float(c['amount_eur']),
             'price': float(c['price']), 'shares': float(c['shares']), 'broker': c['broker'],
+            'fee_eur': float(c.get('fee_eur') or 0),
         } for c in contributions],
         'comparison': comparison,
     })
@@ -1122,17 +1128,19 @@ def add_pac():
     price = data.get('price')
     fund_name = (data.get('fund_name') or '').strip()
     broker = (data.get('broker') or 'Directa').strip() or 'Directa'
+    fee_eur = data.get('fee_eur', 0)
     if not isin or not ticker or not contribution_date or amount_eur is None or price is None:
         return jsonify({'error': 'isin, ticker, contribution_date, amount_eur e price obbligatori'}), 400
     try:
         amount_eur = float(amount_eur)
         price = float(price)
-        if price <= 0 or amount_eur <= 0:
+        fee_eur = float(fee_eur or 0)
+        if price <= 0 or amount_eur <= 0 or fee_eur < 0:
             raise ValueError
     except (ValueError, TypeError):
-        return jsonify({'error': 'amount_eur e price devono essere numeri positivi'}), 400
+        return jsonify({'error': 'amount_eur, price e fee_eur devono essere numeri validi'}), 400
     ok = db.add_pac_contribution(isin, ticker, contribution_date, amount_eur, price,
-                                  fund_name=fund_name, broker=broker)
+                                  fund_name=fund_name, broker=broker, fee_eur=fee_eur)
     if ok:
         return jsonify({'status': 'ok', 'isin': isin})
     return jsonify({'error': 'Errore salvataggio'}), 503

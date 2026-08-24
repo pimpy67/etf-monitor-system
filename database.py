@@ -1401,11 +1401,18 @@ class PriceDatabase:
 
     def add_pac_contribution(self, isin: str, ticker: str, contribution_date: str,
                               amount_eur: float, price: float, fund_name: str = '',
-                              broker: str = 'Directa') -> bool:
+                              broker: str = 'Directa', fee_eur: float = 0.0) -> bool:
         """Registra un versamento PAC reale — l'utente ha già eseguito l'acquisto su
         Directa il giorno fisso del mese e registra qui a mano quanto/a che prezzo.
         Nessun automatismo: stessa filosofia di add_portfolio_entry. UNIQUE(isin,
-        contribution_date) evita doppioni se lo stesso mese viene inserito due volte."""
+        contribution_date) evita doppioni se lo stesso mese viene inserito due volte.
+
+        fee_eur (2026-08-24): commissione Directa pagata, separata da amount_eur (che
+        resta il solo controvalore delle quote, usato per calcolare 'shares'). La prima
+        esecuzione reale (VWCE.DE su Xetra) ha mostrato 9,50EUR di commissione — quasi
+        doppia dei 5EUR assunti in tutti i backtest — senza tenerne conto qui il
+        confronto PAC vs L1/L0 sarebbe stato otticamente migliore di quanto sia davvero.
+        """
         conn = self._get_connection()
         if not conn:
             return False
@@ -1414,15 +1421,16 @@ class PriceDatabase:
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO etf_pac_contributions
-                        (isin, ticker, fund_name, contribution_date, amount_eur, price, shares, broker)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        (isin, ticker, fund_name, contribution_date, amount_eur, price, shares, broker, fee_eur)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (isin, contribution_date) DO UPDATE
                         SET amount_eur = EXCLUDED.amount_eur,
                             price = EXCLUDED.price,
                             shares = EXCLUDED.shares,
                             fund_name = EXCLUDED.fund_name,
-                            broker = EXCLUDED.broker
-                """, (isin, ticker, fund_name, contribution_date, amount_eur, price, shares, broker))
+                            broker = EXCLUDED.broker,
+                            fee_eur = EXCLUDED.fee_eur
+                """, (isin, ticker, fund_name, contribution_date, amount_eur, price, shares, broker, fee_eur))
                 conn.commit()
                 return True
         except Exception as e:

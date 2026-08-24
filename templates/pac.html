@@ -208,6 +208,10 @@
                 <input type="number" id="fPrice" step="0.0001" placeholder="es. 165.74">
             </div>
             <div class="form-group">
+                <label>Commissione (€)</label>
+                <input type="number" id="fFee" step="0.01" value="9.50">
+            </div>
+            <div class="form-group">
                 <label>Ticker</label>
                 <input type="text" id="fTicker" value="VWCE.DE">
             </div>
@@ -223,7 +227,7 @@
     <div class="card">
         <table id="positionsTable">
             <thead>
-                <tr><th>ETF</th><th class="num">Quote</th><th class="num">Costo medio</th><th class="num">Prezzo attuale</th><th class="num">Valore</th><th class="num">Gain/Loss</th></tr>
+                <tr><th>ETF</th><th class="num">Quote</th><th class="num">Costo medio</th><th class="num">Prezzo attuale</th><th class="num">Valore</th><th class="num">Commissioni tot.</th><th class="num">Gain/Loss</th></tr>
             </thead>
             <tbody id="positionsBody"></tbody>
         </table>
@@ -234,7 +238,7 @@
     <div class="card">
         <table id="contribTable">
             <thead>
-                <tr><th>Data</th><th>ETF</th><th class="num">Importo</th><th class="num">Prezzo</th><th class="num">Quote</th><th></th></tr>
+                <tr><th>Data</th><th>ETF</th><th class="num">Importo</th><th class="num">Commissione</th><th class="num">Prezzo</th><th class="num">Quote</th><th></th></tr>
             </thead>
             <tbody id="contribBody"></tbody>
         </table>
@@ -333,6 +337,7 @@ function renderPositions(positions) {
             <td class="num">${p.avg_cost !== null ? p.avg_cost.toFixed(4) + '€' : '—'}</td>
             <td class="num">${p.current_price !== null ? p.current_price.toFixed(4) + '€' : '—'}</td>
             <td class="num">${fmtEur(p.current_value)}</td>
+            <td class="num">${fmtEur(p.total_fees)}</td>
             <td class="num ${gainClass}">${fmtEur(p.gain_eur)} (${fmtPct(p.gain_pct)})</td>
         </tr>`;
     });
@@ -352,6 +357,7 @@ function renderContributions(contribs) {
             <td>${c.contribution_date}</td>
             <td>${c.ticker}</td>
             <td class="num">${fmtEur(c.amount_eur)}</td>
+            <td class="num">${fmtEur(c.fee_eur)}</td>
             <td class="num">${c.price.toFixed(4)}€</td>
             <td class="num">${c.shares.toFixed(4)}</td>
             <td><button class="btn-danger-outline" onclick="deleteContribution(${c.id})">Rimuovi</button></td>
@@ -365,6 +371,7 @@ async function addContribution() {
     const contribution_date = document.getElementById('fContribDate').value;
     const amount_eur = parseFloat(document.getElementById('fAmount').value);
     const price = parseFloat(document.getElementById('fPrice').value);
+    const fee_eur = parseFloat(document.getElementById('fFee').value) || 0;
     const errEl = document.getElementById('errorBanner');
 
     if (!isin || !ticker || !contribution_date || !amount_eur || !price) {
@@ -376,7 +383,7 @@ async function addContribution() {
         const res = await fetch(`${CONFIG.apiBase}/api/pac`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ isin, ticker, contribution_date, amount_eur, price }),
+            body: JSON.stringify({ isin, ticker, contribution_date, amount_eur, price, fee_eur }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Errore salvataggio');
