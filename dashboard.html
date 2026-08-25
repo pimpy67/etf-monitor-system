@@ -605,10 +605,11 @@ let allEtfMap = {};          // isin → {nome, price}
 let l1TrackingMap = {};      // isin → {entry_date, entry_price, pct_gain, days_in_l1, is_new}
 let l1ExitsData = [];
 let recentExitsMap = {};  // isin → {exit_date, days_ago}
-let portfolioSectionOpen = false;
+let portfolioSectionOpen = true;   // aperto di default (richiesta utente 2026-08-25)
 let favoriteIsins = new Set();     // isin ticker seguiti manualmente ("Preferiti")
-let favoritesSectionOpen = false;
-let approachRadarOpen = false;
+let favoritesSectionOpen = true;   // aperto di default
+let approachRadarOpen = true;      // aperto di default
+let level3Open = false;            // L3 (Universo) chiuso di default, si apre a tendina
 let historyCache = {};
 let pfEditMode = false;      // true = modifica, false = aggiunta
 
@@ -793,16 +794,18 @@ function renderDashboard() {
   const l1list = (levels['1'] || levels[1] || []).filter(applyFilters);
   sections.push(renderLevelSection(1, 'L1 — Trend Sicuro', 'level-1', l1list));
 
-  // L2 / L3
+  // Portfolio — subito sotto L0/L1 (richiesta utente 2026-08-25)
+  sections.push(renderPortfolioSection());
+
+  // L2 / L3 (L3 collassato a tendina, chiuso di default — vedi toggleLevel3Section)
   for (const [lvl, label, cls] of [['2','L2 — Watchlist','level-2'],['3','L3 — Universo','level-3']]) {
     const list = (levels[lvl] || levels[parseInt(lvl)] || []).filter(applyFilters);
     sections.push(renderLevelSection(parseInt(lvl), label, cls, list));
   }
 
-  // Preferiti + Radar Anticipato + Portfolio + param ref
+  // Preferiti + Radar Anticipato + param ref
   sections.push(renderFavoritesSection());
   sections.push(renderApproachRadarSection());
-  sections.push(renderPortfolioSection());
   sections.push(renderParamRef());
 
   document.getElementById('mainContent').innerHTML = sections.join('');
@@ -852,11 +855,23 @@ function clearSearch() {
 function renderLevelSection(lvl, label, cls, list) {
   const count = list.length;
   const emptyMsg   = lvl === 1 ? 'Nessun ETF in L1' : 'Nessun ETF';
+  // L3 (Universo) è collassato a tendina, chiuso di default — troppi ETF per
+  // stare sempre visibile. Gli altri livelli restano sempre aperti come prima.
+  const collapsible = lvl === 3;
+  const headerAttrs = collapsible ? ` onclick="toggleLevel3Section()" style="cursor:pointer;"` : '';
+  const toggleSpan  = collapsible
+    ? `<span id="level3Toggle" style="font-size:0.75em;">${level3Open ? '&#9650;' : '&#9660;'}</span>`
+    : '';
+  const bodyAttrs   = collapsible
+    ? ` id="level3Body" style="display:${level3Open ? 'block' : 'none'};"`
+    : '';
   return `
   <div class="level-section ${cls}">
-    <div class="level-header">
+    <div class="level-header"${headerAttrs}>
       <span>${label} <span class="count">(${count} ETF)</span></span>
+      ${toggleSpan}
     </div>
+    <div${bodyAttrs}>
     <table class="etf-table">
       <colgroup>
         <col class="col-nome"><col class="col-ticker"><col class="col-prezzo">
@@ -893,7 +908,18 @@ function renderLevelSection(lvl, label, cls, list) {
         }).map(e => renderETFRow(e, lvl)).join('') : `<tr><td colspan="8" class="empty-msg">${emptyMsg}</td></tr>`}
       </tbody>
     </table>
+    </div>
   </div>`;
+}
+
+// L3 è renderizzato sempre (la tabella è già nel markup), qui si toggla solo
+// la visibilità — nessun fetch da rifare, a differenza di Preferiti/Radar/Portafoglio.
+function toggleLevel3Section() {
+  level3Open = !level3Open;
+  const body = document.getElementById('level3Body');
+  const tog  = document.getElementById('level3Toggle');
+  if (body) body.style.display = level3Open ? 'block' : 'none';
+  if (tog)  tog.innerHTML = level3Open ? '&#9650;' : '&#9660;';
 }
 
 // ── L0 Scoring: Calcola quanti criteri sono soddisfatti ─────────────────
@@ -1095,8 +1121,11 @@ async function loadFavorites() {
 function renderFavoritesTable(favs) {
   if (!favs.length) return `<p style="text-align:center;padding:16px;color:#8b949e;font-size:0.95em">Nessun preferito ancora — clicca la stellina ☆ accanto a un ETF per iniziare a seguirlo.</p>`;
 
+  // Ordine progressivo: più condizioni soddisfatte in cima, meno condizioni in fondo
+  const sorted = favs.slice().sort((a, b) => (b.buy_count ?? -1) - (a.buy_count ?? -1));
+
   const LEVEL_LABEL = {0:'L0', 1:'L1', 2:'L2', 3:'L3'};
-  const rows = favs.map(f => {
+  const rows = sorted.map(f => {
     const lvlBadge = f.level != null ? `<span class="lv-badge lv${f.level}">${LEVEL_LABEL[f.level]}</span>` : '<span style="color:#555">—</span>';
     const bc = f.buy_count != null ? `${f.buy_count}/7` : '—';
     const regime = f.regime === 'BULL' ? '<span class="regime-bull">▲ Bull</span>'
@@ -1206,7 +1235,10 @@ async function loadApproachRadar() {
 function renderApproachRadarTable(rows) {
   if (!rows.length) return `<p style="text-align:center;padding:16px;color:#8b949e;font-size:0.95em">Nessun ETF in avvicinamento consistente al momento.</p>`;
 
-  const trs = rows.map(r => {
+  // Ordine progressivo: più condizioni soddisfatte in cima, meno condizioni in fondo
+  const sorted = rows.slice().sort((a, b) => (b.buy_count ?? -1) - (a.buy_count ?? -1));
+
+  const trs = sorted.map(r => {
     const tickerEsc = (r.ticker || '').replace(/'/g, "\\'");
     const regime = r.regime === 'BULL' ? '<span class="regime-bull">▲ Bull</span>'
                  : r.regime === 'BEAR' ? '<span class="regime-bear">▼ Bear</span>'
