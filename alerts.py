@@ -186,6 +186,11 @@ class AlertSystem:
             'params': 'Terzo meccanismo (no RSI/ADX/MACD) ristretto a bond_corp_hy_em (unica famiglia con edge robusto su 5 testate — bond_governativi crolla out-of-sample) — persistenza 12gg, dist_max 0.3%, TP dinamico target 3%',
             'color_main': '#2E86C1', 'color_dark': '#1B4F72', 'tag': 'Bond-Trend',
         },
+        'TIGHTEN_RSI': {
+            'label': 'Candidate Tighten RSI',
+            'params': 'Sulle 5 famiglie core: quando manca solo rsi_ok, richiede dist_ema20<=3.0% (invece del ema_dist_max normale di famiglia) prima di accettare l\'ingresso — altrimenti skip anche se la produzione entrerebbe',
+            'color_main': '#8E44AD', 'color_dark': '#5B2C6F', 'tag': 'Tighten-RSI',
+        },
     }
 
     def send_shadow_entries(self, new_entries: list, variant: str = 'L1') -> bool:

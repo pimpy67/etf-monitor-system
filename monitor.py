@@ -1188,6 +1188,24 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor Bond-Trend (non bloccante): {e}")
 
+        # STEP 8g — Shadow Monitor CANDIDATE_TIGHTEN_RSI_20260825: sulle 5 famiglie
+        # 'core' (smart_6_macd), quando l'unica condizione nativa mancante e' rsi_ok
+        # (RSI troppo alto), richiede in aggiunta dist_ema20 <= 3.0% prima di accettare
+        # l'ingresso — altrimenti skip, anche se la produzione entrerebbe. Per ogni
+        # altro caso e' identico alla produzione. Origine: l'utente ha notato segnali
+        # L1 gia' troppo estesi dalla EMA20 (rischio ritracciamento) proprio nel
+        # sotto-caso RSI-fallito. Backtest Golden Dataset: IN N=24 PF=2.21 WR=62.5% |
+        # OUT N=14 PF=1.69 WR=57.1% — migliora ogni metrica sulla baseline
+        # (IN N=31 PF=1.45 WR=54.8% | OUT N=18 PF=1.62 WR=55.6%), ma N ancora sotto la
+        # soglia di 30. Vedi shadow_monitor_tighten_rsi.py e CLAUDE.md.
+        try:
+            from shadow_monitor_tighten_rsi import run_shadow_monitor_tighten_rsi
+            shadow_tighten_rsi_entries = run_shadow_monitor_tighten_rsi(self.db, results, add_log=add_log)
+            if shadow_tighten_rsi_entries and send_daily_report:
+                self.alert_system.send_shadow_entries(shadow_tighten_rsi_entries, variant='TIGHTEN_RSI')
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor Tighten-RSI (non bloccante): {e}")
+
         # 7. Invia resoconto portafoglio — DOPO l'aggiornamento SL/TP (fix 2026-08-05:
         # prima veniva inviato PRIMA degli STEP 4/7 sopra, quindi l'email mostrava
         # sempre i valori SL/TP del giorno precedente invece di quelli appena calcolati
