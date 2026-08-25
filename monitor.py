@@ -82,14 +82,16 @@ class ETFMonitor:
         Returns: {
             'raw': raw_score,
             'smoothed': ema_score,
-            'enters_watchlist': bool,  # Isteresi: raw >= 70 ma smoothed ancora < 70
-            'exits_watchlist': bool,   # Isteresi: raw < 60 ma smoothed ancora >= 60
+            'in_watchlist': bool,      # Stato di appartenenza persistente dopo l'isteresi
+            'enters_watchlist': bool,  # Isteresi: entrato oggi (non lo era ieri)
+            'exits_watchlist': bool,   # Isteresi: uscito oggi (lo era ieri)
             'jump_triggered': bool,    # Override salto: delta > 25
         }
         """
-        state = self.l2_score_state.get(isin, {'raw': 0, 'smoothed': 0, 'raw_prev': 0})
+        state = self.l2_score_state.get(isin, {'raw': 0, 'smoothed': 0, 'raw_prev': 0, 'in_watchlist': False})
         raw_prev = state.get('raw_prev', 0)
         smoothed_prev = state.get('smoothed', 0)
+        was_in_watchlist = state.get('in_watchlist', False)
 
         # ── Smoothing EMA (periodo 3gg) ────────────────────────────────
         ema_period = 3
@@ -107,22 +109,33 @@ class ETFMonitor:
             smoothed = raw_score  # Hard-reset smoothed al valore grezzo
             jump_triggered = True
 
-        # ── Isteresi (70 enter, 60 exit) ───────────────────────────────
+        # ── Isteresi (70 enter, 60 exit) sullo stato di appartenenza reale,
+        # non solo sul confronto con lo smoothed di ieri — così un ETF che
+        # resta tra 60 e 70 non oscilla dentro/fuori dalla watchlist.
         l2_enter = 70
         l2_exit = 60
-        enters = raw_score >= l2_enter and smoothed_prev < l2_enter
-        exits = raw_score < l2_exit and smoothed_prev >= l2_exit
+        if not was_in_watchlist and smoothed >= l2_enter:
+            in_watchlist = True
+        elif was_in_watchlist and smoothed < l2_exit:
+            in_watchlist = False
+        else:
+            in_watchlist = was_in_watchlist
+
+        enters = in_watchlist and not was_in_watchlist
+        exits = was_in_watchlist and not in_watchlist
 
         # Salva stato per prossimo ciclo
         self.l2_score_state[isin] = {
             'raw': raw_score,
             'smoothed': smoothed,
-            'raw_prev': raw_score
+            'raw_prev': raw_score,
+            'in_watchlist': in_watchlist,
         }
 
         return {
             'raw': raw_score,
             'smoothed': smoothed,
+            'in_watchlist': in_watchlist,
             'enters_watchlist': enters,
             'exits_watchlist': exits,
             'jump_triggered': jump_triggered,
@@ -370,6 +383,17 @@ class ETFMonitor:
                 add_log(f"    ⬜ L2 READINESS ESCE: raw={l2_readiness_score:.0f} smoothed={l2_smoothed_score:.0f}")
             elif l2_smoothed_score >= 70:
                 add_log(f"    🟨 L2 READINESS: raw={l2_readiness_score:.0f} smoothed={l2_smoothed_score:.0f} (watchlist)")
+
+            # Persisti lo stato nel DB — senza questa scrittura la tab "L2 Readiness"
+            # della dashboard resta sempre vuota (legge da etf_l2_watchlist via
+            # /api/l2-watchlist, il punteggio calcolato sopra non arrivava mai qui).
+            # Richiede un ISIN valido: la tabella ha isin come chiave primaria.
+            if isin:
+                self.db.update_l2_watchlist_state(
+                    isin, ticker, l2_readiness_score,
+                    l2_smooth_state['in_watchlist'],
+                    l2_smoothed_score, l2_readiness_score
+                )
 
         except Exception as e:
             add_log(f"    ⚠️  L2 readiness score error: {e}")
