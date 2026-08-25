@@ -1230,6 +1230,31 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor Tighten-RSI (non bloccante): {e}")
 
+        # STEP 8h/8i — Shadow Monitor Radar Anticipato / Radar Rimbalzo EMA20
+        # (2026-08-25): i due radar informativi della dashboard testati come
+        # candidati trigger d'ingresso reale. Backtest Golden Dataset (batch
+        # 2026-08-07): PF migliora out-of-sample per entrambi (approach 1.54->1.93,
+        # bounce 1.38->1.56 dopo esclusione outlier 3LAM.MI), overlap quasi nullo
+        # con gli ingressi L1 reali (0%/1.2%) — opportunita' diverse, non rumore.
+        # Volume molto piu' alto di L1 (~25-30x) ma WR/PF per trade inferiori.
+        # Uscita: stesse funzioni reali di L1 (nessuna logica duplicata). Vedi
+        # backtest_radars.py e shadow_monitor_radars.py.
+        try:
+            from shadow_monitor_radars import run_shadow_monitor_radar_approach
+            shadow_radar_approach_entries = run_shadow_monitor_radar_approach(self.db, results, add_log=add_log)
+            if shadow_radar_approach_entries and send_daily_report:
+                self.alert_system.send_shadow_entries(shadow_radar_approach_entries, variant='RADAR_APPROACH')
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor Radar Anticipato (non bloccante): {e}")
+
+        try:
+            from shadow_monitor_radars import run_shadow_monitor_radar_bounce
+            shadow_radar_bounce_entries = run_shadow_monitor_radar_bounce(self.db, results, add_log=add_log)
+            if shadow_radar_bounce_entries and send_daily_report:
+                self.alert_system.send_shadow_entries(shadow_radar_bounce_entries, variant='RADAR_BOUNCE')
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor Radar Rimbalzo (non bloccante): {e}")
+
         # 7. Invia resoconto portafoglio — DOPO l'aggiornamento SL/TP (fix 2026-08-05:
         # prima veniva inviato PRIMA degli STEP 4/7 sopra, quindi l'email mostrava
         # sempre i valori SL/TP del giorno precedente invece di quelli appena calcolati

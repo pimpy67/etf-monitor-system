@@ -191,6 +191,16 @@ class AlertSystem:
             'params': 'Sulle 5 famiglie core: quando manca solo rsi_ok, richiede dist_ema20<=3.0% (invece del ema_dist_max normale di famiglia) prima di accettare l\'ingresso — altrimenti skip anche se la produzione entrerebbe',
             'color_main': '#8E44AD', 'color_dark': '#5B2C6F', 'tag': 'Tighten-RSI',
         },
+        'RADAR_APPROACH': {
+            'label': 'Candidate Radar Anticipato',
+            'params': 'Trigger = Radar Anticipato (dist EMA20/MACD/ADX in miglioramento consistente su 7gg, R²>=0.3) invece del gate 7/7 — uscita SL/TP identica a L1 reale',
+            'color_main': '#16A085', 'color_dark': '#0E6655', 'tag': 'Radar-Anticipato',
+        },
+        'RADAR_BOUNCE': {
+            'label': 'Candidate Radar Rimbalzo EMA20',
+            'params': 'Trigger = Radar Rimbalzo (minimo locale "a V" su dist EMA20, mai bucata, rimbalzo con R²>=0.3 su 10gg) invece del gate 7/7 — uscita SL/TP identica a L1 reale',
+            'color_main': '#CA6F1E', 'color_dark': '#873600', 'tag': 'Radar-Rimbalzo',
+        },
     }
 
     def send_shadow_entries(self, new_entries: list, variant: str = 'L1') -> bool:
