@@ -608,6 +608,7 @@ let recentExitsMap = {};  // isin → {exit_date, days_ago}
 let portfolioSectionOpen = false;
 let favoriteIsins = new Set();     // isin ticker seguiti manualmente ("Preferiti")
 let favoritesSectionOpen = false;
+let approachRadarOpen = false;
 let historyCache = {};
 let pfEditMode = false;      // true = modifica, false = aggiunta
 
@@ -725,9 +726,10 @@ async function loadMarketRegime() {
 function renderDashboard() {
   if (!allData) return;
 
-  // Salva lo stato del portfolio/preferiti prima di ri-renderizzare
+  // Salva lo stato del portfolio/preferiti/radar prima di ri-renderizzare
   const wasPortfolioOpen = portfolioSectionOpen;
   const wasFavoritesOpen = favoritesSectionOpen;
+  const wasApproachRadarOpen = approachRadarOpen;
 
   const s = allData.summary || {};
   document.getElementById('totCount').textContent = s.total_etfs || 0;
@@ -797,8 +799,9 @@ function renderDashboard() {
     sections.push(renderLevelSection(parseInt(lvl), label, cls, list));
   }
 
-  // Preferiti + Portfolio + param ref
+  // Preferiti + Radar Anticipato + Portfolio + param ref
   sections.push(renderFavoritesSection());
+  sections.push(renderApproachRadarSection());
   sections.push(renderPortfolioSection());
   sections.push(renderParamRef());
 
@@ -812,6 +815,10 @@ function renderDashboard() {
   if (wasFavoritesOpen) {
     favoritesSectionOpen = false; // Reset per il toggle
     toggleFavoritesSection();
+  }
+  if (wasApproachRadarOpen) {
+    approachRadarOpen = false; // Reset per il toggle
+    toggleApproachRadarSection();
   }
 
 }
@@ -1150,6 +1157,86 @@ async function removeFavorite(isin) {
     renderDashboard();
     loadFavorites();
   } catch(e) { console.error('Remove favorite error', e); }
+}
+
+// ── Radar Anticipato (2026-08-25) ────────────────────────────────────────
+// ETF ancora sotto EMA20 ma la cui distanza dall'EMA20, MACD histogram e ADX
+// stanno migliorando in modo statisticamente consistente (regressione lineare
+// + R² minimo su una finestra mobile, non solo il confronto ieri-vs-oggi) —
+// idea utente 2026-08-25. Puramente informativo, calcolato on-demand da
+// /api/approach-radar: non e' un segnale del sistema, non tocca L0/L1/L2/L3.
+function renderApproachRadarSection() {
+  return `
+  <div class="portfolio-section" id="approachRadarSection">
+    <div class="portfolio-header" onclick="event.stopPropagation();toggleApproachRadarSection()">
+      <h3>&#127919; Radar Anticipato — In Avvicinamento</h3>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span id="approachRadarCount" style="font-size:0.78em;color:#555">— ETF</span>
+        <span id="approachRadarToggle" style="color:#555;font-size:0.75em">&#9660;</span>
+      </div>
+    </div>
+    <div class="portfolio-body" id="approachRadarBody" style="display:none;">
+      <p style="margin:0 0 12px;font-size:0.88em;color:#aaa;">ETF ancora sotto la EMA20 (non ancora L1/L2 per allineamento) ma con distanza dalla EMA20, MACD e ADX in miglioramento consistente negli ultimi giorni (regressione lineare, non il solo confronto con ieri). Non è un segnale d'ingresso del sistema — solo un radar per anticipare chi si sta avvicinando.</p>
+      <div id="approachRadarContent"></div>
+    </div>
+  </div>`;
+}
+
+function toggleApproachRadarSection() {
+  approachRadarOpen = !approachRadarOpen;
+  const body = document.getElementById('approachRadarBody');
+  const tog  = document.getElementById('approachRadarToggle');
+  if (body) body.style.display = approachRadarOpen ? 'block' : 'none';
+  if (tog)  tog.innerHTML = approachRadarOpen ? '&#9650;' : '&#9660;';
+  if (approachRadarOpen) loadApproachRadar();
+}
+
+async function loadApproachRadar() {
+  try {
+    const res  = await fetch('/api/approach-radar');
+    const data = await res.json();
+    const rows = data.results || [];
+    const countEl = document.getElementById('approachRadarCount');
+    if (countEl) countEl.textContent = rows.length + ' ETF';
+    const contentEl = document.getElementById('approachRadarContent');
+    if (contentEl) contentEl.innerHTML = renderApproachRadarTable(rows);
+  } catch(e) { console.error('Approach radar load error', e); }
+}
+
+function renderApproachRadarTable(rows) {
+  if (!rows.length) return `<p style="text-align:center;padding:16px;color:#8b949e;font-size:0.95em">Nessun ETF in avvicinamento consistente al momento.</p>`;
+
+  const trs = rows.map(r => {
+    const tickerEsc = (r.ticker || '').replace(/'/g, "\\'");
+    const regime = r.regime === 'BULL' ? '<span class="regime-bull">▲ Bull</span>'
+                 : r.regime === 'BEAR' ? '<span class="regime-bear">▼ Bear</span>'
+                 : r.regime === 'LATERALE' ? '<span class="regime-lat">▬ Laterale</span>' : '—';
+    return `<tr style="cursor:pointer" onclick="openETFDetail('${tickerEsc}','${r.isin}')">
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <strong style="font-size:1.05em;">${r.nome || r.ticker}</strong><br>
+        <span style="font-size:0.88em;color:#8b949e;font-family:monospace;letter-spacing:0.02em;">${r.ticker || ''} · ${r.isin || ''}</span>
+      </td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.buy_count != null ? r.buy_count + '/7' : '—'}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.dist_ema20_pct != null ? fmtNum(r.dist_ema20_pct, 2) + '%' : '—'}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.adx != null ? fmtNum(r.adx, 1) : '—'}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.macd_histogram != null ? fmtNum(r.macd_histogram, 4) : '—'}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${regime}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-weight:700;">${r.score}</td>
+    </tr>`;
+  }).join('');
+
+  return `<table style="width:100%;border-collapse:collapse;font-size:0.95em">
+    <thead><tr style="color:#aaa;text-align:left;text-transform:uppercase;letter-spacing:0.03em;font-size:0.78em;">
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15)">ETF</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Cond.</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Dist EMA20</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">ADX</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">MACD Hist</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Regime</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Score</th>
+    </tr></thead>
+    <tbody>${trs}</tbody>
+  </table>`;
 }
 
 // ── Param ref HTML ─────────────────────────────────────────────────────────

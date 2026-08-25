@@ -231,6 +231,83 @@ class ETFTechnicalAnalyzer:
         x = np.arange(len(vals))
         return float(np.polyfit(x, vals, 1)[0])
 
+    def _slope_r2(self, s: pd.Series, window: int = 7):
+        """Regressione lineare (slope, R²) sugli ultimi `window` valori validi.
+        R² basso = trend rumoroso/piatto anche se lo slope e' formalmente positivo —
+        usato dal Radar Anticipato (vedi compute_approach_signal) per non scambiare
+        rumore per un vero avvicinamento."""
+        vals = s.dropna().tail(window).values
+        if len(vals) < 3:
+            return 0.0, 0.0
+        x = np.arange(len(vals))
+        slope, intercept = np.polyfit(x, vals, 1)
+        pred = slope * x + intercept
+        ss_res = float(np.sum((vals - pred) ** 2))
+        ss_tot = float(np.sum((vals - vals.mean()) ** 2))
+        r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+        return float(slope), float(r2)
+
+    def compute_approach_signal(self, close: pd.Series, high: pd.Series = None,
+                                 low: pd.Series = None, lookback: int = 7,
+                                 min_r2: float = 0.3) -> Dict:
+        """
+        Radar Anticipato (2026-08-25, idea utente): individua ETF che NON hanno
+        ancora superato l'EMA20 ma la cui distanza dall'EMA20, il MACD histogram
+        e l'ADX stanno migliorando in modo statisticamente consistente su una
+        finestra di `lookback` giorni (regressione lineare, non il solo confronto
+        ieri-vs-oggi gia' usato da macd_ok/persistenza in suggest_level()).
+
+        R² minimo (`min_r2`) scarta i trend rumorosi: con poche osservazioni uno
+        slope positivo casuale e' comune, il fit deve spiegare almeno min_r2 della
+        varianza per contare come "avvicinamento reale". Puramente informativo —
+        non tocca in alcun modo suggest_level() o il gate L1/L0."""
+        close = close.astype(float)
+        if len(close) < self.ema20_period + lookback:
+            return {'approaching': False, 'reason': 'Storico insufficiente'}
+
+        ema20 = self._ema(close, self.ema20_period)
+        macd_d = self._macd(close)
+        if high is not None and low is not None and len(high) == len(close):
+            adx_s = self._adx(high.astype(float), low.astype(float), close)
+        else:
+            adx_s = self._adx_close_only(close)
+
+        current = float(close.iloc[-1])
+        ema20_v = float(ema20.iloc[-1]) if pd.notna(ema20.iloc[-1]) else None
+        if not ema20_v or ema20_v <= 0:
+            return {'approaching': False, 'reason': 'EMA20 non calcolabile'}
+
+        price_below_ema20 = current < ema20_v
+        dist_series = (close - ema20) / ema20 * 100
+
+        dist_slope, dist_r2 = self._slope_r2(dist_series, lookback)
+        macd_slope, macd_r2 = self._slope_r2(macd_d['histogram'], lookback)
+        adx_slope, adx_r2   = self._slope_r2(adx_s, lookback)
+
+        approaching = (price_below_ema20
+                       and dist_slope > 0 and dist_r2 >= min_r2
+                       and macd_slope > 0 and macd_r2 >= min_r2
+                       and adx_slope > 0 and adx_r2 >= min_r2)
+
+        score = round(100 * (dist_r2 + macd_r2 + adx_r2) / 3, 1)
+        adx_last = float(adx_s.iloc[-1]) if pd.notna(adx_s.iloc[-1]) else None
+
+        return {
+            'approaching':       approaching,
+            'price_below_ema20': price_below_ema20,
+            'dist_ema20_pct':    round(float(dist_series.iloc[-1]), 2),
+            'dist_ema20_slope':  round(dist_slope, 4),
+            'dist_ema20_r2':     round(dist_r2, 2),
+            'macd_histogram':    round(float(macd_d['histogram'].iloc[-1]), 4),
+            'macd_slope':        round(macd_slope, 5),
+            'macd_r2':           round(macd_r2, 2),
+            'adx':               round(adx_last, 1) if adx_last is not None else None,
+            'adx_slope':         round(adx_slope, 3),
+            'adx_r2':            round(adx_r2, 2),
+            'score':             score,
+            'lookback_days':     lookback,
+        }
+
     def _days_above(self, price: pd.Series, ma: pd.Series, max_check: int = 10) -> int:
         count = 0
         for i in range(1, min(max_check + 1, len(price))):

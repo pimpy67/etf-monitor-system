@@ -1541,6 +1541,36 @@ la freccia scatta solo se lo scarto tra la migliore e la peggiore è ≥3 punti 
 neutra di proposito (stessa cautela già discussa sul non reagire a un campione piccolo
 tipo "6 mesi, 2 trade").
 
+**Prima esecuzione reale (2026-08-24) — commissione reale ≠ commissione da backtest**: il
+primo versamento PAC vero (6 quote `VWCE.DE` su Xetra, ordine a mercato piazzato su
+Directa) ha mostrato una commissione di **9,50€**, quasi doppia dei 5€ assunti in tutti i
+backtest del sistema (verosimilmente un sovrapprezzo per mercato estero rispetto alla
+Borsa Italiana, dove sono MEU/PHAG). Senza tenerne conto, il PAC sarebbe risultato
+otticamente migliore di quanto sia davvero nel confronto con L1/L0 — l'errore opposto a
+quello già corretto nei backtest (che includono sempre i costi).
+
+- `migrations/007_add_pac_fee_column.sql` — colonna `fee_eur NUMERIC(8,2) DEFAULT 0` su
+  `etf_pac_contributions`.
+- `database.py::add_pac_contribution()` — nuovo parametro `fee_eur: float = 0.0`.
+- `app.py`: `total_amount` (capitale investito PAC) ora = controvalore quote + commissioni
+  pagate; nuovo campo `total_fees` per posizione; validazione `fee_eur >= 0` in POST.
+- `templates/pac.html` — campo "Commissione (€)" nel form (default 9,50, il valore reale
+  osservato), colonna commissione in tabella posizioni e storico versamenti.
+
+**Bug reale trovato e corretto lo stesso giorno — confronto ignorava le posizioni chiuse**:
+il confronto L1/L0 leggeva solo `etf_portfolio_entries` con `status='active'`
+(`get_portfolio_entries()`, filtro SQL). Quando una posizione L1/L0 usciva (vendita reale
+registrata in dashboard Portafoglio con "Esci"), spariva del tutto dal confronto PAC — il
+guadagno/perdita realizzato non veniva mai conteggiato. Nel tempo questo avrebbe reso il
+confronto sempre più ingannevole: solo le posizioni aperte in quel preciso momento
+avrebbero contato, perdendo tutta la storia dei trade già chiusi (effetto survivorship).
+Fix: `database.py::get_exited_portfolio_entries()` (nuovo, legge `status='exited' AND
+exit_price IS NOT NULL`) + `app.py::get_pac()` somma alle sleeve `shares × entry_price`
+(investito) e `shares × exit_price` (valore) anche per le posizioni chiuse, con lo stesso
+peso delle posizioni aperte (`shares × prezzo attuale`). Nessuna azione utente nuova
+richiesta: le uscite si registrano esattamente come prima (pagina Portafoglio → "Esci"),
+il confronto le include automaticamente da ora in poi.
+
 ---
 
 ## Infrastruttura Tecnica

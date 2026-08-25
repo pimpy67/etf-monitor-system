@@ -309,7 +309,12 @@ function renderComparison(cmp) {
         const ranked = withGain.slice().sort((a, b) => cmp[b].gain_pct - cmp[a].gain_pct);
         const best = ranked[0], worst = ranked[ranked.length - 1];
         const spread = cmp[best].gain_pct - cmp[worst].gain_pct;
-        if (spread < 3) {
+        // FIX 2026-08-25: prima il banner guardava solo lo spread, senza il vincolo
+        // "almeno 3 posizioni per sleeve" gia' applicato dal backend alle frecce (vedi
+        // app.py::get_pac) — poteva dichiarare un vincitore mentre le frecce mostravano
+        // tutte neutral, un'incoerenza visibile con solo 1-2 posizioni per sleeve.
+        const minNOk = withGain.every(k => cmp[k].n_positions >= 3);
+        if (spread < 3 || !minNOk) {
             banner.textContent = '⚖️ Rendimenti troppo vicini (o campione ancora piccolo) per indicare dove pesare di più';
         } else {
             banner.textContent = `🏆 In vantaggio: ${SLEEVE_LABELS[best]} (+${spread.toFixed(2)} punti percentuali su ${SLEEVE_LABELS[worst]})`;
