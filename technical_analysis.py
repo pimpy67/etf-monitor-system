@@ -308,6 +308,86 @@ class ETFTechnicalAnalyzer:
             'lookback_days':     lookback,
         }
 
+    def compute_pullback_bounce_signal(self, close: pd.Series, high: pd.Series = None,
+                                        low: pd.Series = None, lookback: int = 10,
+                                        min_r2: float = 0.3) -> Dict:
+        """
+        Radar Rimbalzo EMA20 (2026-08-25, idea utente): individua ETF che sono
+        GIA' sopra la EMA20 (trend gia' in corso) e stanno ritracciando verso
+        di essa, ma PRIMA di romperla invertono la pendenza e tornano a
+        salire — il classico "test riuscito del supporto" durante un pullback
+        in trend. Complementare al Radar Anticipato (compute_approach_signal),
+        che guarda invece chi la EMA20 non l'ha ancora superata.
+
+        Sulla finestra di `lookback` giorni richiede tutto quanto segue:
+        - la distanza da EMA20 non e' MAI scesa sotto zero (mai bucata davvero
+          — se l'ha bucata e' un rientro dopo rottura, non un test di supporto)
+        - un minimo locale "a V": prima scende (fase di ritracciamento, almeno
+          2 giorni), poi risale (fase di rimbalzo, almeno 2 giorni) — scarta
+          sia un trend monotono in salita (nessun ritracciamento reale) sia
+          uno ancora in discesa (il rimbalzo non e' ancora iniziato)
+        - la fase di rimbalzo (dal minimo a oggi) ha slope positivo con R² >=
+          min_r2, per scartare un rimbalzo di un solo giorno/rumore (stesso
+          filtro gia' usato da compute_approach_signal)
+
+        Puramente informativo — non tocca in alcun modo suggest_level() o il
+        gate L1/L0."""
+        close = close.astype(float)
+        if len(close) < self.ema20_period + lookback:
+            return {'bouncing': False, 'reason': 'Storico insufficiente'}
+
+        ema20 = self._ema(close, self.ema20_period)
+        current = float(close.iloc[-1])
+        ema20_v = float(ema20.iloc[-1]) if pd.notna(ema20.iloc[-1]) else None
+        if not ema20_v or ema20_v <= 0:
+            return {'bouncing': False, 'reason': 'EMA20 non calcolabile'}
+        if current <= ema20_v:
+            return {'bouncing': False, 'reason': 'Prezzo non sopra EMA20'}
+
+        dist_series = (close - ema20) / ema20 * 100
+        window = dist_series.tail(lookback)
+        if window.isna().any() or len(window) < lookback:
+            return {'bouncing': False, 'reason': 'Storico insufficiente nella finestra'}
+        if window.min() < 0:
+            return {'bouncing': False, 'reason': 'EMA20 bucata durante la finestra'}
+
+        vals = window.values
+        idx_min = int(np.argmin(vals))
+
+        # Serve un vero "a V": almeno 2 punti prima del minimo (discesa) e
+        # almeno 2 dopo (rimbalzo confermato su piu' giorni, non solo oggi)
+        if idx_min < 2 or idx_min > len(vals) - 3:
+            return {'bouncing': False, 'reason': 'Nessun minimo locale chiaro nella finestra'}
+
+        pre_segment  = window.iloc[:idx_min + 1]
+        post_segment = window.iloc[idx_min:]
+        pre_slope,  _        = self._slope_r2(pre_segment, len(pre_segment))
+        post_slope, post_r2  = self._slope_r2(post_segment, len(post_segment))
+
+        bouncing = bool(pre_slope < 0 and post_slope > 0 and post_r2 >= min_r2)
+
+        macd_d = self._macd(close)
+        if high is not None and low is not None and len(high) == len(close):
+            adx_s = self._adx(high.astype(float), low.astype(float), close)
+        else:
+            adx_s = self._adx_close_only(close)
+        adx_last = float(adx_s.iloc[-1]) if pd.notna(adx_s.iloc[-1]) else None
+        macd_last = macd_d['histogram'].iloc[-1]
+
+        return {
+            'bouncing':        bouncing,
+            'dist_ema20_pct':  round(float(dist_series.iloc[-1]), 2),
+            'dist_min_pct':    round(float(vals[idx_min]), 2),
+            'days_since_min':  len(vals) - 1 - idx_min,
+            'pre_slope':       round(pre_slope, 4),
+            'post_slope':      round(post_slope, 4),
+            'post_r2':         round(post_r2, 2),
+            'macd_histogram':  round(float(macd_last), 4) if pd.notna(macd_last) else None,
+            'adx':             round(adx_last, 1) if adx_last is not None else None,
+            'score':           round(100 * post_r2, 1) if bouncing else 0.0,
+            'lookback_days':   lookback,
+        }
+
     def _days_above(self, price: pd.Series, ma: pd.Series, max_check: int = 10) -> int:
         count = 0
         for i in range(1, min(max_check + 1, len(price))):

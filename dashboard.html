@@ -609,6 +609,7 @@ let portfolioSectionOpen = true;   // aperto di default (richiesta utente 2026-0
 let favoriteIsins = new Set();     // isin ticker seguiti manualmente ("Preferiti")
 let favoritesSectionOpen = true;   // aperto di default
 let approachRadarOpen = true;      // aperto di default
+let bounceRadarOpen = true;        // aperto di default
 let level3Open = false;            // L3 (Universo) chiuso di default, si apre a tendina
 let historyCache = {};
 let pfEditMode = false;      // true = modifica, false = aggiunta
@@ -731,6 +732,7 @@ function renderDashboard() {
   const wasPortfolioOpen = portfolioSectionOpen;
   const wasFavoritesOpen = favoritesSectionOpen;
   const wasApproachRadarOpen = approachRadarOpen;
+  const wasBounceRadarOpen = bounceRadarOpen;
 
   const s = allData.summary || {};
   document.getElementById('totCount').textContent = s.total_etfs || 0;
@@ -803,9 +805,10 @@ function renderDashboard() {
     sections.push(renderLevelSection(parseInt(lvl), label, cls, list));
   }
 
-  // Preferiti + Radar Anticipato + param ref
+  // Preferiti + Radar Anticipato + Radar Rimbalzo EMA20 + param ref
   sections.push(renderFavoritesSection());
   sections.push(renderApproachRadarSection());
+  sections.push(renderBounceRadarSection());
   sections.push(renderParamRef());
 
   document.getElementById('mainContent').innerHTML = sections.join('');
@@ -822,6 +825,10 @@ function renderDashboard() {
   if (wasApproachRadarOpen) {
     approachRadarOpen = false; // Reset per il toggle
     toggleApproachRadarSection();
+  }
+  if (wasBounceRadarOpen) {
+    bounceRadarOpen = false; // Reset per il toggle
+    toggleBounceRadarSection();
   }
 
 }
@@ -1264,6 +1271,91 @@ function renderApproachRadarTable(rows) {
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Dist EMA20</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">ADX</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">MACD Hist</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Regime</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Score</th>
+    </tr></thead>
+    <tbody>${trs}</tbody>
+  </table>`;
+}
+
+// ── Radar Rimbalzo EMA20 (2026-08-25) ─────────────────────────────────────
+// ETF gia' sopra la EMA20 che ritracciano verso di essa ma, prima di
+// romperla, invertono la pendenza e tornano a salire — test riuscito del
+// supporto durante un pullback in trend. Complementare al Radar Anticipato
+// (quello guarda chi non ha ancora superato la EMA20). Calcolato on-demand
+// da /api/bounce-radar, non tocca L0/L1/L2/L3.
+function renderBounceRadarSection() {
+  return `
+  <div class="portfolio-section" id="bounceRadarSection">
+    <div class="portfolio-header" onclick="event.stopPropagation();toggleBounceRadarSection()">
+      <h3>&#128260; Radar Rimbalzo — Test EMA20</h3>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span id="bounceRadarCount" style="font-size:0.78em;color:#555">— ETF</span>
+        <span id="bounceRadarToggle" style="color:#555;font-size:0.75em">&#9660;</span>
+      </div>
+    </div>
+    <div class="portfolio-body" id="bounceRadarBody" style="display:none;">
+      <p style="margin:0 0 12px;font-size:0.88em;color:#aaa;">ETF già sopra la EMA20 che stanno ritracciando verso di essa ma, prima di romperla, invertono la pendenza e tornano a salire (minimo locale confermato su più giorni, non un rimbalzo di un solo giorno). È il test riuscito del supporto durante un pullback — non è un segnale d'ingresso del sistema, solo un radar.</p>
+      <div id="bounceRadarContent"></div>
+    </div>
+  </div>`;
+}
+
+function toggleBounceRadarSection() {
+  bounceRadarOpen = !bounceRadarOpen;
+  const body = document.getElementById('bounceRadarBody');
+  const tog  = document.getElementById('bounceRadarToggle');
+  if (body) body.style.display = bounceRadarOpen ? 'block' : 'none';
+  if (tog)  tog.innerHTML = bounceRadarOpen ? '&#9650;' : '&#9660;';
+  if (bounceRadarOpen) loadBounceRadar();
+}
+
+async function loadBounceRadar() {
+  try {
+    const res  = await fetch('/api/bounce-radar');
+    const data = await res.json();
+    const rows = data.results || [];
+    const countEl = document.getElementById('bounceRadarCount');
+    if (countEl) countEl.textContent = rows.length + ' ETF';
+    const contentEl = document.getElementById('bounceRadarContent');
+    if (contentEl) contentEl.innerHTML = renderBounceRadarTable(rows);
+  } catch(e) { console.error('Bounce radar load error', e); }
+}
+
+function renderBounceRadarTable(rows) {
+  if (!rows.length) return `<p style="text-align:center;padding:16px;color:#8b949e;font-size:0.95em">Nessun ETF in rimbalzo su EMA20 al momento.</p>`;
+
+  // Ordine progressivo: più condizioni soddisfatte in cima, meno condizioni in fondo
+  const sorted = rows.slice().sort((a, b) => (b.buy_count ?? -1) - (a.buy_count ?? -1));
+
+  const trs = sorted.map(r => {
+    const tickerEsc = (r.ticker || '').replace(/'/g, "\\'");
+    const regime = r.regime === 'BULL' ? '<span class="regime-bull">▲ Bull</span>'
+                 : r.regime === 'BEAR' ? '<span class="regime-bear">▼ Bear</span>'
+                 : r.regime === 'LATERALE' ? '<span class="regime-lat">▬ Laterale</span>' : '—';
+    return `<tr style="cursor:pointer" onclick="openETFDetail('${tickerEsc}','${r.isin}')">
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08)">
+        <strong style="font-size:1.05em;">${r.nome || r.ticker}</strong><br>
+        <span style="font-size:0.88em;color:#8b949e;font-family:monospace;letter-spacing:0.02em;">${r.ticker || ''} · ${r.isin || ''}</span>
+      </td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.buy_count != null ? r.buy_count + '/7' : '—'}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.dist_ema20_pct != null ? fmtNum(r.dist_ema20_pct, 2) + '%' : '—'}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.dist_min_pct != null ? fmtNum(r.dist_min_pct, 2) + '%' : '—'}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.days_since_min != null ? r.days_since_min + 'gg' : '—'}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.adx != null ? fmtNum(r.adx, 1) : '—'}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${regime}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-weight:700;">${r.score}</td>
+    </tr>`;
+  }).join('');
+
+  return `<table style="width:100%;border-collapse:collapse;font-size:0.95em">
+    <thead><tr style="color:#aaa;text-align:left;text-transform:uppercase;letter-spacing:0.03em;font-size:0.78em;">
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15)">ETF</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Cond.</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Dist EMA20</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Dist Minima</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Rimbalzo Da</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">ADX</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Regime</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Score</th>
     </tr></thead>

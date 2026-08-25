@@ -816,6 +816,79 @@ def get_approach_radar():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/bounce-radar')
+def get_bounce_radar():
+    """
+    Radar Rimbalzo EMA20 (2026-08-25, idea utente): ETF gia' sopra la EMA20
+    che stanno ritracciando verso di essa ma, prima di romperla, invertono la
+    pendenza e tornano a salire — test riuscito del supporto durante un
+    pullback in trend (vedi
+    technical_analysis.py::compute_pullback_bounce_signal). Complementare al
+    Radar Anticipato (quello guarda chi non ha ancora superato la EMA20).
+    Puramente informativo: calcolato on-demand dallo storico prezzi, non
+    tocca suggest_level() ne' salva nulla.
+
+    Query param opzionali: days (finestra di ricerca del minimo, default 10),
+    min_r2 (soglia R² minima sulla fase di rimbalzo, default 0.3).
+    """
+    try:
+        lookback = int(request.args.get('days', 10))
+        min_r2 = float(request.args.get('min_r2', 0.3))
+
+        data = _get_dashboard_data()
+        if not data:
+            return jsonify({'error': 'Dashboard data non disponibile'}), 404
+
+        candidates = []
+        # L1/L2/L3: il prezzo deve essere sopra EMA20 per definizione del
+        # pattern — L0 (deep recovery) e' un contesto diverso, escluso.
+        for level_key in ('1', '2', '3'):
+            candidates.extend(data.get('levels', {}).get(level_key, []))
+
+        results = []
+        for etf in candidates:
+            isin = etf.get('isin')
+            ticker = etf.get('ticker')
+            identifier = isin or ticker
+            if not identifier:
+                continue
+
+            # dist_ema20 gia' presente nello snapshot odierno: scarta subito chi
+            # e' gia' sotto l'EMA20, senza dover fare query/regressione inutili.
+            dist_today = etf.get('dist_ema20')
+            if dist_today is not None and dist_today < 0:
+                continue
+
+            hist = db.get_ohlc_by_isin(identifier, days=max(60, lookback + 30))
+            if hist.empty or len(hist) < 25:
+                continue
+
+            close = hist['Close'].astype(float)
+            has_ohlc = hist['High'].notna().any() and hist['Low'].notna().any()
+            high = hist['High'].astype(float) if has_ohlc else None
+            low = hist['Low'].astype(float) if has_ohlc else None
+
+            analyzer = ETFTechnicalAnalyzer(famiglia=etf.get('etf_type', 'equity_sviluppati'))
+            signal = analyzer.compute_pullback_bounce_signal(close, high, low,
+                                                               lookback=lookback, min_r2=min_r2)
+            if not signal.get('bouncing'):
+                continue
+
+            results.append({
+                'isin': isin, 'ticker': ticker, 'nome': etf.get('nome'),
+                'famiglia': etf.get('etf_type'), 'categoria': etf.get('categoria'),
+                'price': etf.get('price'), 'buy_count': etf.get('buy_count'),
+                'regime': etf.get('regime'),
+                **signal,
+            })
+
+        results.sort(key=lambda r: (-r['score'], r['days_since_min']))
+        return jsonify({'lookback_days': lookback, 'min_r2': min_r2,
+                         'n_scanned': len(candidates), 'results': results})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/portfolio', methods=['GET'])
 def get_portfolio():
     """Portafoglio personale ETF arricchito con dati attuali."""
