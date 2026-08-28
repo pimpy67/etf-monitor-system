@@ -642,26 +642,57 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── Data loading ──────────────────────────────────────────────────────────
-async function loadData() {
+// Fetch JSON con timeout esplicito + verifica che la risposta sia davvero JSON.
+// Serve perché quando un endpoint lato server si blocca, Nginx risponde dopo ~60s
+// con una pagina HTML "504 Gateway Time-out": senza questi controlli res.json()
+// esplode con "Unexpected token '<'" e cancella l'intera dashboard.
+async function fetchJSON(url, {timeoutMs = 20000} = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const [dashRes, l1TrackRes, l1ExitRes] = await Promise.all([
-      fetch('/data/dashboard_data.json'),
-      fetch('/api/l1-tracking'),
-      fetch('/api/l1-exits?days=60'),
-    ]);
-    allData = await dashRes.json();
-    const l1Track = await l1TrackRes.json();
-    const l1Exit  = await l1ExitRes.json();
-    l1TrackingMap = {};
-    (l1Track.tracking || []).forEach(t => { l1TrackingMap[t.isin] = t; });
-    l1ExitsData = l1Exit.exits || [];
-    buildRecentExitsMap();
-    renderDashboard();
-    loadMarketRegime();  // Carica regime di mercato
+    const res = await fetch(url, {signal: ctrl.signal});
+    if (!res.ok) throw new Error(`HTTP ${res.status} su ${url}`);
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('json')) {
+      throw new Error(`risposta non-JSON da ${url} (${ct || 'content-type assente'})`);
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function loadData() {
+  // 1) dashboard_data.json è l'unico fetch critico: se manca non c'è nulla da mostrare.
+  let dash;
+  try {
+    dash = await fetchJSON('/data/dashboard_data.json');
   } catch(e) {
     document.getElementById('mainContent').innerHTML =
-      `<div class="loader" style="color:#f85149">Errore: ${e.message} — <a href="/api/trigger-update" style="color:#58a6ff">Aggiorna</a></div>`;
+      `<div class="loader" style="color:#f85149">Errore nel caricamento dati: ${e.message} — <a href="javascript:location.reload()" style="color:#58a6ff">Ricarica</a></div>`;
+    return;
   }
+  allData = dash;
+
+  // 2) l1-tracking e l1-exits sono accessori (badge di tracking): se falliscono,
+  //    la dashboard si carica lo stesso, solo senza quei dettagli.
+  try {
+    const l1Track = await fetchJSON('/api/l1-tracking');
+    l1TrackingMap = {};
+    (l1Track.tracking || []).forEach(t => { l1TrackingMap[t.isin] = t; });
+  } catch(e) {
+    console.warn('l1-tracking non disponibile:', e.message);
+  }
+  try {
+    const l1Exit = await fetchJSON('/api/l1-exits?days=60');
+    l1ExitsData = l1Exit.exits || [];
+  } catch(e) {
+    console.warn('l1-exits non disponibile:', e.message);
+  }
+
+  buildRecentExitsMap();
+  renderDashboard();
+  loadMarketRegime();  // Carica regime di mercato
 }
 
 // ── Recent L1 exits map ───────────────────────────────────────────────────

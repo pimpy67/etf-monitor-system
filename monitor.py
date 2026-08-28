@@ -1369,6 +1369,7 @@ class ETFMonitor:
         """
         l0_candidates = []
 
+        conn = None
         try:
             # Leggi ETF già in L0 portafoglio
             conn = self.db.get_connection()
@@ -1381,11 +1382,13 @@ class ETFMonitor:
                     WHERE portafoglio = 'L0' AND status = 'active'
                 """)
                 existing_l0 = {row[0] for row in cur.fetchall()}
-            conn.close()
 
         except Exception as e:
             add_log(f"  ⚠️  Errore lettura L0 esistenti: {e}")
             existing_l0 = set()
+        finally:
+            if conn is not None:
+                conn.close()
 
         # Filtra candidati L0 dai risultati dell'analisi
         for result in results:
@@ -1455,6 +1458,7 @@ class ETFMonitor:
         5. Sempre: salva SL/TP e contatori aggiornati (posizione resta 'active')
         """
         tightening_events = []
+        conn = None
         try:
             # Leggi tutte le entry L0 attive
             query = """
@@ -1474,12 +1478,10 @@ class ETFMonitor:
                     rows = cur.fetchall()
             except Exception as e:
                 add_log(f"  ⚠️  Errore query portfolio L0: {e}")
-                conn.close()
                 return tightening_events
 
             if not rows:
                 add_log("  — Nessuna posizione L0 da aggiornare")
-                conn.close()
                 return tightening_events
 
             add_log(f"  Aggiornamento {len(rows)} posizioni L0...")
@@ -1622,10 +1624,11 @@ class ETFMonitor:
                     add_log(f"    ⚠️  Errore L0 {isin}: {type(e).__name__}: {e}")
                     continue
 
-            conn.close()
-
         except Exception as e:
             add_log(f"  ⚠️  Errore generale L0: {e}")
+        finally:
+            if conn is not None:
+                conn.close()
 
         return tightening_events
 
@@ -1759,6 +1762,7 @@ class ETFMonitor:
         QUESTO giro — stesso meccanismo di _update_portfolio_l0_suggerito, vedi lì.
         """
         tightening_events = []
+        conn = None
         try:
             # Leggi tutte le entry L1 attive
             query = """
@@ -1778,12 +1782,10 @@ class ETFMonitor:
                     rows = cur.fetchall()
             except Exception as e:
                 add_log(f"  ⚠️  Errore query portfolio L1: {e}")
-                conn.close()
                 return tightening_events
 
             if not rows:
                 add_log("  — Nessuna posizione L1 da aggiornare")
-                conn.close()
                 return tightening_events
 
             add_log(f"  Aggiornamento {len(rows)} posizioni L1...")
@@ -1910,10 +1912,11 @@ class ETFMonitor:
                     add_log(f"    ⚠️  Errore L1 {isin}: {type(e).__name__}: {e}")
                     continue
 
-            conn.close()
-
         except Exception as e:
             add_log(f"  ⚠️  Errore generale L1: {e}")
+        finally:
+            if conn is not None:
+                conn.close()
 
         return tightening_events
 

@@ -30,6 +30,16 @@ services:
       POSTGRES_DB: etfs
       POSTGRES_USER: etfmonitor
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+    # Rete di sicurezza contro i leak di connessione lato app: qualunque
+    # connessione lasciata "idle in transaction" per >2 min viene chiusa da
+    # Postgres, cosi' un bug futuro non puo' piu' saturare i 100 slot e mandare
+    # giu' la dashboard (incidente 2026-08-28).
+    command:
+      - "postgres"
+      - "-c"
+      - "idle_in_transaction_session_timeout=120000"
+      - "-c"
+      - "max_connections=150"
     volumes:
       - etf_postgres_data:/var/lib/postgresql/data
     healthcheck:

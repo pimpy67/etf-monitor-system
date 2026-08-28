@@ -307,6 +307,7 @@ def get_prices():
 @app.route('/api/portfolio-sl')
 def portfolio_sl():
     """Restituisce SL attuali per tutte le posizioni L1, opzionalmente filtrate per ISIN."""
+    conn = None
     try:
         conn = db.get_connection()
         if not conn:
@@ -402,7 +403,6 @@ def portfolio_sl():
                         'order_parallel_ok': op['parallel_ok'],
                     })
 
-        conn.close()
         return jsonify({
             'timestamp': datetime.now().isoformat(),
             'positions': result,
@@ -412,6 +412,12 @@ def portfolio_sl():
     except Exception as e:
         print(f"Errore portfolio-sl: {e}")
         return jsonify({'error': str(e)}), 500
+    finally:
+        # close SEMPRE la connessione: se un'eccezione salta qui senza chiuderla,
+        # psycopg2 la lascia "idle in transaction" e nel giro di qualche settimana
+        # si esauriscono i 100 slot di Postgres ("sorry, too many clients already").
+        if conn is not None:
+            conn.close()
 
 
 @app.route('/api/accept-sl-suggestion', methods=['POST'])

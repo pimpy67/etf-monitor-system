@@ -113,54 +113,65 @@ class PortfolioL1Syncer:
 
     def _check_existing_entry(self, isin: str, portafoglio: str) -> Optional[Dict]:
         """Verifica se l'ETF è già nel portafoglio."""
+        conn = self.db.get_connection()
+        if conn is None:
+            return None
         try:
-            with self.db.get_connection() as conn:
-                with conn.cursor() as cur:
-                    query = """
-                        SELECT id, entry_date, entry_price, status
-                        FROM etf_portfolio_entries
-                        WHERE isin = %s AND portafoglio = %s AND status = 'active'
-                        LIMIT 1
-                    """
-                    cur.execute(query, (isin, portafoglio))
-                    row = cur.fetchone()
-                    if row:
-                        return {
-                            'id': row[0],
-                            'entry_date': row[1],
-                            'entry_price': row[2],
-                            'status': row[3]
-                        }
-                    return None
+            # NB: `with <connessione psycopg2>` gestisce solo la transazione, NON
+            # chiude la connessione — serve un close() esplicito o si accumulano
+            # connessioni idle finche' Postgres esaurisce gli slot.
+            with conn.cursor() as cur:
+                query = """
+                    SELECT id, entry_date, entry_price, status
+                    FROM etf_portfolio_entries
+                    WHERE isin = %s AND portafoglio = %s AND status = 'active'
+                    LIMIT 1
+                """
+                cur.execute(query, (isin, portafoglio))
+                row = cur.fetchone()
+                if row:
+                    return {
+                        'id': row[0],
+                        'entry_date': row[1],
+                        'entry_price': row[2],
+                        'status': row[3]
+                    }
+                return None
         except Exception as e:
             logger.error(f"Error checking existing entry: {e}")
             return None
+        finally:
+            conn.close()
 
     def _add_portfolio_entry(self, isin: str, ticker: str, fund_name: str,
                             entry_date: str, entry_price: float, portafoglio: str,
                             famiglia: str, sl_suggerito: float, sg_suggerito: float,
                             entry_confidence: float = 1.0) -> bool:
         """Aggiungi una nuova entry L1 al portafoglio."""
+        conn = self.db.get_connection()
+        if conn is None:
+            return False
         try:
-            with self.db.get_connection() as conn:
-                with conn.cursor() as cur:
-                    query = """
-                        INSERT INTO etf_portfolio_entries (
-                            isin, entry_date, entry_price, fund_name,
-                            status, portafoglio, portfolio_type, 
-                            sl_suggerito, sg_suggerito, entry_confidence
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """
-                    cur.execute(query, (
+            with conn.cursor() as cur:
+                query = """
+                    INSERT INTO etf_portfolio_entries (
                         isin, entry_date, entry_price, fund_name,
-                        'active', portafoglio, portafoglio,
+                        status, portafoglio, portfolio_type,
                         sl_suggerito, sg_suggerito, entry_confidence
-                    ))
-                    conn.commit()
-                    return True
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                cur.execute(query, (
+                    isin, entry_date, entry_price, fund_name,
+                    'active', portafoglio, portafoglio,
+                    sl_suggerito, sg_suggerito, entry_confidence
+                ))
+                conn.commit()
+                return True
         except Exception as e:
             logger.error(f"Error adding portfolio entry: {e}")
             return False
+        finally:
+            conn.close()
 
     def _calculate_sl_l1(self, entry_price: float, famiglia: str) -> float:
         """Calcola SL iniziale basato su sl_initial_pct della famiglia."""
