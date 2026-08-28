@@ -2314,6 +2314,65 @@ amministrativamente nel DB (`exit_reason='PROMOTED'`), non per un vero
 tocco di SL/TP. Deploy via `./deploy.sh`. Vedi memory/etf_post_lockdown_todo_20260906.md
 sezione 3 per il dettaglio completo.
 
+> ✅ **Aggiornamento 2026-08-24**: `calculate_sl_suggerito_l0` non è più hardcoded — legge
+> i 3 scaglioni dallo YAML per famiglia (`l0_sl_tier1_buffer_pct` ecc.), default = ai valori
+> precedenti. `equity_sviluppati` ha ora `l0_sl_tier1_buffer_pct: 0.04` esplicito nello YAML.
+
+### CANDIDATE_L0_SL_TIER1_20260828 — Shadow Monitor (NON promosso)
+
+Origine: domanda dell'utente "invece di scegliere una % a priori, non si può testare uno
+stop sulla struttura di prezzo (fascia di supporto) di ogni ETF?". Costruito
+`optimize_l0_sl_structural.py` (scratch) — confronta 11 candidati sullo Stop L0 di
+`equity_sviluppati`: `fixed 4/5/6%`, `swinglow` (10/20/30gg, ± buffer), `atr` (2/2.5/3×),
+`hybrid`. Golden Dataset batch `2026-08-07`, 105 ticker, split IN 2023-08-05→2025-08-05 /
+OUT →2026-08-05, floor −8% / cap −1.5% su tutti gli strutturali.
+
+**Risultato:**
+
+| candidato | IN: WR / PF / P&L10k | OUT: WR / PF / P&L10k |
+|---|---|---|
+| `fixed_4%` (produzione) | 63,1% / 4,39 / +64.080€ | 45,5% / 2,02 / +3.179€ |
+| **`fixed_5%`** | 71,7% / 5,29 / +68.217€ | 54,5% / 2,70 / +4.729€ |
+| **`fixed_6%`** | 74,2% / 5,05 / +67.469€ | 60,0% / 2,94 / +4.961€ |
+| `atr_2.0` | 52,1% / 4,29 / +60.924€ | **22,7%** / 1,30 / +1.438€ |
+| `swinglow_20_0` | 61,9% / 3,88 / +57.029€ | 40,0% / 2,42 / +4.404€ |
+| `swinglow_20_1%` / `_30_1%` / `hybrid` | 75,0% / ~4,1 / ~63.800€ | 85,7% / 8,84 / +6.705€ (N=7) |
+
+- **Le regole strutturali NON battono un % fisso più largo.** `atr_*` fa whipsaw (OOS WR
+  22-31%). `swinglow` grezzo è mediocre. I 3 candidati che sembrano ottimi
+  (`swinglow_20_1%`, `_30_1%`, `hybrid`) danno risultati **identici tra loro** — artefatto:
+  per questi setup il minimo a 20-30gg sta quasi sempre sotto il floor, quindi collassano
+  su "stop fisso −8%". Non è "struttura", è solo uno stop largo con N=7 OOS.
+- **Segnale pulito (terza volta): più largo è meglio.** `5%` e `6%` battono `4%` su WR, PF,
+  P&L, sia IN che OUT, monotòno — stessa forma di `CANDIDATE_MODEL_L0_SL_20260820` (2%→4%).
+
+⚠️ N out-of-sample = 10-11 sui candidati buoni — non conclusivo da solo, coerente con IN e
+col backtest del 20/08. **Non promosso** (a differenza del 20/08): il campione OOS è troppo
+piccolo e non c'è un evento reale scatenante come il whipsaw su BRES. Shadow Monitor
+prima, N≥30 forward + decisione esplicita al checkpoint.
+
+**Implementazione**: `shadow_monitor_l0_sl_tier1.py` (STEP 8k in `monitor.py::run()`),
+tiene 2 varianti in parallelo — `candidate_l0_sl_tier1_5pct_20260828` (buffer 0.05) e
+`candidate_l0_sl_tier1_6pct_20260828` (0.06). Cambia SOLO `l0_sl_tier1_buffer_pct` via
+copia locale di `analyzer.p` (mai la baseline condivisa); ingresso `suggest_level_0`
+nativo, TP nativo, tier2/3 nativi. Log su `etf_shadow_positions`, email via
+`send_shadow_entries` (varianti `L0_SL_5PCT`/`L0_SL_6PCT` in `alerts.py::_SHADOW_VARIANTS`).
+`optimize_l0_sl_structural.py` e `optimize_l0_sl_tier1_em.py` rimossi dal repo dopo il run.
+Deploy via `./deploy.sh`.
+
+**Estrazione al checkpoint:**
+```sql
+SELECT model_name, ticker, entry_date, exit_date, exit_reason, gross_pct_gain, status
+FROM etf_shadow_positions
+WHERE model_name IN ('candidate_l0_sl_tier1_5pct_20260828','candidate_l0_sl_tier1_6pct_20260828')
+ORDER BY model_name, entry_date;
+```
+
+**Nota EM (stesso giorno)**: sweep `optimize_l0_sl_tier1_em.py` su `mercati_emergenti`
+(whitelist+blacklist bypassate) — buffer 2%: IN N=86 WR=20,9% PF=1,23 | **OUT N=19 WR=0,0%
+PF=0,0 −4.730€**. L0 su emergenti non ha edge (già visto il 24/08) — nessuno stop lo
+salva. Nessun candidato per EM.
+
 ---
 
 ## Variabili d'Ambiente `.env`

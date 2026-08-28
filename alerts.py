@@ -206,6 +206,16 @@ class AlertSystem:
             'params': 'Dopo uno stop SL su un ticker (equity_sviluppati), blocca il re-ingresso sullo stesso ticker per 10 giorni di trading — nessun altro parametro d\'ingresso/uscita cambiato rispetto al nativo',
             'color_main': '#5D6D7E', 'color_dark': '#2C3E50', 'tag': 'L0-Cooldown',
         },
+        'L0_SL_5PCT': {
+            'label': 'Candidate L0 Stop tier1 5%',
+            'params': 'Primo scaglione dello Stop L0 (profit<5%) portato da 4% a 5% dall\'entry — solo equity_sviluppati, ingresso/TP/tier2-3 identici al nativo. Sweep: OUT WR 45.5%->54.5%, PF 2.02->2.70',
+            'color_main': '#E67E22', 'color_dark': '#A04000', 'tag': 'L0-SL-5%',
+        },
+        'L0_SL_6PCT': {
+            'label': 'Candidate L0 Stop tier1 6%',
+            'params': 'Primo scaglione dello Stop L0 (profit<5%) portato da 4% a 6% dall\'entry — solo equity_sviluppati, ingresso/TP/tier2-3 identici al nativo. Sweep: OUT WR 45.5%->60.0%, PF 2.02->2.94',
+            'color_main': '#CA6F1E', 'color_dark': '#873600', 'tag': 'L0-SL-6%',
+        },
     }
 
     def send_shadow_entries(self, new_entries: list, variant: str = 'L1') -> bool:

@@ -1297,6 +1297,25 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor L0-cooldown (non bloccante): {e}")
 
+        # STEP 8k — Shadow Monitor CANDIDATE_L0_SL_TIER1_20260828: primo scaglione
+        # dello Stop L0 (profit<5%) da 4% a 5% e 6% dall'entry — SOLO
+        # equity_sviluppati, ingresso/TP/tier2-3 identici al nativo. Sweep
+        # optimize_l0_sl_structural.py (Golden Dataset batch 2026-08-07, 105 ticker):
+        # 4%(prod) OUT WR=45.5% PF=2.02 | 5% OUT WR=54.5% PF=2.70 | 6% OUT WR=60.0%
+        # PF=2.94 — monotono su IN e OUT, coerente con CANDIDATE_MODEL_L0_SL_20260820
+        # (2%->4%). Le regole strutturali (ATR/swing-low) testate nello stesso sweep
+        # sono risultate PEGGIO. N OOS piccolo (10-11) -> Shadow, non promozione.
+        # Traccia 2 model_name: candidate_l0_sl_tier1_5pct/6pct_20260828.
+        try:
+            from shadow_monitor_l0_sl_tier1 import run_shadow_monitor_l0_sl_tier1, EMAIL_VARIANT
+            shadow_l0_sl_map = run_shadow_monitor_l0_sl_tier1(self.db, results, add_log=add_log)
+            if send_daily_report:
+                for mname, entries in shadow_l0_sl_map.items():
+                    if entries:
+                        self.alert_system.send_shadow_entries(entries, variant=EMAIL_VARIANT[mname])
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor L0-SL-tier1 (non bloccante): {e}")
+
         # 7. Invia resoconto portafoglio — DOPO l'aggiornamento SL/TP (fix 2026-08-05:
         # prima veniva inviato PRIMA degli STEP 4/7 sopra, quindi l'email mostrava
         # sempre i valori SL/TP del giorno precedente invece di quelli appena calcolati
