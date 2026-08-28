@@ -682,17 +682,19 @@ class AlertSystem:
             conn = db._get_connection()
             if not conn:
                 return True  # No DB connection available
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT pe.id, pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
-                       pe.portafoglio, pe.sl_suggerito, pe.sg_suggerito, pe.broker,
-                       pe.tp_proximity_stop_max
-                FROM etf_portfolio_entries pe
-                WHERE pe.status = 'active'
-                ORDER BY pe.entry_date DESC
-            """)
-            positions = cur.fetchall()
-            conn.close()
+            try:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT pe.id, pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
+                           pe.portafoglio, pe.sl_suggerito, pe.sg_suggerito, pe.broker,
+                           pe.tp_proximity_stop_max
+                    FROM etf_portfolio_entries pe
+                    WHERE pe.status = 'active'
+                    ORDER BY pe.entry_date DESC
+                """)
+                positions = cur.fetchall()
+            finally:
+                conn.close()
 
             if not positions and not favorites_digest:
                 return True  # Nulla da segnalare, niente email
@@ -716,13 +718,15 @@ class AlertSystem:
                     conn = db._get_connection()
                     if not conn:
                         continue
-                    cur = conn.cursor()
-                    cur.execute("""
-                        SELECT close, date FROM etf_price_history
-                        WHERE isin = %s OR ticker = %s ORDER BY date DESC LIMIT 1
-                    """, (isin, isin))
-                    result = cur.fetchone()
-                    conn.close()
+                    try:
+                        cur = conn.cursor()
+                        cur.execute("""
+                            SELECT close, date FROM etf_price_history
+                            WHERE isin = %s OR ticker = %s ORDER BY date DESC LIMIT 1
+                        """, (isin, isin))
+                        result = cur.fetchone()
+                    finally:
+                        conn.close()
 
                     if result:
                         current_price = float(result[0])
@@ -799,13 +803,15 @@ class AlertSystem:
                     conn = db._get_connection()
                     if not conn:
                         continue
-                    cur = conn.cursor()
-                    cur.execute("""
-                        SELECT close FROM etf_price_history
-                        WHERE isin = %s OR ticker = %s ORDER BY date DESC LIMIT 1
-                    """, (isin, isin))
-                    result = cur.fetchone()
-                    conn.close()
+                    try:
+                        cur = conn.cursor()
+                        cur.execute("""
+                            SELECT close FROM etf_price_history
+                            WHERE isin = %s OR ticker = %s ORDER BY date DESC LIMIT 1
+                        """, (isin, isin))
+                        result = cur.fetchone()
+                    finally:
+                        conn.close()
 
                     current_price = float(result[0]) if result else entry_price
                     pct_change = ((current_price - entry_price) / entry_price * 100) if entry_price > 0 else 0

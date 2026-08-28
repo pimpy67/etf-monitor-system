@@ -88,6 +88,25 @@ class PriceDatabase:
         if not self.database_url or not POSTGRES_AVAILABLE:
             return None
 
+        # Il Postgres in Docker (host 'postgres'/'localhost'/'127.0.0.1') non parla
+        # SSL: tentare sslmode='require' prima fa fallire ogni connessione e poi
+        # riprovare senza SSL — 2 handshake TCP per OGNI query. Con centinaia di
+        # query per ciclo (radar, monitor) e' spreco puro. Salta il tentativo SSL
+        # quando l'host e' chiaramente locale.
+        try:
+            url = self.database_url.lower()
+            is_local = ('@postgres' in url or '@localhost' in url or '@127.0.0.1' in url
+                        or '@db:' in url)
+        except Exception:
+            is_local = False
+
+        if is_local:
+            try:
+                return psycopg2.connect(self.database_url)
+            except Exception as e:
+                print(f"Errore connessione database (locale): {e}")
+                return None
+
         try:
             conn = psycopg2.connect(self.database_url, sslmode='require')
             return conn
