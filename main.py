@@ -85,7 +85,12 @@ def main():
     initial_monitor_thread = threading.Thread(target=run_initial_monitor, daemon=True)
     initial_monitor_thread.start()
 
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    # threaded=True: il dev server di Werkzeug altrimenti serve UNA richiesta alla
+    # volta — un endpoint lento (radar: ~200 query DB + regressioni) o il ciclo
+    # monitor bloccano tutta la dashboard finche' non finiscono, e Nginx risponde
+    # 502. Con i thread le richieste veloci non restano piu' in coda dietro a
+    # quelle pesanti. (Incidente 2026-08-28.)
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False, threaded=True)
 
 
 if __name__ == "__main__":

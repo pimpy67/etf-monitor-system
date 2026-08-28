@@ -766,6 +766,25 @@ def _assign_quality_rank(results):
         r['quality_rank'] = i + 1
 
 
+# Cache TTL per gli endpoint radar: scansionano ~200 ETF con query DB +
+# regressione ciascuno (diversi secondi), e la dashboard li richiama a ogni
+# apertura pagina + ogni 60s di auto-refresh. Senza cache, su un server a 1
+# vCPU/1 thread le scansioni si accavallano e bloccano tutto (incidente
+# 2026-08-28). 5 minuti e' piu' che sufficiente: i dati cambiano una volta al
+# giorno col monitor.
+_RADAR_CACHE = {}
+_RADAR_CACHE_TTL = 300  # secondi
+
+def _radar_cached(key, compute):
+    import time as _t
+    hit = _RADAR_CACHE.get(key)
+    if hit and (_t.time() - hit[0]) < _RADAR_CACHE_TTL:
+        return hit[1]
+    value = compute()
+    _RADAR_CACHE[key] = (_t.time(), value)
+    return value
+
+
 @app.route('/api/approach-radar')
 def get_approach_radar():
     """
@@ -788,53 +807,56 @@ def get_approach_radar():
         if not data:
             return jsonify({'error': 'Dashboard data non disponibile'}), 404
 
-        candidates = []
-        # Solo L2/L3: L0/L1 sono gia' oltre lo stadio "in avvicinamento".
-        for level_key in ('2', '3'):
-            candidates.extend(data.get('levels', {}).get(level_key, []))
+        def _compute():
+            candidates = []
+            # Solo L2/L3: L0/L1 sono gia' oltre lo stadio "in avvicinamento".
+            for level_key in ('2', '3'):
+                candidates.extend(data.get('levels', {}).get(level_key, []))
 
-        results = []
-        for etf in candidates:
-            isin = etf.get('isin')
-            ticker = etf.get('ticker')
-            identifier = isin or ticker
-            if not identifier:
-                continue
+            results = []
+            for etf in candidates:
+                isin = etf.get('isin')
+                ticker = etf.get('ticker')
+                identifier = isin or ticker
+                if not identifier:
+                    continue
 
-            # dist_ema20 gia' presente nello snapshot odierno: scarta subito chi
-            # ha gia' superato l'EMA20, senza dover fare query/regressione inutili.
-            dist_today = etf.get('dist_ema20')
-            if dist_today is not None and dist_today >= 0:
-                continue
+                # dist_ema20 gia' presente nello snapshot odierno: scarta subito chi
+                # ha gia' superato l'EMA20, senza dover fare query/regressione inutili.
+                dist_today = etf.get('dist_ema20')
+                if dist_today is not None and dist_today >= 0:
+                    continue
 
-            hist = db.get_ohlc_by_isin(identifier, days=max(60, lookback + 30))
-            if hist.empty or len(hist) < 25:
-                continue
+                hist = db.get_ohlc_by_isin(identifier, days=max(60, lookback + 30))
+                if hist.empty or len(hist) < 25:
+                    continue
 
-            close = hist['Close'].astype(float)
-            has_ohlc = hist['High'].notna().any() and hist['Low'].notna().any()
-            high = hist['High'].astype(float) if has_ohlc else None
-            low = hist['Low'].astype(float) if has_ohlc else None
-            volume = hist['Volume'].astype(float) if hist['Volume'].notna().any() else None
+                close = hist['Close'].astype(float)
+                has_ohlc = hist['High'].notna().any() and hist['Low'].notna().any()
+                high = hist['High'].astype(float) if has_ohlc else None
+                low = hist['Low'].astype(float) if has_ohlc else None
+                volume = hist['Volume'].astype(float) if hist['Volume'].notna().any() else None
 
-            analyzer = ETFTechnicalAnalyzer(famiglia=etf.get('etf_type', 'equity_sviluppati'))
-            signal = analyzer.compute_approach_signal(close, high, low, volume=volume,
-                                                        lookback=lookback, min_r2=min_r2)
-            if not signal.get('approaching'):
-                continue
+                analyzer = ETFTechnicalAnalyzer(famiglia=etf.get('etf_type', 'equity_sviluppati'))
+                signal = analyzer.compute_approach_signal(close, high, low, volume=volume,
+                                                            lookback=lookback, min_r2=min_r2)
+                if not signal.get('approaching'):
+                    continue
 
-            results.append({
-                'isin': isin, 'ticker': ticker, 'nome': etf.get('nome'),
-                'famiglia': etf.get('etf_type'), 'categoria': etf.get('categoria'),
-                'price': etf.get('price'), 'buy_count': etf.get('buy_count'),
-                'regime': etf.get('regime'),
-                **signal,
-            })
+                results.append({
+                    'isin': isin, 'ticker': ticker, 'nome': etf.get('nome'),
+                    'famiglia': etf.get('etf_type'), 'categoria': etf.get('categoria'),
+                    'price': etf.get('price'), 'buy_count': etf.get('buy_count'),
+                    'regime': etf.get('regime'),
+                    **signal,
+                })
 
-        _assign_quality_rank(results)
-        results.sort(key=lambda r: (-r['score'], r['dist_ema20_pct']))
-        return jsonify({'lookback_days': lookback, 'min_r2': min_r2,
-                         'n_scanned': len(candidates), 'results': results})
+            _assign_quality_rank(results)
+            results.sort(key=lambda r: (-r['score'], r['dist_ema20_pct']))
+            return {'lookback_days': lookback, 'min_r2': min_r2,
+                    'n_scanned': len(candidates), 'results': results}
+
+        return jsonify(_radar_cached(('approach', lookback, min_r2), _compute))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -862,54 +884,57 @@ def get_bounce_radar():
         if not data:
             return jsonify({'error': 'Dashboard data non disponibile'}), 404
 
-        candidates = []
-        # L1/L2/L3: il prezzo deve essere sopra EMA20 per definizione del
-        # pattern — L0 (deep recovery) e' un contesto diverso, escluso.
-        for level_key in ('1', '2', '3'):
-            candidates.extend(data.get('levels', {}).get(level_key, []))
+        def _compute():
+            candidates = []
+            # L1/L2/L3: il prezzo deve essere sopra EMA20 per definizione del
+            # pattern — L0 (deep recovery) e' un contesto diverso, escluso.
+            for level_key in ('1', '2', '3'):
+                candidates.extend(data.get('levels', {}).get(level_key, []))
 
-        results = []
-        for etf in candidates:
-            isin = etf.get('isin')
-            ticker = etf.get('ticker')
-            identifier = isin or ticker
-            if not identifier:
-                continue
+            results = []
+            for etf in candidates:
+                isin = etf.get('isin')
+                ticker = etf.get('ticker')
+                identifier = isin or ticker
+                if not identifier:
+                    continue
 
-            # dist_ema20 gia' presente nello snapshot odierno: scarta subito chi
-            # e' gia' sotto l'EMA20, senza dover fare query/regressione inutili.
-            dist_today = etf.get('dist_ema20')
-            if dist_today is not None and dist_today < 0:
-                continue
+                # dist_ema20 gia' presente nello snapshot odierno: scarta subito chi
+                # e' gia' sotto l'EMA20, senza dover fare query/regressione inutili.
+                dist_today = etf.get('dist_ema20')
+                if dist_today is not None and dist_today < 0:
+                    continue
 
-            hist = db.get_ohlc_by_isin(identifier, days=max(60, lookback + 30))
-            if hist.empty or len(hist) < 25:
-                continue
+                hist = db.get_ohlc_by_isin(identifier, days=max(60, lookback + 30))
+                if hist.empty or len(hist) < 25:
+                    continue
 
-            close = hist['Close'].astype(float)
-            has_ohlc = hist['High'].notna().any() and hist['Low'].notna().any()
-            high = hist['High'].astype(float) if has_ohlc else None
-            low = hist['Low'].astype(float) if has_ohlc else None
-            volume = hist['Volume'].astype(float) if hist['Volume'].notna().any() else None
+                close = hist['Close'].astype(float)
+                has_ohlc = hist['High'].notna().any() and hist['Low'].notna().any()
+                high = hist['High'].astype(float) if has_ohlc else None
+                low = hist['Low'].astype(float) if has_ohlc else None
+                volume = hist['Volume'].astype(float) if hist['Volume'].notna().any() else None
 
-            analyzer = ETFTechnicalAnalyzer(famiglia=etf.get('etf_type', 'equity_sviluppati'))
-            signal = analyzer.compute_pullback_bounce_signal(close, high, low, volume=volume,
-                                                               lookback=lookback, min_r2=min_r2)
-            if not signal.get('bouncing'):
-                continue
+                analyzer = ETFTechnicalAnalyzer(famiglia=etf.get('etf_type', 'equity_sviluppati'))
+                signal = analyzer.compute_pullback_bounce_signal(close, high, low, volume=volume,
+                                                                   lookback=lookback, min_r2=min_r2)
+                if not signal.get('bouncing'):
+                    continue
 
-            results.append({
-                'isin': isin, 'ticker': ticker, 'nome': etf.get('nome'),
-                'famiglia': etf.get('etf_type'), 'categoria': etf.get('categoria'),
-                'price': etf.get('price'), 'buy_count': etf.get('buy_count'),
-                'regime': etf.get('regime'),
-                **signal,
-            })
+                results.append({
+                    'isin': isin, 'ticker': ticker, 'nome': etf.get('nome'),
+                    'famiglia': etf.get('etf_type'), 'categoria': etf.get('categoria'),
+                    'price': etf.get('price'), 'buy_count': etf.get('buy_count'),
+                    'regime': etf.get('regime'),
+                    **signal,
+                })
 
-        _assign_quality_rank(results)
-        results.sort(key=lambda r: (-r['score'], r['days_since_min']))
-        return jsonify({'lookback_days': lookback, 'min_r2': min_r2,
-                         'n_scanned': len(candidates), 'results': results})
+            _assign_quality_rank(results)
+            results.sort(key=lambda r: (-r['score'], r['days_since_min']))
+            return {'lookback_days': lookback, 'min_r2': min_r2,
+                    'n_scanned': len(candidates), 'results': results}
+
+        return jsonify(_radar_cached(('bounce', lookback, min_r2), _compute))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
