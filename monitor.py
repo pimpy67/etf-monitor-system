@@ -1072,6 +1072,18 @@ class ETFMonitor:
             with open('data/dashboard_data.json', 'w') as f:
                 json.dump(dashboard, f, indent=2)
 
+        # Precalcola i due radar (Anticipato + Rimbalzo) e salvali su file: sono
+        # scansioni pesanti (~200 ETF, query DB + regressione ciascuno) che prima
+        # giravano a OGNI richiesta della dashboard bloccando l'app (incidente
+        # 2026-08-28). Ora l'endpoint legge solo il file. try/except: un errore
+        # qui non deve mai bloccare il ciclo.
+        try:
+            add_log("Precalcolo radar (Anticipato + Rimbalzo)...")
+            from radar_compute import refresh_radar_files
+            refresh_radar_files(dashboard, self.db, add_log=add_log)
+        except Exception as e:
+            add_log(f"⚠️  Errore precalcolo radar: {e}")
+
         # PRIORITÀ 3 — Salva stato L2 smoothing per anti-flickering (prossimo ciclo)
         try:
             self._save_l2_state()
