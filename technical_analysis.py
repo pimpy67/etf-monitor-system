@@ -247,8 +247,44 @@ class ETFTechnicalAnalyzer:
         r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
         return float(slope), float(r2)
 
+    def _rvol(self, volume: Optional[pd.Series], window: int = 20) -> Optional[float]:
+        """RVOL = volume di oggi / media dei `window` giorni precedenti (oggi escluso).
+        RVOL > 1 = interesse di mercato sopra la norma, < 1 = sotto. None se il
+        volume non e' disponibile o lo storico e' troppo corto (alcuni ETF non
+        hanno Volume salvato, vedi get_ohlc_by_isin)."""
+        if volume is None or len(volume) < window + 1:
+            return None
+        vol = volume.astype(float)
+        if vol.isna().all():
+            return None
+        today = vol.iloc[-1]
+        baseline = vol.iloc[-(window + 1):-1]
+        if pd.isna(today) or baseline.isna().all():
+            return None
+        avg = baseline.mean()
+        if not avg or avg <= 0:
+            return None
+        return float(today / avg)
+
+    def _quality_score(self, adx: Optional[float], rvol: Optional[float]) -> Optional[float]:
+        """
+        Punteggio di qualita' tecnica 0-100 per il ranking dei segnali Radar
+        (idea utente 2026-08-27): combina forza/direzionalita' del trend (ADX) e
+        conferma di interesse di mercato (RVOL). Serve a ordinare/evidenziare i
+        migliori quando scattano tanti segnali insieme con cassa limitata — NON
+        e' stato backtestato come predittore di performance, quindi va usato solo
+        come priorita' di visualizzazione, mai come filtro d'ingresso o soglia
+        automatica. Cap ADX=40 e RVOL=2.5x cosi' un singolo outlier non domina.
+        None se manca sia ADX sia RVOL (nessun dato su cui basare un ranking).
+        """
+        if adx is None and rvol is None:
+            return None
+        adx_component = min(max(adx, 0.0), 40.0) / 40.0 * 50.0 if adx is not None else 0.0
+        rvol_component = min(max(rvol, 0.0), 2.5) / 2.5 * 50.0 if rvol is not None else 0.0
+        return round(adx_component + rvol_component, 1)
+
     def compute_approach_signal(self, close: pd.Series, high: pd.Series = None,
-                                 low: pd.Series = None, lookback: int = 7,
+                                 low: pd.Series = None, volume: pd.Series = None, lookback: int = 7,
                                  min_r2: float = 0.3) -> Dict:
         """
         Radar Anticipato (2026-08-25, idea utente): individua ETF che NON hanno
@@ -291,6 +327,8 @@ class ETFTechnicalAnalyzer:
 
         score = round(100 * (dist_r2 + macd_r2 + adx_r2) / 3, 1)
         adx_last = float(adx_s.iloc[-1]) if pd.notna(adx_s.iloc[-1]) else None
+        rvol = self._rvol(volume)
+        quality_score = self._quality_score(adx_last, rvol)
 
         return {
             'approaching':       approaching,
@@ -304,12 +342,15 @@ class ETFTechnicalAnalyzer:
             'adx':               round(adx_last, 1) if adx_last is not None else None,
             'adx_slope':         round(adx_slope, 3),
             'adx_r2':            round(adx_r2, 2),
+            'rvol':              round(rvol, 2) if rvol is not None else None,
+            'quality_score':     quality_score,
             'score':             score,
             'lookback_days':     lookback,
         }
 
     def compute_pullback_bounce_signal(self, close: pd.Series, high: pd.Series = None,
-                                        low: pd.Series = None, lookback: int = 10,
+                                        low: pd.Series = None, volume: pd.Series = None,
+                                        lookback: int = 10,
                                         min_r2: float = 0.3) -> Dict:
         """
         Radar Rimbalzo EMA20 (2026-08-25, idea utente): individua ETF che sono
@@ -373,6 +414,8 @@ class ETFTechnicalAnalyzer:
             adx_s = self._adx_close_only(close)
         adx_last = float(adx_s.iloc[-1]) if pd.notna(adx_s.iloc[-1]) else None
         macd_last = macd_d['histogram'].iloc[-1]
+        rvol = self._rvol(volume)
+        quality_score = self._quality_score(adx_last, rvol)
 
         return {
             'bouncing':        bouncing,
@@ -384,6 +427,8 @@ class ETFTechnicalAnalyzer:
             'post_r2':         round(post_r2, 2),
             'macd_histogram':  round(float(macd_last), 4) if pd.notna(macd_last) else None,
             'adx':             round(adx_last, 1) if adx_last is not None else None,
+            'rvol':            round(rvol, 2) if rvol is not None else None,
+            'quality_score':   quality_score,
             'score':           round(100 * post_r2, 1) if bouncing else 0.0,
             'lookback_days':   lookback,
         }

@@ -201,6 +201,11 @@ class AlertSystem:
             'params': 'Trigger = Radar Rimbalzo (minimo locale "a V" su dist EMA20, mai bucata, rimbalzo con R²>=0.3 su 10gg) invece del gate 7/7 — uscita SL/TP identica a L1 reale',
             'color_main': '#CA6F1E', 'color_dark': '#873600', 'tag': 'Radar-Rimbalzo',
         },
+        'L0_COOLDOWN': {
+            'label': 'Candidate L0 Cooldown',
+            'params': 'Dopo uno stop SL su un ticker (equity_sviluppati), blocca il re-ingresso sullo stesso ticker per 10 giorni di trading — nessun altro parametro d\'ingresso/uscita cambiato rispetto al nativo',
+            'color_main': '#5D6D7E', 'color_dark': '#2C3E50', 'tag': 'L0-Cooldown',
+        },
     }
 
     def send_shadow_entries(self, new_entries: list, variant: str = 'L1') -> bool:

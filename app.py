@@ -745,6 +745,21 @@ def get_l2_watchlist():
         return jsonify([])
 
 
+def _assign_quality_rank(results):
+    """
+    Ranking dei segnali Radar per qualita' tecnica (idea utente 2026-08-27):
+    con cassa reale limitata e piu' segnali simultanei, evidenzia i 3 migliori
+    per quality_score (ADX + RVOL, vedi technical_analysis.py::_quality_score)
+    con un 'quality_rank' 1/2/3. Non cambia l'ordine di visualizzazione (la
+    dashboard ordina per buy_count, preferenza gia' stabilita) — serve solo a
+    marcare i migliori quando ce ne sono tanti insieme. Muta i dict in-place.
+    """
+    ranked = sorted((r for r in results if r.get('quality_score') is not None),
+                     key=lambda r: -r['quality_score'])
+    for i, r in enumerate(ranked[:3]):
+        r['quality_rank'] = i + 1
+
+
 @app.route('/api/approach-radar')
 def get_approach_radar():
     """
@@ -794,9 +809,10 @@ def get_approach_radar():
             has_ohlc = hist['High'].notna().any() and hist['Low'].notna().any()
             high = hist['High'].astype(float) if has_ohlc else None
             low = hist['Low'].astype(float) if has_ohlc else None
+            volume = hist['Volume'].astype(float) if hist['Volume'].notna().any() else None
 
             analyzer = ETFTechnicalAnalyzer(famiglia=etf.get('etf_type', 'equity_sviluppati'))
-            signal = analyzer.compute_approach_signal(close, high, low,
+            signal = analyzer.compute_approach_signal(close, high, low, volume=volume,
                                                         lookback=lookback, min_r2=min_r2)
             if not signal.get('approaching'):
                 continue
@@ -809,6 +825,7 @@ def get_approach_radar():
                 **signal,
             })
 
+        _assign_quality_rank(results)
         results.sort(key=lambda r: (-r['score'], r['dist_ema20_pct']))
         return jsonify({'lookback_days': lookback, 'min_r2': min_r2,
                          'n_scanned': len(candidates), 'results': results})
@@ -867,9 +884,10 @@ def get_bounce_radar():
             has_ohlc = hist['High'].notna().any() and hist['Low'].notna().any()
             high = hist['High'].astype(float) if has_ohlc else None
             low = hist['Low'].astype(float) if has_ohlc else None
+            volume = hist['Volume'].astype(float) if hist['Volume'].notna().any() else None
 
             analyzer = ETFTechnicalAnalyzer(famiglia=etf.get('etf_type', 'equity_sviluppati'))
-            signal = analyzer.compute_pullback_bounce_signal(close, high, low,
+            signal = analyzer.compute_pullback_bounce_signal(close, high, low, volume=volume,
                                                                lookback=lookback, min_r2=min_r2)
             if not signal.get('bouncing'):
                 continue
@@ -882,6 +900,7 @@ def get_bounce_radar():
                 **signal,
             })
 
+        _assign_quality_rank(results)
         results.sort(key=lambda r: (-r['score'], r['days_since_min']))
         return jsonify({'lookback_days': lookback, 'min_r2': min_r2,
                          'n_scanned': len(candidates), 'results': results})

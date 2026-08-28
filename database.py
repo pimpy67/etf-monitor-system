@@ -723,6 +723,31 @@ class PriceDatabase:
         finally:
             conn.close()
 
+    def get_last_shadow_sl_exit(self, model_name: str, ticker: str):
+        """Data dell'ultima uscita via SL (stop loss) per questo ticker/modello
+        ombra, o None se non e' mai stata stoppata. Usata dai candidati con un
+        gate di cooldown post-stop (es. candidate_l0_cooldown_20260827) — non
+        distingue tra posizioni ancora 'chiuse per sempre' e riaperte: prende
+        semplicemente l'exit_date piu' recente con exit_reason='SL'."""
+        conn = self._get_connection()
+        if not conn:
+            return None
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT exit_date FROM etf_shadow_positions
+                    WHERE model_name = %s AND ticker = %s
+                      AND status = 'closed' AND exit_reason = 'SL'
+                    ORDER BY exit_date DESC LIMIT 1
+                """, (model_name, ticker))
+                row = cur.fetchone()
+                return row[0] if row else None
+        except Exception as e:
+            logging.error(f"Errore get_last_shadow_sl_exit {ticker}: {e}")
+            return None
+        finally:
+            conn.close()
+
     def get_shadow_positions(self, model_name: str) -> list:
         conn = self._get_connection()
         if not conn:

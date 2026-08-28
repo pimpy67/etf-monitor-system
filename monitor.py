@@ -158,6 +158,12 @@ class ETFMonitor:
         """
         import pandas as _pd
 
+        # ISIN valido solo col formato standard a 12 caratteri — l'Excel usa un
+        # trattino '—' come placeholder per gli ETF senza ISIN risolvibile (leva),
+        # che altrimenti verrebbe trattato come un ISIN vero e condiviso da più ETF
+        # (bug trovato 2026-08-28: 8 ETF a leva finivano tutti sulla stessa riga DB)
+        isin = isin if isin and len(isin) == 12 else ''
+
         # 1. Database
         db_df = _pd.DataFrame()
         if isin:
@@ -175,8 +181,11 @@ class ETFMonitor:
         if not df.empty:
             # Yahoo Finance fornisce sempre OHLCV completo: salvalo con save_ohlcv_bulk
             # (save_close_bulk scartava High/Low/Open/Volume anche quando disponibili)
+            # NB: la chiave di riga è sempre il ticker reale, mai l'ISIN (bug 2026-08-28:
+            # passare l'ISIN come ticker faceva collidere ETF diversi con lo stesso ISIN,
+            # o con lo stesso placeholder '—', sulla stessa riga del DB)
             if isin:
-                self.db.save_ohlcv_bulk(isin, df, source='yfinance', isin=isin)
+                self.db.save_ohlcv_bulk(ticker, df, source='yfinance', isin=isin)
             else:
                 self.db.save_ohlcv_bulk(ticker, df, source='yfinance')
             return df
@@ -1254,6 +1263,27 @@ class ETFMonitor:
                 self.alert_system.send_shadow_entries(shadow_radar_bounce_entries, variant='RADAR_BOUNCE')
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor Radar Rimbalzo (non bloccante): {e}")
+
+        # STEP 8j — Shadow Monitor CANDIDATE_L0_COOLDOWN_20260827: dopo uno stop SL
+        # su un ticker (equity_sviluppati, unica famiglia L0 raggiungibile), blocca
+        # il re-ingresso su quello stesso ticker per 10 giorni di trading — nessun
+        # altro parametro d'ingresso/uscita cambiato. Origine: suggest_level_0() e'
+        # level-triggered (il segnale resta 'True' per giorni di fila), quindi uno
+        # stop preso mentre il segnale e' ancora vero produce un rientro immediato
+        # il giorno lavorativo successivo (caso reale LBRE.DE, SL 14/08 -> rientro
+        # 15/08/2026). Backtest Golden Dataset (105 ticker, batch 2026-08-07): IN
+        # N=97 PF=4.38 WR=62.9% | OUT N=12 PF=2.41 WR=50.0% P&L=+4.404EUR/10k —
+        # batte il baseline (OUT N=11 PF=2.02 WR=45.5%) su ogni metrica OOS senza
+        # firma di overfitting (a differenza della variante 'reclaim', scartata:
+        # IN migliora ma OOS crolla PF 2.02->1.42). Vedi shadow_monitor_l0_cooldown.py
+        # e CLAUDE.md.
+        try:
+            from shadow_monitor_l0_cooldown import run_shadow_monitor_l0_cooldown
+            shadow_l0_cooldown_entries = run_shadow_monitor_l0_cooldown(self.db, results, add_log=add_log)
+            if shadow_l0_cooldown_entries and send_daily_report:
+                self.alert_system.send_shadow_entries(shadow_l0_cooldown_entries, variant='L0_COOLDOWN')
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor L0-cooldown (non bloccante): {e}")
 
         # 7. Invia resoconto portafoglio — DOPO l'aggiornamento SL/TP (fix 2026-08-05:
         # prima veniva inviato PRIMA degli STEP 4/7 sopra, quindi l'email mostrava

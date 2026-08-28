@@ -1168,6 +1168,21 @@ function renderFavoritesTable(favs) {
   </table>`;
 }
 
+// Re-render locale delle tabelle Radar dopo un toggle preferiti — riusa le righe
+// gia' scaricate (lastApproachRadarRows/lastBounceRadarRows) invece di rifare il
+// fetch (che ricalcola le regressioni per ogni ETF, costoso e causerebbe un
+// flicker inutile solo per aggiornare una stellina).
+function refreshRadarFavoriteButtons() {
+  const approachEl = document.getElementById('approachRadarContent');
+  if (approachEl && lastApproachRadarRows.length) {
+    approachEl.innerHTML = renderApproachRadarTable(lastApproachRadarRows);
+  }
+  const bounceEl = document.getElementById('bounceRadarContent');
+  if (bounceEl && lastBounceRadarRows.length) {
+    bounceEl.innerHTML = renderBounceRadarTable(lastBounceRadarRows);
+  }
+}
+
 async function toggleFavorite(isin) {
   if (!isin) return;
   if (favoriteIsins.has(isin)) {
@@ -1181,6 +1196,7 @@ async function toggleFavorite(isin) {
       });
       favoriteIsins.add(isin);
       renderDashboard();
+      refreshRadarFavoriteButtons();
       loadFavorites();
     } catch(e) { console.error('Add favorite error', e); }
   }
@@ -1191,6 +1207,7 @@ async function removeFavorite(isin) {
     await fetch('/api/favorites/' + encodeURIComponent(isin), {method: 'DELETE'});
     favoriteIsins.delete(isin);
     renderDashboard();
+    refreshRadarFavoriteButtons();
     loadFavorites();
   } catch(e) { console.error('Remove favorite error', e); }
 }
@@ -1227,11 +1244,14 @@ function toggleApproachRadarSection() {
   if (approachRadarOpen) loadApproachRadar();
 }
 
+let lastApproachRadarRows = [];
+
 async function loadApproachRadar() {
   try {
     const res  = await fetch('/api/approach-radar');
     const data = await res.json();
     const rows = data.results || [];
+    lastApproachRadarRows = rows;
     const countEl = document.getElementById('approachRadarCount');
     if (countEl) countEl.textContent = rows.length + ' ETF';
     const contentEl = document.getElementById('approachRadarContent');
@@ -1250,17 +1270,23 @@ function renderApproachRadarTable(rows) {
     const regime = r.regime === 'BULL' ? '<span class="regime-bull">▲ Bull</span>'
                  : r.regime === 'BEAR' ? '<span class="regime-bear">▼ Bear</span>'
                  : r.regime === 'LATERALE' ? '<span class="regime-lat">▬ Laterale</span>' : '—';
-    return `<tr style="cursor:pointer" onclick="openETFDetail('${tickerEsc}','${r.isin}')">
+    const medal = r.quality_rank === 1 ? '🥇 ' : r.quality_rank === 2 ? '🥈 ' : r.quality_rank === 3 ? '🥉 ' : '';
+    const rowBg = r.quality_rank ? 'background:rgba(255,215,0,0.06);' : '';
+    const inFav = favoriteIsins.has(r.isin);
+    const favBtn = r.isin ? `<button onclick="event.stopPropagation();toggleFavorite('${r.isin}')" title="${inFav?'Rimuovi dai preferiti':'Aggiungi ai preferiti'}" style="background:none;border:none;cursor:pointer;font-size:1.25em;line-height:1;padding:0 4px 0 0;color:${inFav?'#FFC000':'#8b949e'};flex-shrink:0;text-shadow:${inFav?'0 0 6px rgba(255,192,0,0.5)':'none'};vertical-align:middle;">${inFav?'&#9733;':'&#9734;'}</button>` : '';
+    return `<tr style="cursor:pointer;${rowBg}" onclick="openETFDetail('${tickerEsc}','${r.isin}')">
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08)">
-        <strong style="font-size:1.05em;">${r.nome || r.ticker}</strong><br>
-        <span style="font-size:0.88em;color:#8b949e;font-family:monospace;letter-spacing:0.02em;">${r.ticker || ''} · ${r.isin || ''}</span>
+        ${favBtn}<strong style="font-size:1.05em;">${medal}${r.nome || r.ticker}</strong><br>
+        <span style="font-size:0.88em;color:#8b949e;font-family:monospace;letter-spacing:0.02em;padding-left:${favBtn?'26px':'0'};">${r.ticker || ''} · ${r.isin || ''}</span>
       </td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.buy_count != null ? r.buy_count + '/7' : '—'}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.dist_ema20_pct != null ? fmtNum(r.dist_ema20_pct, 2) + '%' : '—'}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.adx != null ? fmtNum(r.adx, 1) : '—'}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.rvol != null ? fmtNum(r.rvol, 2) + 'x' : '—'}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.macd_histogram != null ? fmtNum(r.macd_histogram, 4) : '—'}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${regime}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-weight:700;">${r.score}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-weight:700;">${r.quality_score != null ? r.quality_score : '—'}</td>
     </tr>`;
   }).join('');
 
@@ -1270,12 +1296,15 @@ function renderApproachRadarTable(rows) {
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Cond.</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Dist EMA20</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">ADX</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">RVOL</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">MACD Hist</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Regime</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Score</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center" title="ADX+RVOL, 0-100. Solo priorita' di visualizzazione, non backtestato come predittore.">Qualità</th>
     </tr></thead>
     <tbody>${trs}</tbody>
-  </table>`;
+  </table>
+  <p style="margin:8px 0 0;font-size:0.78em;color:#8b949e;">🥇🥈🥉 = top 3 per qualità tecnica (ADX+RVOL) tra i segnali di oggi — solo priorità di lettura quando scattano tanti segnali insieme, non un filtro d'ingresso.</p>`;
 }
 
 // ── Radar Rimbalzo EMA20 (2026-08-25) ─────────────────────────────────────
@@ -1310,11 +1339,14 @@ function toggleBounceRadarSection() {
   if (bounceRadarOpen) loadBounceRadar();
 }
 
+let lastBounceRadarRows = [];
+
 async function loadBounceRadar() {
   try {
     const res  = await fetch('/api/bounce-radar');
     const data = await res.json();
     const rows = data.results || [];
+    lastBounceRadarRows = rows;
     const countEl = document.getElementById('bounceRadarCount');
     if (countEl) countEl.textContent = rows.length + ' ETF';
     const contentEl = document.getElementById('bounceRadarContent');
@@ -1333,18 +1365,24 @@ function renderBounceRadarTable(rows) {
     const regime = r.regime === 'BULL' ? '<span class="regime-bull">▲ Bull</span>'
                  : r.regime === 'BEAR' ? '<span class="regime-bear">▼ Bear</span>'
                  : r.regime === 'LATERALE' ? '<span class="regime-lat">▬ Laterale</span>' : '—';
-    return `<tr style="cursor:pointer" onclick="openETFDetail('${tickerEsc}','${r.isin}')">
+    const medal = r.quality_rank === 1 ? '🥇 ' : r.quality_rank === 2 ? '🥈 ' : r.quality_rank === 3 ? '🥉 ' : '';
+    const rowBg = r.quality_rank ? 'background:rgba(255,215,0,0.06);' : '';
+    const inFav = favoriteIsins.has(r.isin);
+    const favBtn = r.isin ? `<button onclick="event.stopPropagation();toggleFavorite('${r.isin}')" title="${inFav?'Rimuovi dai preferiti':'Aggiungi ai preferiti'}" style="background:none;border:none;cursor:pointer;font-size:1.25em;line-height:1;padding:0 4px 0 0;color:${inFav?'#FFC000':'#8b949e'};flex-shrink:0;text-shadow:${inFav?'0 0 6px rgba(255,192,0,0.5)':'none'};vertical-align:middle;">${inFav?'&#9733;':'&#9734;'}</button>` : '';
+    return `<tr style="cursor:pointer;${rowBg}" onclick="openETFDetail('${tickerEsc}','${r.isin}')">
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08)">
-        <strong style="font-size:1.05em;">${r.nome || r.ticker}</strong><br>
-        <span style="font-size:0.88em;color:#8b949e;font-family:monospace;letter-spacing:0.02em;">${r.ticker || ''} · ${r.isin || ''}</span>
+        ${favBtn}<strong style="font-size:1.05em;">${medal}${r.nome || r.ticker}</strong><br>
+        <span style="font-size:0.88em;color:#8b949e;font-family:monospace;letter-spacing:0.02em;padding-left:${favBtn?'26px':'0'};">${r.ticker || ''} · ${r.isin || ''}</span>
       </td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.buy_count != null ? r.buy_count + '/7' : '—'}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.dist_ema20_pct != null ? fmtNum(r.dist_ema20_pct, 2) + '%' : '—'}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.dist_min_pct != null ? fmtNum(r.dist_min_pct, 2) + '%' : '—'}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.days_since_min != null ? r.days_since_min + 'gg' : '—'}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.adx != null ? fmtNum(r.adx, 1) : '—'}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.rvol != null ? fmtNum(r.rvol, 2) + 'x' : '—'}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${regime}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-weight:700;">${r.score}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-weight:700;">${r.quality_score != null ? r.quality_score : '—'}</td>
     </tr>`;
   }).join('');
 
@@ -1356,11 +1394,14 @@ function renderBounceRadarTable(rows) {
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Dist Minima</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Rimbalzo Da</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">ADX</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">RVOL</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Regime</th>
       <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center">Score</th>
+      <th style="padding:8px;border-bottom:1px solid rgba(255,255,255,0.15);text-align:center" title="ADX+RVOL, 0-100. Solo priorita' di visualizzazione, non backtestato come predittore.">Qualità</th>
     </tr></thead>
     <tbody>${trs}</tbody>
-  </table>`;
+  </table>
+  <p style="margin:8px 0 0;font-size:0.78em;color:#8b949e;">🥇🥈🥉 = top 3 per qualità tecnica (ADX+RVOL) tra i segnali di oggi — solo priorità di lettura quando scattano tanti segnali insieme, non un filtro d'ingresso.</p>`;
 }
 
 // ── Param ref HTML ─────────────────────────────────────────────────────────
