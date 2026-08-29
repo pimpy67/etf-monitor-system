@@ -1266,7 +1266,10 @@ def get_favorites_route():
 
         result.append({
             'isin':            isin,
-            'ticker':          entry.get('ticker'),
+            # Ticker attuale dal dashboard_data (segue i cambi listino, es.
+            # WATC.SW -> WATC.PA); quello salvato in etf_favorites è congelato
+            # alla data di aggiunta e può essere obsoleto.
+            'ticker':          analysis.get('ticker') or entry.get('ticker'),
             'nome':            entry.get('nome') or analysis.get('nome'),
             'note':            entry.get('note'),
             'added_date':      str(entry['added_date']) if entry.get('added_date') else None,

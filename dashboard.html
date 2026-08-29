@@ -2242,7 +2242,14 @@ async function changeDetailDays(days) {
 }
 
 async function loadETFDetail(ticker, isin, days) {
-  const params = ticker ? `ticker=${encodeURIComponent(ticker)}` : `isin=${encodeURIComponent(isin)}`;
+  // Passa SEMPRE entrambi gli identificatori quando disponibili: se il ticker
+  // memorizzato è vecchio (es. dopo un cambio listino WATC.SW -> WATC.PA) l'API
+  // riesce comunque a matchare per ISIN, invece di dare 404 e finire nel
+  // fallback degradato senza price_history (grafico vuoto).
+  const qs = [];
+  if (ticker) qs.push(`ticker=${encodeURIComponent(ticker)}`);
+  if (isin)   qs.push(`isin=${encodeURIComponent(isin)}`);
+  const params = qs.join('&');
   const key    = params;
   let data = detailDataCache[key];
   if (!data) {
