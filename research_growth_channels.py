@@ -111,6 +111,21 @@ def _rolling_trend(logprice, window):
 
 _HIVOL_FAMILIES = {'crypto_digital_assets', 'leva_single_stock'}
 
+FAMILY_PRESETS = {
+    'core': ['equity_sviluppati', 'mercati_emergenti', 'settoriali_growth',
+             'oro_metalli_preziosi', 'metalli_industriali'],
+    'equity': ['equity_sviluppati', 'settoriali_growth', 'mercati_emergenti'],
+    'all': None,
+}
+
+
+def resolve_families(arg):
+    if not arg or arg == 'all':
+        return None
+    if arg in FAMILY_PRESETS:
+        return FAMILY_PRESETS[arg]
+    return [x.strip() for x in arg.split(',') if x.strip()]
+
 
 def clean_ohlc(df, family):
     """Ripara/scarta i print corrotti del Golden Dataset (spike che si annullano
@@ -301,9 +316,12 @@ def _episodes(close, min_gain=0.15, min_days=20):
     return eps
 
 
-def phase_leaderboard(entry_lag=3, min_gain=0.15, top_episodes=30):
+def phase_leaderboard(entry_lag=3, min_gain=0.15, top_episodes=30, families=None):
     keep = ['ticker', 'family', 'date', 'close'] + FEATURE_COLS
     df = pd.read_csv(OUT_DATASET, parse_dates=['date'], usecols=keep)
+    if families:
+        df = df[df['family'].isin(families)]
+        print(f"  (filtro famiglie: {families} -> {df['ticker'].nunique()} ticker)")
     df = df.sort_values(['ticker', 'date']).reset_index(drop=True)
     for c in FEATURE_COLS:                              # winsorize per la firma d'ingresso
         df[c] = df[c].clip(df[c].quantile(0.005), df[c].quantile(0.995))
@@ -412,9 +430,12 @@ def _spearman(a, b):
     return a[m].rank().corr(b[m].rank())
 
 
-def phase_analyze(target, split_date, top_q):
+def phase_analyze(target, split_date, top_q, families=None):
     keep = ['ticker', 'family', 'date'] + FEATURE_COLS + [target]
     df = pd.read_csv(OUT_DATASET, parse_dates=['date'], usecols=keep)
+    if families:
+        df = df[df['family'].isin(families)]
+        print(f"FILTRO FAMIGLIE: {families}  ({df['ticker'].nunique()} ticker)")
     print(f"Dataset: {len(df):,} righe, {df['ticker'].nunique()} ticker, "
           f"{df['date'].min().date()} -> {df['date'].max().date()}")
 
@@ -499,6 +520,19 @@ def phase_analyze(target, split_date, top_q):
         top, bot = g.loc[g.index.max()], g.loc[g.index.min()]
         print(f"     spread top-bottom decile: median {top['median'] - bot['median']:+.2f}%  |  mean {top['mean'] - bot['mean']:+.2f}%")
 
+    # tenuta per ANNO (regime-dependence): spread mediano top-bottom decile
+    print("\n── Tenuta per anno (spread mediano decile 9 - decile 0) ──")
+    allsc = df.copy()
+    allsc['score'] = score(allsc)
+    allsc = allsc.dropna(subset=['score'])
+    for yr, gy in allsc.groupby(allsc['date'].dt.year):
+        if len(gy) < 200:
+            continue
+        gy = gy.assign(dec=pd.qcut(gy['score'], 10, labels=False, duplicates='drop'))
+        gg = gy.groupby('dec')[target].median()
+        d0, d9 = gg.loc[gg.index.min()], gg.loc[gg.index.max()]
+        print(f"   {yr}:  dec0 {d0:+6.2f}%   dec9 {d9:+6.2f}%   spread {d9 - d0:+6.2f}%   N={len(gy):,}")
+
     # controllo autocorrelazione: 1 riga per ticker per mese
     print("\n── Robustezza: campione ridotto a 1 riga / ticker / mese ──")
     samp = df.copy()
@@ -529,7 +563,10 @@ def main():
                     help='fwd_ret_40/60/90 | fwd_mar_40/60/90')
     ap.add_argument('--split', default='2025-01-01', help='data split IN/OUT (YYYY-MM-DD)')
     ap.add_argument('--top-q', type=float, default=0.20, help='quantile winner/loser (0.20)')
+    ap.add_argument('--families', default='all',
+                    help="'all' | 'core' (5 famiglie smart_6_macd) | 'equity' | lista csv")
     args = ap.parse_args()
+    fams = resolve_families(args.families)
 
     t0 = datetime.now()
     if args.phase in ('build', 'both'):
@@ -537,10 +574,10 @@ def main():
         phase_build()
     if args.phase in ('leaderboard', 'both'):
         print("\n" + "=" * 78 + "\nFASE 1b — LEADERBOARD (piu' performanti + episodi di crescita)\n" + "=" * 78)
-        phase_leaderboard(min_gain=args.min_gain)
+        phase_leaderboard(min_gain=args.min_gain, families=fams)
     if args.phase in ('analyze', 'both'):
         print("\n" + "=" * 78 + f"\nFASE 2 — ANALYZE (target={args.target}, split={args.split})\n" + "=" * 78)
-        phase_analyze(args.target, args.split, args.top_q)
+        phase_analyze(args.target, args.split, args.top_q, families=fams)
     print(f"\nTempo totale: {datetime.now() - t0}")
 
 
