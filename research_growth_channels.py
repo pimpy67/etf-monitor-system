@@ -234,6 +234,119 @@ def phase_build():
 
 
 # ────────────────────────────────────────────────────────────────────────────
+# FASE 1b — LEADERBOARD: i piu' performanti + i loro "episodi di crescita"
+# ────────────────────────────────────────────────────────────────────────────
+def _episodes(close, min_gain=0.15, min_days=20):
+    """Segmenta i tratti in cui close > EMA50: per ognuno misura gain, max
+    drawdown interno, durata. Tiene solo quelli >= min_gain e >= min_days.
+    Ritorna lista di dict con posizioni indice i0/i1."""
+    ema50 = close.ewm(span=50, adjust=False).mean()
+    up = (close > ema50).values
+    arr = close.values
+    eps, i = [], 0
+    n = len(arr)
+    while i < n:
+        if not up[i]:
+            i += 1
+            continue
+        j = i
+        while j + 1 < n and up[j + 1]:
+            j += 1
+        seg = arr[i:j + 1]
+        if len(seg) >= min_days:
+            gain = seg[-1] / seg[0] - 1
+            mdd = (seg / np.maximum.accumulate(seg) - 1).min()
+            if gain >= min_gain:
+                eps.append({'i0': i, 'i1': j, 'gain': gain, 'maxdd': mdd,
+                            'days': j - i})
+        i = j + 1
+    return eps
+
+
+def phase_leaderboard(entry_lag=3, min_gain=0.15, top_episodes=30):
+    keep = ['ticker', 'family', 'date', 'close'] + FEATURE_COLS
+    df = pd.read_csv(OUT_DATASET, parse_dates=['date'], usecols=keep)
+    df = df.sort_values(['ticker', 'date']).reset_index(drop=True)
+
+    # ── 1. classifica per ETF sull'intera finestra congelata ────────────────
+    perf_rows, all_eps = [], []
+    for tk, g in df.groupby('ticker'):
+        g = g.reset_index(drop=True)
+        c = g['close']
+        if len(c) < 200:
+            continue
+        yrs = (g['date'].iloc[-1] - g['date'].iloc[0]).days / 365.25
+        tot = c.iloc[-1] / c.iloc[0] - 1
+        cagr = (1 + tot) ** (1 / yrs) - 1 if yrs > 0 else np.nan
+        mdd = (c / c.cummax() - 1).min()
+        mar = cagr / abs(mdd) if mdd < 0 else np.nan
+        eps = _episodes(c, min_gain=min_gain)
+        for e in eps:
+            e2 = {'ticker': tk, 'family': g['family'].iloc[0],
+                  'start': g['date'].iloc[e['i0']].date(),
+                  'end': g['date'].iloc[e['i1']].date(),
+                  'gain_pct': e['gain'] * 100, 'maxdd_pct': e['maxdd'] * 100,
+                  'days': e['days']}
+            # firma d'ingresso: feature entry_lag giorni dopo l'inizio episodio
+            k = min(e['i0'] + entry_lag, e['i1'])
+            for f in FEATURE_COLS:
+                e2[f] = g[f].iloc[k]
+            all_eps.append(e2)
+        perf_rows.append({'ticker': tk, 'family': g['family'].iloc[0],
+                          'cagr_pct': cagr * 100, 'maxdd_pct': mdd * 100,
+                          'mar': mar, 'tot_ret_pct': tot * 100,
+                          'n_episodi': len(eps),
+                          'gain_medio_ep_pct': np.mean([e['gain'] for e in eps]) * 100 if eps else np.nan})
+
+    perf = pd.DataFrame(perf_rows)
+    eps_df = pd.DataFrame(all_eps)
+    pd.set_option('display.width', 220); pd.set_option('display.max_columns', 30)
+
+    print("\n" + "=" * 78 + "\n  CLASSIFICA ETF — intera finestra congelata (per MAR = CAGR/|maxDD|)\n" + "=" * 78)
+    show = ['ticker', 'family', 'cagr_pct', 'maxdd_pct', 'mar', 'tot_ret_pct', 'n_episodi', 'gain_medio_ep_pct']
+    top = perf.sort_values('mar', ascending=False).head(25)
+    print(top[show].to_string(index=False, float_format=lambda x: f"{x:8.2f}"))
+    print("\n  --- coda (peggiori 10 per MAR) ---")
+    print(perf.sort_values('mar', ascending=False).tail(10)[show].to_string(index=False, float_format=lambda x: f"{x:8.2f}"))
+
+    print("\n  Performance mediana per FAMIGLIA:")
+    fam = perf.groupby('family')[['cagr_pct', 'maxdd_pct', 'mar', 'n_episodi']].median().sort_values('mar', ascending=False)
+    print(fam.to_string(float_format=lambda x: f"{x:8.2f}"))
+
+    if eps_df.empty:
+        print("\nNessun episodio di crescita trovato con la soglia data.")
+        return
+    eps_df.to_csv('/app/data/research_growth_episodes.csv', index=False)
+    print(f"\n{len(eps_df)} episodi di crescita (gain >= {min_gain*100:.0f}%, >= 20gg) "
+          f"su {eps_df['ticker'].nunique()} ETF -> data/research_growth_episodes.csv")
+
+    print("\n" + "=" * 78 + f"\n  TOP {top_episodes} EPISODI DI CRESCITA (per gain%)\n" + "=" * 78)
+    cols = ['ticker', 'family', 'start', 'end', 'days', 'gain_pct', 'maxdd_pct']
+    best = eps_df.sort_values('gain_pct', ascending=False).head(top_episodes)
+    print(best[cols].to_string(index=False, float_format=lambda x: f"{x:8.2f}"))
+
+    # ── 2. firma d'ingresso: media feature nei top episodi vs baseline ──────
+    base_mu = df[FEATURE_COLS].mean()
+    base_sd = df[FEATURE_COLS].std(ddof=0)
+    topN = eps_df.sort_values('gain_pct', ascending=False).head(max(top_episodes, 40))
+    print("\n" + "=" * 78 +
+          f"\n  FIRMA D'INGRESSO — media feature all'inizio dei top {len(topN)} episodi\n"
+          "  (z = (media_episodi - media_universo) / sd_universo ; |z|>0.4 = marcato)\n" + "=" * 78)
+    sig = pd.DataFrame({
+        'feature': FEATURE_COLS,
+        'media_episodi': [topN[f].mean() for f in FEATURE_COLS],
+        'media_universo': [base_mu[f] for f in FEATURE_COLS],
+    })
+    sig['z'] = (sig['media_episodi'] - sig['media_universo']) / base_sd[FEATURE_COLS].values
+    sig = sig.sort_values('z', key=lambda s: s.abs(), ascending=False)
+    print(sig.to_string(index=False, float_format=lambda x: f"{x:9.3f}"))
+    sig.to_csv('/app/data/research_growth_entry_signature.csv', index=False)
+    print("\n  -> data/research_growth_entry_signature.csv")
+    print("\n  Lettura: le feature con |z| alto e coerente sono il 'canale' tipico da cui")
+    print("  parte una corsa reale. Vanno poi verificate come filtro OOS nella FASE 2.")
+
+
+# ────────────────────────────────────────────────────────────────────────────
 # FASE 2 — analisi winners vs losers, IN/OUT split
 # ────────────────────────────────────────────────────────────────────────────
 def _cohen_d(a, b):
@@ -358,7 +471,9 @@ def phase_analyze(target, split_date, top_q):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--phase', choices=['build', 'analyze', 'both'], default='both')
+    ap.add_argument('--phase', choices=['build', 'leaderboard', 'analyze', 'both'], default='both')
+    ap.add_argument('--min-gain', type=float, default=0.15,
+                    help='gain minimo per contare come episodio di crescita (0.15 = 15%)')
     ap.add_argument('--target', default='fwd_ret_60',
                     help='fwd_ret_40/60/90 | fwd_mar_40/60/90')
     ap.add_argument('--split', default='2025-01-01', help='data split IN/OUT (YYYY-MM-DD)')
@@ -369,6 +484,9 @@ def main():
     if args.phase in ('build', 'both'):
         print("=" * 78 + "\nFASE 1 — BUILD DATASET\n" + "=" * 78)
         phase_build()
+    if args.phase in ('leaderboard', 'both'):
+        print("\n" + "=" * 78 + "\nFASE 1b — LEADERBOARD (piu' performanti + episodi di crescita)\n" + "=" * 78)
+        phase_leaderboard(min_gain=args.min_gain)
     if args.phase in ('analyze', 'both'):
         print("\n" + "=" * 78 + f"\nFASE 2 — ANALYZE (target={args.target}, split={args.split})\n" + "=" * 78)
         phase_analyze(args.target, args.split, args.top_q)
