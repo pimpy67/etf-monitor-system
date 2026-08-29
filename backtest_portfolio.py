@@ -40,15 +40,22 @@ def build_signal(df, mode, pct, min_sp):
     df['ema20'] = df['close'] / (1 + df['dist_ema20'] / 100.0)
     df['trend_ok'] = df['gap_sma50_sma200'] > 0
 
-    if mode in ('strength', 'score'):
+    if mode in ('strength', 'score', 'worst'):
         fit_target = 'fwd_trade_ret' if mode == 'strength' else 'fwd_ret_60'
         IN = df[df['date'] < SPLIT]
         feats, signs, mu, sd = fit_score(IN, min_sp, fit_target)
         df['score'] = score_series(df, feats, signs, mu, sd)
-        thr = df.loc[df['date'] < SPLIT, 'score'].dropna().quantile(pct)
-        df['sig'] = df['trend_ok'] & (df['score'] >= thr)
-        df['rankval'] = df['score']
-        print(f"  score ({fit_target}): {len(feats)} feature, soglia top {(1-pct)*100:.0f}% = {thr:.2f}")
+        sc_in = df.loc[df['date'] < SPLIT, 'score'].dropna()
+        if mode == 'worst':          # compra la FORZA: score basso sul modello fwd_ret
+            thr = sc_in.quantile(1 - pct)
+            df['sig'] = df['trend_ok'] & (df['score'] <= thr)
+            df['rankval'] = -df['score']       # piu' basso lo score, piu' alta la priorita'
+            print(f"  worst({fit_target}): {len(feats)} feat, soglia bottom {(1-pct)*100:.0f}% = {thr:.2f}")
+        else:
+            thr = sc_in.quantile(pct)
+            df['sig'] = df['trend_ok'] & (df['score'] >= thr)
+            df['rankval'] = df['score']
+            print(f"  {mode}({fit_target}): {len(feats)} feat, soglia top {(1-pct)*100:.0f}% = {thr:.2f}")
     else:  # always / random
         df['score'] = np.nan
         df['sig'] = df['trend_ok']
@@ -201,7 +208,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--families', default='core', choices=['core', 'equity'])
     ap.add_argument('--mode', default='all',
-                    choices=['all', 'always', 'strength', 'score', 'random'])
+                    choices=['all', 'always', 'strength', 'worst', 'score', 'random'])
     ap.add_argument('--max-positions', type=int, default=8)
     ap.add_argument('--position-size', type=float, default=10000)
     ap.add_argument('--rank', default='score', choices=['score', 'random'],
@@ -230,7 +237,7 @@ def main():
     report(pd.DataFrame(), bench, 0, capital, args.position_size, args.max_positions,
            'BENCHMARK buy&hold equipesato')
 
-    modes = ['always', 'strength', 'score', 'random'] if args.mode == 'all' else [args.mode]
+    modes = ['always', 'strength', 'worst', 'random'] if args.mode == 'all' else [args.mode]
     for m in modes:
         df = build_signal(base.copy(), m, args.pct, args.min_sp)
         rank = 'random' if m == 'random' else args.rank
