@@ -53,12 +53,12 @@ FEATURES = [
 ]
 
 
-def fit_score(IN, min_sp):
-    """Feature con |Spearman IN vs fwd_ret_60| >= min_sp. Ritorna (feats, sign, mu, sd)."""
-    tgt = IN['fwd_ret_60']
+def fit_score(IN, min_sp, fit_target='fwd_ret_60'):
+    """Feature con |Spearman IN vs fit_target| >= min_sp. Ritorna (feats, sign, mu, sd)."""
+    tgt = IN[fit_target]
     chosen, signs = [], {}
     for f in FEATURES:
-        m = IN[f].notna() & tgt.notna()
+        m = IN[f].notna() & tgt.notna() & np.isfinite(tgt)
         if m.sum() < 200:
             continue
         sp = IN.loc[m, f].rank().corr(tgt[m].rank())
@@ -173,76 +173,138 @@ def report(trades, label):
     print(f"        motivi uscita: {df['reason'].value_counts().to_dict()}")
 
 
+def summ(trades):
+    """Riga compatta per la tabella di confronto."""
+    if not trades:
+        return dict(n=0, wr=np.nan, pf=np.nan, gross=np.nan, dur=np.nan,
+                    net5=0.0, net10=0.0, per10=np.nan)
+    df = pd.DataFrame(trades)
+    closed = df[df['status'] == 'closed']
+    wr = (closed['gross_pct'] > 0).mean() * 100 if len(closed) else np.nan
+    g = closed.loc[closed['gross_pct'] > 0, 'gross_pct'].sum()
+    l = -closed.loc[closed['gross_pct'] < 0, 'gross_pct'].sum()
+    pf = g / l if l > 0 else np.inf
+    net10 = sum(net_eur(t, 10000) for t in trades)
+    return dict(n=len(df), wr=wr, pf=pf, gross=df['gross_pct'].mean(),
+                dur=df['days'].median(),
+                net5=sum(net_eur(t, 5000) for t in trades), net10=net10,
+                per10=net10 / len(df))
+
+
+def run_mode(df, analyzers, fams, mode, fit_target, min_sp, pct):
+    """Fitta lo score (su IN, target=fit_target), simula, ritorna (feats, trIN, trOUT)."""
+    IN = df[df['date'] < SPLIT]
+    feats, signs, mu, sd = fit_score(IN, min_sp, fit_target)
+    d = df.copy()
+    d['score'] = score_series(d, feats, signs, mu, sd)
+    sc_in = d.loc[d['date'] < SPLIT, 'score'].dropna()
+    thr = sc_in.quantile(1 - pct) if mode == 'worst' else sc_in.quantile(pct)
+
+    trades = []
+    for tk, g in d.groupby('ticker'):
+        g = g.reset_index(drop=True)
+        fam = g['family'].iloc[0]
+        trades += [dict(t, ticker=tk, family=fam)
+                   for t in simulate_ticker(g, analyzers[fam], thr, mode)]
+    tr = pd.DataFrame(trades)
+    if tr.empty:
+        return feats, [], []
+    tr['entry_dt'] = pd.to_datetime(tr['entry_date'])
+    return (feats,
+            tr[tr['entry_dt'] < SPLIT].to_dict('records'),
+            tr[tr['entry_dt'] >= SPLIT].to_dict('records'))
+
+
+def print_table(rows):
+    hdr = f"{'variante':<28}{'N':>6}{'WR':>7}{'PF':>7}{'gross':>8}{'dur':>6}{'net/tr 10k':>12}{'net tot 10k':>14}"
+    print(hdr)
+    print("-" * len(hdr))
+    for name, s in rows:
+        if s['n'] == 0:
+            print(f"{name:<28}{'0':>6}")
+            continue
+        print(f"{name:<28}{s['n']:>6}{s['wr']:>6.1f}%{s['pf']:>7.2f}{s['gross']:>+7.2f}%"
+              f"{s['dur']:>5.0f}g{s['per10']:>+11.0f}E{s['net10']:>+13,.0f}E")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--families', default='core', choices=['core', 'equity'])
-    ap.add_argument('--pct', type=float, default=0.85, help='percentile soglia score (0.85 = top 15 percento)')
-    ap.add_argument('--min-sp', type=float, default=0.04, help='|Spearman IN| minimo per includere una feature')
-    ap.add_argument('--mode', default='score', choices=['score', 'always', 'worst'])
+    ap.add_argument('--pct', type=float, default=0.85, help='percentile soglia (0.85 = top/bottom 15 percento)')
+    ap.add_argument('--min-sp', type=float, default=0.04, help='|Spearman IN| minimo per una feature')
+    ap.add_argument('--fit-target', default='fwd_ret_60', choices=['fwd_ret_60', 'fwd_mar_60'],
+                    help='fwd_mar_60 = rendimento/drawdown (penalizza il percorso), consigliato per "strength"')
+    ap.add_argument('--mode', default='all',
+                    choices=['all', 'score', 'always', 'worst'])
+    ap.add_argument('--sweep', action='store_true', help='sweep pct in {0.70..0.92} su score e worst')
     args = ap.parse_args()
 
     fams = CORE if args.families == 'core' else EQUITY
     t0 = datetime.now()
 
-    df = pd.read_csv(DATASET, parse_dates=['date'],
-                     usecols=['ticker', 'family', 'date', 'close', 'fwd_ret_60'] + FEATURES)
+    usecols = ['ticker', 'family', 'date', 'close', 'fwd_ret_60', 'fwd_mar_60'] + FEATURES
+    df = pd.read_csv(DATASET, parse_dates=['date'], usecols=usecols)
     df = df[df['family'].isin(fams)].copy()
     df = df.dropna(subset=FEATURES).sort_values(['ticker', 'date'])
+    df['fwd_mar_60'] = df['fwd_mar_60'].replace([np.inf, -np.inf], np.nan).clip(-30, 30)
     IN = df[df['date'] < SPLIT]
     print(f"Famiglie {args.families} ({fams})")
     print(f"Dataset: {len(df):,} righe, {df['ticker'].nunique()} ticker  "
-          f"| IN {len(IN):,}  OUT {len(df) - len(IN):,}")
-
-    feats, signs, mu, sd = fit_score(IN, args.min_sp)
-    print(f"\nScore fittato su IN: {len(feats)} feature")
-    print("   " + ", ".join(f"{f}({'+' if signs[f] > 0 else '-'})" for f in feats))
-
-    df['score'] = score_series(df, feats, signs, mu, sd)
-    sc_in = df.loc[df['date'] < SPLIT, 'score'].dropna()
-    if args.mode == 'worst':
-        thr = sc_in.quantile(1 - args.pct)
-        print(f"Soglia score (bottom {(1-args.pct)*100:.0f}%, da IN): {thr:.2f}")
-    else:
-        thr = sc_in.quantile(args.pct)
-        print(f"Soglia score (top {(1-args.pct)*100:.0f}%, da IN): {thr:.2f}")
+          f"| IN {len(IN):,}  OUT {len(df) - len(IN):,}  | fit-target={args.fit_target}\n")
 
     analyzers = {f: ETFTechnicalAnalyzer(famiglia=f) for f in fams}
 
-    all_trades = []
-    for tk, g in df.groupby('ticker'):
-        g = g.reset_index(drop=True)
-        fam = g['family'].iloc[0]
-        all_trades += [dict(t, ticker=tk, family=fam)
-                       for t in simulate_ticker(g, analyzers[fam], thr, args.mode)]
-
-    tr = pd.DataFrame(all_trades)
-    if tr.empty:
-        print("\nNessun trade generato.")
+    if args.sweep:
+        for mode in ('score', 'worst'):
+            print(f"\n### SWEEP pct — mode={mode}, fit-target={args.fit_target}")
+            rows = []
+            for pct in (0.70, 0.75, 0.80, 0.85, 0.90, 0.92):
+                _, _, o = run_mode(df, analyzers, fams, mode, args.fit_target, args.min_sp, pct)
+                rows.append((f"pct={pct:.2f}  (OUT)", summ(o)))
+            print_table(rows)
+        print(f"\nTempo: {datetime.now() - t0}")
         return
-    tr['entry_dt'] = pd.to_datetime(tr['entry_date'])
-    trIN = tr[tr['entry_dt'] < SPLIT].to_dict('records')
-    trOUT = tr[tr['entry_dt'] >= SPLIT].to_dict('records')
 
-    print(f"\n{'='*70}\nMODE={args.mode}  famiglie={args.families}  pct={args.pct}\n{'='*70}")
-    report(trIN, 'IN  2023-02 -> 2025-01')
-    report(trOUT, 'OUT 2025-01 -> 2026-08')
+    if args.mode == 'all':
+        combos = [
+            ('always', 'fwd_ret_60'),
+            ('score  (ret)', 'fwd_ret_60'),
+            ('score  (mar)=strength', 'fwd_mar_60'),
+            ('worst  (ret)', 'fwd_ret_60'),
+            ('worst  (mar)', 'fwd_mar_60'),
+        ]
+        rows_in, rows_out = [], []
+        for label, ft in combos:
+            m = 'always' if label.startswith('always') else ('worst' if 'worst' in label else 'score')
+            _, i, o = run_mode(df, analyzers, fams, m, ft, args.min_sp, args.pct)
+            rows_in.append((label, summ(i)))
+            rows_out.append((label, summ(o)))
+        print(f"=== CONFRONTO — famiglie {args.families}, pct={args.pct} ===\n")
+        print("IN  (2023-02 -> 2025-01)")
+        print_table(rows_in)
+        print("\nOUT (2025-01 -> 2026-08)")
+        print_table(rows_out)
+        print(f"\nTempo: {datetime.now() - t0}")
+        return
 
-    # per famiglia (solo OUT)
+    # modalita' singola: report dettagliato
+    feats, trIN, trOUT = run_mode(df, analyzers, fams, args.mode, args.fit_target, args.min_sp, args.pct)
+    print(f"Score: {len(feats)} feature  {', '.join(feats)}")
+    print(f"\n{'='*70}\nMODE={args.mode}  fit={args.fit_target}  pct={args.pct}\n{'='*70}")
+    report(trIN, 'IN ')
+    report(trOUT, 'OUT')
     print("\n   -- OUT per famiglia --")
     for fam in fams:
         report([t for t in trOUT if t['family'] == fam], f'OUT/{fam}')
-
-    # top ticker per netto (OUT, 10k)
     if trOUT:
         by_tk = {}
         for t in trOUT:
             by_tk.setdefault(t['ticker'], []).append(t)
         rank = sorted(((tk, sum(net_eur(x, 10000) for x in v), len(v)) for tk, v in by_tk.items()),
                       key=lambda x: -x[1])
-        print("\n   -- OUT: 8 ticker migliori / 5 peggiori (netto 10k/trade) --")
+        print("\n   -- OUT: 8 migliori / 5 peggiori (netto 10k/trade) --")
         for tk, tot, k in rank[:8] + rank[-5:]:
             print(f"      {tk:<10} {tot:+9,.0f}EUR  ({k} trade)")
-
     print(f"\nTempo: {datetime.now() - t0}")
 
 
