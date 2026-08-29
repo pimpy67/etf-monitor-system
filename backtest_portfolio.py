@@ -85,12 +85,16 @@ def simulate_portfolio(df, analyzers, capital, size, max_pos, rank, seed=1):
     cash = float(capital)
     positions = {}          # ticker -> dict(entry_price, entry_date, fam)
     cooldown = {}            # ticker -> date-index until blocked
+    last_px = {}             # ultimo prezzo noto per ticker (per il mark-to-market nei giorni
+                             # in cui la borsa del ticker e' chiusa — .MI/.PA/.DE/.L hanno
+                             # festivi diversi: senza questo l'equity crolla in modo finto)
     trades, equity_curve = [], []
     skipped_no_slot = 0
 
     for di, d in enumerate(dates):
         sub = by_date[d]
         px_today = dict(zip(sub['ticker'], sub['close']))
+        last_px.update(px_today)
 
         # 1) USCITE
         for tk in list(positions.keys()):
@@ -120,9 +124,9 @@ def simulate_portfolio(df, analyzers, capital, size, max_pos, rank, seed=1):
                 cooldown[tk] = di + COOLDOWN
                 del positions[tk]
 
-        # 2) EQUITY mark-to-market
-        mtm = sum(size * (px_today[tk] / e['entry_price'])
-                  for tk, e in positions.items() if tk in px_today)
+        # 2) EQUITY mark-to-market (usa l'ultimo prezzo noto, non salta i ticker non
+        #    quotati oggi)
+        mtm = sum(size * (last_px[tk] / e['entry_price']) for tk, e in positions.items())
         equity_curve.append((d, cash + mtm))
 
         # 3) INGRESSI
@@ -163,17 +167,14 @@ def simulate_portfolio(df, analyzers, capital, size, max_pos, rank, seed=1):
 
 
 def benchmark_equalweight(df, capital):
-    """Buy & hold equipesato: compra tutti i ticker disponibili al primo giorno, tiene."""
-    first = df['date'].min()
-    start_px = df[df['date'] == first].set_index('ticker')['close']
-    tickers = start_px.index
-    per = capital / len(tickers)
-    curve = []
-    for d, sub in df.groupby('date'):
-        p = sub.set_index('ticker')['close']
-        val = sum(per * (p[tk] / start_px[tk]) for tk in tickers if tk in p.index)
-        curve.append((d, val))
-    return pd.DataFrame(curve, columns=['date', 'equity']).set_index('date')
+    """Buy & hold equipesato dei ticker presenti dal primo giorno; forward-fill dei
+    prezzi (festivi di borsa diversi tra .MI/.PA/.DE/.L)."""
+    panel = df.pivot_table(index='date', columns='ticker', values='close', aggfunc='last').ffill()
+    keep = panel.iloc[0].dropna().index
+    panel = panel[keep]
+    per = capital / len(keep)
+    eq = (panel / panel.iloc[0] * per).sum(axis=1)
+    return eq.to_frame('equity')
 
 
 def stats_from_equity(eq, label):
