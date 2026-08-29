@@ -109,6 +109,38 @@ def _rolling_trend(logprice, window):
     return r2, slope, resid_std
 
 
+_HIVOL_FAMILIES = {'crypto_digital_assets', 'leva_single_stock'}
+
+
+def clean_ohlc(df, family):
+    """Ripara/scarta i print corrotti del Golden Dataset (spike che si annullano
+    il giorno dopo, tipo 3LAM.MI). Ritorna df pulito o None se irrecuperabile."""
+    df = df.copy()
+    close = df['Close'].astype(float)
+    if (close <= 0).any():
+        return None
+    thr = 0.9 if family in _HIVOL_FAMILIES else 0.55   # log-return giornaliero max plausibile
+    lr = np.log(close).diff()
+    bad = lr.abs() > thr
+    if not bad.any():
+        return df
+    idx = np.where(bad.values)[0]
+    if len(idx) > 6:
+        return None                                   # troppo corrotto
+    lc = np.log(close.values)
+    for k in idx:
+        if 0 < k < len(lc) - 1:
+            lc[k] = 0.5 * (lc[k - 1] + lc[k + 1])      # interpola in log
+    fixed = np.exp(lc)
+    if np.abs(np.diff(np.log(fixed))).max() > thr:
+        return None                                   # ancora spike dopo la riparazione
+    ratio = fixed / close.values
+    for col in ('Open', 'High', 'Low', 'Close'):
+        if col in df.columns:
+            df[col] = df[col].astype(float).values * ratio
+    return df
+
+
 def build_features(df):
     """df: OHLCV index=Date. Ritorna DataFrame con FEATURE_COLS + target forward."""
     close = df['Close'].astype(float)
@@ -142,8 +174,8 @@ def build_features(df):
     out['dist_sma200'] = (close - sma200) / sma200 * 100
     out['gap_ema20_sma50'] = (ema20 - sma50) / sma50 * 100
     out['gap_sma50_sma200'] = (sma50 - sma200) / sma200 * 100
-    out['ema20_slope_10'] = ema20.pct_change(10) * 100
-    out['sma50_slope_20'] = sma50.pct_change(20) * 100
+    out['ema20_slope_10'] = (np.log(ema20) - np.log(ema20).shift(10)) / 10 * 252 * 100  # %/anno lin.
+    out['sma50_slope_20'] = (np.log(sma50) - np.log(sma50).shift(20)) / 20 * 252 * 100
     out['rsi'] = rsi
     out['rsi_chg_5'] = rsi - rsi.shift(5)
     out['adx'] = adx
@@ -157,7 +189,7 @@ def build_features(df):
     out['trend_r2_20'] = r2_20
     out['trend_r2_40'] = r2_40
     out['trend_r2_60'] = r2_60
-    out['trend_slope_40_ann'] = (np.exp(slope_40 * 252) - 1) * 100
+    out['trend_slope_40_ann'] = slope_40 * 252 * 100          # %/anno lineare (no exp -> no blow-up)
     out['channel_width_40'] = resid_40 * 100          # ~ % (spazio log)
     out['pct_above_ema20_60'] = (close > ema20).rolling(60).mean() * 100
     out['up_day_ratio_20'] = (close.diff() > 0).rolling(20).mean() * 100
@@ -207,15 +239,19 @@ def phase_build():
 
     fam_map = load_family_map()
     parts = []
-    skipped = 0
+    skip_short, skip_corrupt = [], []
     for i, tk in enumerate(tickers, 1):
         df = db.get_frozen_ohlcv(tk, FROZEN_BATCH)
         if df.empty or len(df) < WARMUP + 30:
-            skipped += 1
+            skip_short.append(tk)
+            continue
+        df = clean_ohlc(df, fam_map.get(tk, 'unknown'))
+        if df is None:
+            skip_corrupt.append(tk)
             continue
         feats = build_features(df)
         if feats is None:
-            skipped += 1
+            skip_short.append(tk)
             continue
         feats = feats.iloc[WARMUP:].copy()          # scarta warm-up
         feats.insert(0, 'ticker', tk)
@@ -228,7 +264,9 @@ def phase_build():
     full = pd.concat(parts, ignore_index=True)
     os.makedirs('/app/data', exist_ok=True)
     full.to_csv(OUT_DATASET, index=False, compression='gzip', float_format='%.5f')
-    print(f"\nOK — {len(full):,} righe ({full['ticker'].nunique()} ticker, {skipped} scartati)")
+    print(f"\n  scartati storico corto: {len(skip_short)} {skip_short}")
+    print(f"  scartati DATI CORROTTI:  {len(skip_corrupt)} {skip_corrupt}")
+    print(f"\nOK — {len(full):,} righe ({full['ticker'].nunique()} ticker)")
     print(f"     range date: {full['date'].min().date()} -> {full['date'].max().date()}")
     print(f"     salvato: {OUT_DATASET}")
 
@@ -267,6 +305,8 @@ def phase_leaderboard(entry_lag=3, min_gain=0.15, top_episodes=30):
     keep = ['ticker', 'family', 'date', 'close'] + FEATURE_COLS
     df = pd.read_csv(OUT_DATASET, parse_dates=['date'], usecols=keep)
     df = df.sort_values(['ticker', 'date']).reset_index(drop=True)
+    for c in FEATURE_COLS:                              # winsorize per la firma d'ingresso
+        df[c] = df[c].clip(df[c].quantile(0.005), df[c].quantile(0.995))
 
     # ── 1. classifica per ETF sull'intera finestra congelata ────────────────
     perf_rows, all_eps = [], []
@@ -360,6 +400,18 @@ def _cohen_d(a, b):
     return (a.mean() - b.mean()) / pooled
 
 
+def _winsor(s, p=0.005):
+    lo, hi = s.quantile(p), s.quantile(1 - p)
+    return s.clip(lo, hi)
+
+
+def _spearman(a, b):
+    m = a.notna() & b.notna()
+    if m.sum() < 30:
+        return np.nan
+    return a[m].rank().corr(b[m].rank())
+
+
 def phase_analyze(target, split_date, top_q):
     keep = ['ticker', 'family', 'date'] + FEATURE_COLS + [target]
     df = pd.read_csv(OUT_DATASET, parse_dates=['date'], usecols=keep)
@@ -368,54 +420,51 @@ def phase_analyze(target, split_date, top_q):
 
     need = FEATURE_COLS + [target]
     df = df.dropna(subset=need).copy()
-    df = df[np.isfinite(df[need]).all(axis=1)]
-    print(f"Dopo dropna/finite su target={target}: {len(df):,} righe\n")
+    df = df[np.isfinite(df[need]).all(axis=1)].copy()
+
+    # WINSORIZE globale: target + ogni feature a [0.5%, 99.5%] — neutralizza i print
+    # corrotti residui senza buttare righe.
+    df[target] = _winsor(df[target])
+    for c in FEATURE_COLS:
+        df[c] = _winsor(df[c])
+    print(f"Dopo dropna/finite + winsorize su target={target}: {len(df):,} righe\n")
 
     split = pd.Timestamp(split_date)
-    IN = df[df['date'] < split]
-    OUT = df[df['date'] >= split]
-    print(f"IN  (< {split.date()}): {len(IN):,} righe, {IN['ticker'].nunique()} ticker")
-    print(f"OUT (>= {split.date()}): {len(OUT):,} righe, {OUT['ticker'].nunique()} ticker")
+    IN = df[df['date'] < split].copy()
+    OUT = df[df['date'] >= split].copy()
+    print(f"IN  (< {split.date()}): {len(IN):,} righe, {IN['ticker'].nunique()} ticker  "
+          f"mediana {target}={IN[target].median():.2f}%")
+    print(f"OUT (>= {split.date()}): {len(OUT):,} righe, {OUT['ticker'].nunique()} ticker  "
+          f"mediana {target}={OUT[target].median():.2f}%")
 
-    # soglie winner/loser dai SOLI dati IN, applicate identiche a OUT
     hi = IN[target].quantile(1 - top_q)
     lo = IN[target].quantile(top_q)
-    print(f"\nSoglie {target} (da IN): winner >= {hi:.2f}% | loser <= {lo:.2f}%")
-    print(f"  mediana IN={IN[target].median():.2f}%  mediana OUT={OUT[target].median():.2f}%")
+    win_in, los_in = IN[IN[target] >= hi], IN[IN[target] <= lo]
+    win_out, los_out = OUT[OUT[target] >= hi], OUT[OUT[target] <= lo]
 
-    def buckets(d):
-        return d[d[target] >= hi], d[d[target] <= lo]
-
-    win_in, los_in = buckets(IN)
-    win_out, los_out = buckets(OUT)
-    print(f"  winner IN N={len(win_in):,} / loser IN N={len(los_in):,}")
-    print(f"  winner OUT N={len(win_out):,} / loser OUT N={len(los_out):,}")
-
-    # famiglie dominanti tra i winner
-    print("\n── Famiglie nel bucket WINNER (IN) ──")
+    print("\n── Famiglie nel bucket WINNER (IN, soglia {:.1f}%) ──".format(hi))
     fam = (win_in['family'].value_counts(normalize=True) * 100).round(1)
     base = (IN['family'].value_counts(normalize=True) * 100).round(1)
     for f in fam.index[:10]:
         print(f"   {f:<26} {fam[f]:5.1f}%   (baseline {base.get(f, 0):5.1f}%)")
 
-    # confronto feature per feature
+    # ── metrica robusta: Spearman feature-vs-target, IN e OUT ──────────────
     rows = []
     for c in FEATURE_COLS:
+        sp_in = _spearman(IN[c], IN[target])
+        sp_out = _spearman(OUT[c], OUT[target])
         d_in = _cohen_d(win_in[c], los_in[c])
-        d_out = _cohen_d(win_out[c], los_out[c])
-        holds = bool(np.sign(d_in) == np.sign(d_out) and abs(d_out) >= 0.10)
-        rows.append({
-            'feature': c,
-            'win_IN': win_in[c].mean(), 'los_IN': los_in[c].mean(), 'd_IN': d_in,
-            'win_OUT': win_out[c].mean(), 'los_OUT': los_out[c].mean(), 'd_OUT': d_out,
-            'HOLDS_OOS': holds,
-        })
-    res = pd.DataFrame(rows).sort_values('d_IN', key=lambda s: s.abs(), ascending=False)
-    pd.set_option('display.width', 200)
+        holds = bool(np.sign(sp_in) == np.sign(sp_out) and abs(sp_out) >= 0.03)
+        rows.append({'feature': c, 'sp_IN': sp_in, 'sp_OUT': sp_out,
+                     'd_IN(win-los)': d_in,
+                     'win_IN': win_in[c].mean(), 'los_IN': los_in[c].mean(),
+                     'HOLDS_OOS': holds})
+    res = pd.DataFrame(rows).sort_values('sp_IN', key=lambda s: s.abs(), ascending=False)
+    pd.set_option('display.width', 220)
     pd.set_option('display.max_columns', 20)
-    print("\n── Effect size (Cohen's d) winner-vs-loser, ordinato per |d_IN| ──")
-    print("   d>0 = feature piu' ALTA nei winner. HOLDS_OOS = segno regge e |d_OUT|>=0.1")
-    print(res.to_string(index=False, float_format=lambda x: f"{x:7.3f}"))
+    print("\n── Correlazione di rango (Spearman) feature -> " + target + " ──")
+    print("   sp>0 = feature alta -> rendimento forward alto. HOLDS_OOS = segno regge IN&OUT e |sp_OUT|>=0.03")
+    print(res.to_string(index=False, float_format=lambda x: f"{x:8.3f}"))
     res.to_csv(OUT_SUMMARY, index=False)
     print(f"\n   salvato: {OUT_SUMMARY}")
 
@@ -426,11 +475,13 @@ def phase_analyze(target, split_date, top_q):
         return
 
     # quality-score prototipo: z-score (mean/std da IN) delle feature che reggono,
-    # con segno = segno di d_IN, sommati.
+    # segno = segno della Spearman IN, sommati.
     print(f"\n── Quality-score prototipo da {len(kept)} feature che reggono OOS ──")
+    print("   " + ", ".join(f"{r.feature}({'+' if r.sp_IN > 0 else '-'})"
+                            for r in kept.itertuples()))
     mu = IN[kept['feature']].mean()
     sd = IN[kept['feature']].std(ddof=0).replace(0, np.nan)
-    sign = np.sign(kept.set_index('feature')['d_IN'])
+    sign = np.sign(kept.set_index('feature')['sp_IN'])
 
     def score(d):
         z = (d[kept['feature']] - mu) / sd
@@ -441,12 +492,12 @@ def phase_analyze(target, split_date, top_q):
         dd['score'] = score(dd)
         dd = dd.dropna(subset=['score'])
         dd['decile'] = pd.qcut(dd['score'], 10, labels=False, duplicates='drop')
-        g = dd.groupby('decile')[target].agg(['mean', 'median', 'count'])
-        print(f"\n   [{name}] {target} medio per decile di score (0=score peggiore, 9=migliore):")
+        g = dd.groupby('decile')[target].agg(['median', 'mean', 'count'])
+        print(f"\n   [{name}] {target} per decile di score (0=peggiore, 9=migliore):")
         for dec, r in g.iterrows():
-            print(f"     dec {int(dec)}:  mean {r['mean']:7.2f}%   median {r['median']:7.2f}%   N={int(r['count']):,}")
+            print(f"     dec {int(dec)}:  median {r['median']:6.2f}%   mean {r['mean']:6.2f}%   N={int(r['count']):,}")
         top, bot = g.loc[g.index.max()], g.loc[g.index.min()]
-        print(f"     spread top-bottom decile: {top['mean'] - bot['mean']:+.2f}% (mean)")
+        print(f"     spread top-bottom decile: median {top['median'] - bot['median']:+.2f}%  |  mean {top['mean'] - bot['mean']:+.2f}%")
 
     # controllo autocorrelazione: 1 riga per ticker per mese
     print("\n── Robustezza: campione ridotto a 1 riga / ticker / mese ──")
@@ -464,8 +515,8 @@ def phase_analyze(target, split_date, top_q):
             print(f"   [{name}] troppo pochi dati ({len(dd)})")
             continue
         dd['q'] = pd.qcut(dd['score'], 4, labels=False, duplicates='drop')
-        g = dd.groupby('q')[target].mean()
-        print(f"   [{name}] {target} medio per quartile di score: " +
+        g = dd.groupby('q')[target].median()
+        print(f"   [{name}] {target} MEDIANO per quartile di score: " +
               "  ".join(f"Q{int(q)}={v:+.1f}%" for q, v in g.items()))
 
 
@@ -473,7 +524,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--phase', choices=['build', 'leaderboard', 'analyze', 'both'], default='both')
     ap.add_argument('--min-gain', type=float, default=0.15,
-                    help='gain minimo per contare come episodio di crescita (0.15 = 15%)')
+                    help='gain minimo per contare come episodio di crescita (default 0.15)')
     ap.add_argument('--target', default='fwd_ret_60',
                     help='fwd_ret_40/60/90 | fwd_mar_40/60/90')
     ap.add_argument('--split', default='2025-01-01', help='data split IN/OUT (YYYY-MM-DD)')
