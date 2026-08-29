@@ -27,6 +27,7 @@ import sys
 sys.path.insert(0, '/app')
 
 import argparse
+import os
 from datetime import datetime
 
 import numpy as np
@@ -35,10 +36,12 @@ import pandas as pd
 from technical_analysis import ETFTechnicalAnalyzer
 
 DATASET = '/app/data/research_growth_dataset.csv.gz'
+TRADE_RET_CACHE = '/app/data/research_traderet_{}.csv.gz'
 SPLIT = pd.Timestamp('2025-01-01')
 FEE_BUY = FEE_SELL = 5.0
 TAX = 0.26
 COOLDOWN = 3
+MAX_FWD_TRADE = 90
 
 CORE = ['equity_sviluppati', 'mercati_emergenti', 'settoriali_growth',
         'oro_metalli_preziosi', 'metalli_industriali']
@@ -75,6 +78,54 @@ def score_series(df, feats, signs, mu, sd):
     for f in feats:
         z[f] = z[f] * signs[f]
     return z.sum(axis=1)
+
+
+def compute_fwd_trade_ret(g, analyzer):
+    """Per OGNI giorno: se entrassi qui e usassi lo SL/TP reale di L1, quale sarebbe
+    il rendimento lordo del trade? (SL/TP inline, check giornaliero sul Close, finestra
+    max MAX_FWD_TRADE gg). E' il target 'stop-aware' — quello che si tradа davvero."""
+    close = g['close'].to_numpy(float)
+    ema20 = close / (1 + g['dist_ema20'].to_numpy(float) / 100.0)
+    n = len(close)
+    buf = analyzer.p.get('sl_buffer_wide', 0.020)
+    p = analyzer.p.get('l1_stop_gain_dynamic', {})
+    tmax = p.get('target_max_pct', 0.12); tfloor = p.get('target_floor_pct', 0.03)
+    sw = int(p.get('slope_window', 3)); ssens = p.get('slope_sensitivity', 0.0)
+    out = np.full(n, np.nan)
+    for i in range(n - 1):
+        entry = close[i]
+        end = min(i + MAX_FWD_TRADE, n - 1)
+        res = None
+        for j in range(i + 1, end + 1):
+            cp = close[j]
+            gain = cp / entry - 1
+            sl = ema20[j] * (1 - buf) if gain < 0.02 else ema20[j] * 0.99
+            slope = (ema20[j] - ema20[j - sw]) / ema20[j - sw] if j - sw >= 0 else 0.0
+            tp_pct = max(tmax + slope * ssens, tfloor)
+            if cp <= sl or gain >= tp_pct:
+                res = gain * 100
+                break
+        out[i] = res if res is not None else (close[end] / entry - 1) * 100
+    return out
+
+
+def get_trade_ret(df, analyzers, fam_key):
+    """Carica fwd_trade_ret dalla cache o lo calcola e lo salva. Merge in df."""
+    path = TRADE_RET_CACHE.format(fam_key)
+    if os.path.exists(path):
+        c = pd.read_csv(path, parse_dates=['date'])
+        print(f"  fwd_trade_ret da cache: {path} ({len(c):,} righe)")
+    else:
+        print(f"  calcolo fwd_trade_ret (stop-aware) ... una tantum")
+        parts = []
+        for tk, g in df.groupby('ticker'):
+            g = g.reset_index(drop=True)
+            v = compute_fwd_trade_ret(g, analyzers[g['family'].iloc[0]])
+            parts.append(pd.DataFrame({'ticker': tk, 'date': g['date'], 'fwd_trade_ret': v}))
+        c = pd.concat(parts, ignore_index=True)
+        c.to_csv(path, index=False, compression='gzip', float_format='%.4f')
+        print(f"  salvato: {path}")
+    return df.merge(c, on=['ticker', 'date'], how='left')
 
 
 def simulate_ticker(g, analyzer, thr, mode):
@@ -232,12 +283,18 @@ def main():
     ap.add_argument('--families', default='core', choices=['core', 'equity'])
     ap.add_argument('--pct', type=float, default=0.85, help='percentile soglia (0.85 = top/bottom 15 percento)')
     ap.add_argument('--min-sp', type=float, default=0.04, help='|Spearman IN| minimo per una feature')
-    ap.add_argument('--fit-target', default='fwd_ret_60', choices=['fwd_ret_60', 'fwd_mar_60'],
-                    help='fwd_mar_60 = rendimento/drawdown (penalizza il percorso), consigliato per "strength"')
+    ap.add_argument('--fit-target', default='fwd_ret_60',
+                    choices=['fwd_ret_60', 'fwd_mar_60', 'fwd_trade_ret'],
+                    help='fwd_trade_ret = rendimento REALE del trade con SL/TP di L1 (stop-aware)')
     ap.add_argument('--mode', default='all',
-                    choices=['all', 'score', 'always', 'worst'])
-    ap.add_argument('--sweep', action='store_true', help='sweep pct in {0.70..0.92} su score e worst')
+                    choices=['all', 'score', 'always', 'worst', 'strength'])
+    ap.add_argument('--sweep', action='store_true', help='sweep pct in {0.70..0.92}')
     args = ap.parse_args()
+
+    # 'strength' = score fittato sul target stop-aware, ingresso top X% (versione pulita di 'worst')
+    if args.mode == 'strength':
+        args.mode = 'score'
+        args.fit_target = 'fwd_trade_ret'
 
     fams = CORE if args.families == 'core' else EQUITY
     t0 = datetime.now()
@@ -247,19 +304,24 @@ def main():
     df = df[df['family'].isin(fams)].copy()
     df = df.dropna(subset=FEATURES).sort_values(['ticker', 'date'])
     df['fwd_mar_60'] = df['fwd_mar_60'].replace([np.inf, -np.inf], np.nan).clip(-30, 30)
+    analyzers = {f: ETFTechnicalAnalyzer(famiglia=f) for f in fams}
+
+    needs_traderet = (args.fit_target == 'fwd_trade_ret' or args.mode == 'all' or args.sweep)
+    if needs_traderet:
+        df = get_trade_ret(df, analyzers, args.families)
+
     IN = df[df['date'] < SPLIT]
     print(f"Famiglie {args.families} ({fams})")
     print(f"Dataset: {len(df):,} righe, {df['ticker'].nunique()} ticker  "
           f"| IN {len(IN):,}  OUT {len(df) - len(IN):,}  | fit-target={args.fit_target}\n")
 
-    analyzers = {f: ETFTechnicalAnalyzer(famiglia=f) for f in fams}
-
     if args.sweep:
-        for mode in ('score', 'worst'):
-            print(f"\n### SWEEP pct — mode={mode}, fit-target={args.fit_target}")
+        for mode, ft in (('score', 'fwd_trade_ret'), ('worst', 'fwd_ret_60')):
+            print(f"\n### SWEEP pct — mode={mode}, fit-target={ft}"
+                  + ("  (= strength)" if mode == 'score' else ""))
             rows = []
             for pct in (0.70, 0.75, 0.80, 0.85, 0.90, 0.92):
-                _, _, o = run_mode(df, analyzers, fams, mode, args.fit_target, args.min_sp, pct)
+                _, _, o = run_mode(df, analyzers, fams, mode, ft, args.min_sp, pct)
                 rows.append((f"pct={pct:.2f}  (OUT)", summ(o)))
             print_table(rows)
         print(f"\nTempo: {datetime.now() - t0}")
@@ -267,15 +329,14 @@ def main():
 
     if args.mode == 'all':
         combos = [
-            ('always', 'fwd_ret_60'),
-            ('score  (ret)', 'fwd_ret_60'),
-            ('score  (mar)=strength', 'fwd_mar_60'),
-            ('worst  (ret)', 'fwd_ret_60'),
-            ('worst  (mar)', 'fwd_mar_60'),
+            ('always',                'always', 'fwd_ret_60'),
+            ('score (pullback,ret)',  'score',  'fwd_ret_60'),
+            ('STRENGTH (score,trade)', 'score', 'fwd_trade_ret'),
+            ('worst (ret)',           'worst',  'fwd_ret_60'),
+            ('worst (trade)',         'worst',  'fwd_trade_ret'),
         ]
         rows_in, rows_out = [], []
-        for label, ft in combos:
-            m = 'always' if label.startswith('always') else ('worst' if 'worst' in label else 'score')
+        for label, m, ft in combos:
             _, i, o = run_mode(df, analyzers, fams, m, ft, args.min_sp, args.pct)
             rows_in.append((label, summ(i)))
             rows_out.append((label, summ(o)))
