@@ -18,6 +18,17 @@ global_params:
   - private_equity_buffer
   - monetario_liquidita
   l0_regime_required: BULL
+  # 2026-09-02: gate regime L0 RILASSATO. Il backtest IN/OOS (backtest_l0_fast.py) ha
+  # mostrato che il gate BULL-only rende L0 perdente in-sample (PF 0.96) — un drawdown
+  # vero rompe EMA20>SMA50 quindi il gate blocca proprio i setup per cui L0 esiste.
+  # Rilassato a tutti i regimi (= nessun gate): IN PF 1.72 / OOS PF 8.57, N 246/73.
+  # `l0_regime_required` sopra resta il default se questa lista viene rimossa.
+  # Lo Shadow Monitor inverso (shadow_monitor_l0_regime_baseline.py) traccia cosa
+  # avrebbe fatto il vecchio gate BULL-only, per il confronto dal vivo.
+  l0_regime_allowed:
+  - BULL
+  - LATERALE
+  - BEAR
   bond_trend_model:
     families:
     - bond_corp_hy_em

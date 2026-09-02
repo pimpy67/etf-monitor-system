@@ -1123,7 +1123,15 @@ class ETFTechnicalAnalyzer:
         # dal fondo della funzione dove causava UnboundLocalError sui percorsi FAST/SLOW,
         # eseguiti prima che regime_ok venisse assegnato (fix 2026-08-07).
         l0_regime_required = global_params.get('l0_regime_required', 'BULL')
-        regime_ok = (regime_str == l0_regime_required)
+        # 2026-09-02: se global_params.l0_regime_allowed (lista) e' presente, il gate
+        # regime L0 ammette qualunque regime in quella lista invece del solo
+        # l0_regime_required. Rilassato dopo il backtest IN/OOS (il gate BULL-only
+        # rendeva L0 perdente in-sample). Assente -> comportamento storico invariato.
+        _l0_regime_allowed = global_params.get('l0_regime_allowed')
+        if _l0_regime_allowed:
+            regime_ok = regime_str in _l0_regime_allowed
+        else:
+            regime_ok = (regime_str == l0_regime_required)
 
         familia_name = self.famiglia
         if l0_whitelist and familia_name not in l0_whitelist:

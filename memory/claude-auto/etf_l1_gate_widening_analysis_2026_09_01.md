@@ -124,7 +124,35 @@ Data does NOT support widening the gate. The opposite is emerging:
 - **Decision 2: relax the L0 regime gate** (remove entirely, or at least allow LATERALE).
   Strong backtest case IN+OOS.
 
-### L0 — DECIDED 2026-09-02: deploy `l0_regime_all` direct + reverse-shadow + monthly digest
+### L0 — CODE BUILT 2026-09-02, deploy scheduled 03:00 via VPS cron
+
+**All code written, smoke-tested, committed. A VPS cron runs `scripts/deploy_l0_3am.sh` at
+03:00** (VPS idle then → fast build; the daytime PAC deploy's build took 48 min under load).
+No migration (L0 change adds no tables). Files:
+- `config/etf_families.yaml`: `global_params.l0_regime_allowed: [BULL, LATERALE, BEAR]`
+- `technical_analysis.py::suggest_level_0()`: guarded `_l0_regime_allowed` block — verified
+  in smoke test (VWCE.MI in LATERALE regime → `regime_ok_for_l0: True`, was False).
+- `shadow_monitor_l0_regime_baseline.py` (NEW): reverse shadow, `model_name=
+  'baseline_l0_regime_bull'` — enters only when `suggest_level_0().l0_entry AND regime_str
+  == 'BULL'` (replicates the OLD gate). Wired as STEP 8b2 in monitor.py, email variant
+  `L0_REGIME_BASELINE`.
+- `alerts.py::send_shadow_monthly_digest()` (NEW) + `database.py::get_shadow_digest_stats()`
+  / `get_real_l0_digest_stats()` (NEW). Monthly digest: fires from monitor.py STEP 8L when
+  `date.today().day == 1` and `send_daily_report`. One row per shadow model + real L0, with
+  N/WR/PF/avg%/SL-TP/verdict (CONFERMA ≥1.5PF+≥45%WR / CONTRADDICE ≤1.0PF / dati
+  insufficienti <10 closed). Smoke-tested → email sent OK (a real test digest hit the
+  user's inbox 2026-09-02).
+- `etf_monitoraggio.xlsx` committed with VWCE.MI/GAGG.MI (so `smart_restore` in the deploy
+  keeps them; git version previously still had .DE/.PA).
+- `scripts/deploy_l0_3am.sh`: git sync → verify code present → build (timeout 40m, proceeds
+  if image is recent even on hang) → recreate → health check (fail = leave as-is, log
+  loudly) → trigger monitor. Logs to `data/deploy_l0_3am.log`.
+
+**Morning check**: read `data/deploy_l0_3am.log`; confirm STEP 8b2 (Shadow L0-baseline)
+ran without error; confirm `l0_regime_allowed` is in the container YAML. Remove the cron:
+`crontab -l | grep -v deploy_l0_3am | crontab -`.
+
+### ~~L0 — DECIDED 2026-09-02~~ (superseded above — code built)
 
 User chose option (b): deploy the relaxed L0 gate straight to production (like `smart_6_macd`
 24/08 and L0-SL 20/08 — motivated exception), with continued live monitoring. **This is a

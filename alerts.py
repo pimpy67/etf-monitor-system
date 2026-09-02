@@ -216,6 +216,11 @@ class AlertSystem:
             'params': 'Primo scaglione dello Stop L0 (profit<5%) portato da 4% a 6% dall\'entry — solo equity_sviluppati, ingresso/TP/tier2-3 identici al nativo. Sweep: OUT WR 45.5%->60.0%, PF 2.02->2.94',
             'color_main': '#CA6F1E', 'color_dark': '#873600', 'tag': 'L0-SL-6%',
         },
+        'L0_REGIME_BASELINE': {
+            'label': 'Baseline L0 regime BULL-only (shadow inverso)',
+            'params': 'Vecchio gate L0 (ingresso solo in regime BULL) — la produzione dal 02/09 ammette tutti i regimi. Traccia cosa avrebbe fatto la vecchia regola, per il confronto dal vivo nel digest mensile',
+            'color_main': '#7F8C8D', 'color_dark': '#4D5656', 'tag': 'L0-Baseline',
+        },
     }
 
     def send_shadow_entries(self, new_entries: list, variant: str = 'L1') -> bool:
@@ -285,6 +290,89 @@ class AlertSystem:
             f'</tr></thead><tbody>{rows}</tbody></table>'
             f'</div>'
             f'{_FOOTER.format(ts=ts)}</body></html>'
+        )
+        return self._send_email(subject, body_html)
+
+    def send_shadow_monthly_digest(self, stats: list, real_l0: dict = None) -> bool:
+        """Digest mensile (1° del mese) di TUTTI gli Shadow Monitor + la baseline
+        inversa L0. Per ogni candidato: N chiusi/aperti, win rate, profit factor,
+        rendimento medio/totale, SL/TP, e una riga di verdetto (CONFERMA / CONTRADDICE
+        / dati insufficienti). Sostituisce l'estrazione SQL manuale al checkpoint.
+        `stats`: output di db.get_shadow_digest_stats(). `real_l0`: dict opzionale
+        {n_closed, n_win, avg_gross, sum_win, sum_loss} per le posizioni L0 reali."""
+        if not stats and not real_l0:
+            return True
+
+        def _verdict(n_closed, n_win, sum_win, sum_loss):
+            if n_closed < 10:
+                return '#888', f'⏳ dati insufficienti (N={n_closed}, serve ≥10)'
+            wr = 100 * n_win / n_closed if n_closed else 0
+            if not sum_loss:
+                return '#1a7f37', f'✅ nessuna perdita (WR {wr:.0f}%)'
+            pf = sum_win / sum_loss
+            if pf >= 1.5 and wr >= 45:
+                return '#1a7f37', f'✅ CONFERMA (PF {pf:.2f}, WR {wr:.0f}%)'
+            if pf <= 1.0:
+                return '#c0392b', f'❌ CONTRADDICE (PF {pf:.2f}, WR {wr:.0f}%)'
+            return '#b9770e', f'➖ neutro (PF {pf:.2f}, WR {wr:.0f}%)'
+
+        rows = ''
+        allrows = list(stats or [])
+        if real_l0:
+            allrows = [{'model_name': 'PRODUZIONE REALE L0 (etf_portfolio_entries)',
+                        'n_closed': real_l0.get('n_closed', 0), 'n_open': real_l0.get('n_open', 0),
+                        'n_win': real_l0.get('n_win', 0), 'avg_gross': real_l0.get('avg_gross'),
+                        'sum_win': real_l0.get('sum_win') or 0, 'sum_loss': real_l0.get('sum_loss') or 0,
+                        'n_tp': real_l0.get('n_tp', 0), 'n_sl': real_l0.get('n_sl', 0),
+                        'first_entry': real_l0.get('first_entry'), 'last_activity': real_l0.get('last_activity')}] + allrows
+
+        for i, s in enumerate(allrows):
+            n_closed = s.get('n_closed') or 0
+            n_win = s.get('n_win') or 0
+            sum_win = float(s.get('sum_win') or 0)
+            sum_loss = float(s.get('sum_loss') or 0)
+            wr = f'{100*n_win/n_closed:.0f}%' if n_closed else '—'
+            pf = f'{sum_win/sum_loss:.2f}' if sum_loss else ('∞' if sum_win else '—')
+            vcol, vtxt = _verdict(n_closed, n_win, sum_win, sum_loss)
+            bg = '#f9f9f9' if i % 2 else 'white'
+            hl = ';font-weight:bold;background:#eef4ff' if str(s['model_name']).startswith('PRODUZIONE') else ''
+            rows += (
+                f'<tr style="background:{bg}{hl}">'
+                f'<td style="padding:7px;border:1px solid #ddd;font-size:12px">{s["model_name"]}</td>'
+                f'<td style="padding:7px;border:1px solid #ddd;text-align:center">{n_closed}<small style="color:#999"> / {s.get("n_open") or 0} ap.</small></td>'
+                f'<td style="padding:7px;border:1px solid #ddd;text-align:center">{wr}</td>'
+                f'<td style="padding:7px;border:1px solid #ddd;text-align:center">{pf}</td>'
+                f'<td style="padding:7px;border:1px solid #ddd;text-align:center">{s.get("avg_gross") if s.get("avg_gross") is not None else "—"}%</td>'
+                f'<td style="padding:7px;border:1px solid #ddd;text-align:center;font-size:11px;color:#666">{s.get("n_sl") or 0} / {s.get("n_tp") or 0}</td>'
+                f'<td style="padding:7px;border:1px solid #ddd;color:{vcol};font-size:12px">{vtxt}</td>'
+                f'</tr>'
+            )
+
+        ts = datetime.now().strftime('%d/%m/%Y %H:%M')
+        subject = f'📊 Digest mensile Shadow Monitor — {datetime.now().strftime("%B %Y")}'
+        body_html = (
+            f'<html><body style="{_BODY_STYLE}">'
+            f'<div style="background:linear-gradient(135deg,#34495e,#2c3e50);color:white;padding:22px;text-align:center">'
+            f'<h1 style="margin:0;font-size:19px">📊 Digest mensile — Shadow Monitor</h1>'
+            f'<p style="margin:6px 0 0;opacity:.9;font-size:13px">{datetime.now().strftime("%A %d %B %Y")}</p></div>'
+            f'<div style="padding:18px;background:white">'
+            f'<p style="color:#666;font-size:12px;margin:0 0 12px">Stato di tutti i candidati tracciati in ombra, aggiornato ad oggi. '
+            f'Nessuna azione automatica: una promozione a produzione resta una decisione esplicita, con soglia N≥30 trade chiusi. '
+            f'Colonna "Uscite" = SL / TP.</p>'
+            f'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+            f'<thead><tr style="background:#34495e;color:white">'
+            f'<th style="padding:7px;border:1px solid #ddd;text-align:left">Modello</th>'
+            f'<th style="padding:7px;border:1px solid #ddd">Chiusi</th>'
+            f'<th style="padding:7px;border:1px solid #ddd">WR</th>'
+            f'<th style="padding:7px;border:1px solid #ddd">PF</th>'
+            f'<th style="padding:7px;border:1px solid #ddd">Rend. medio</th>'
+            f'<th style="padding:7px;border:1px solid #ddd">Uscite</th>'
+            f'<th style="padding:7px;border:1px solid #ddd;text-align:left">Verdetto</th>'
+            f'</tr></thead><tbody>{rows}</tbody></table>'
+            f'<p style="color:#999;font-size:11px;margin:14px 0 0">'
+            f'`baseline_l0_regime_bull` = shadow inverso: cosa avrebbe fatto il vecchio gate L0 BULL-only '
+            f'(rilassato in produzione dal 02/09). Se la produzione reale L0 batte questa baseline, rilassare ha aiutato.</p>'
+            f'</div>{_FOOTER.format(ts=ts)}</body></html>'
         )
         return self._send_email(subject, body_html)
 

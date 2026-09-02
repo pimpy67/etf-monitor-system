@@ -1172,6 +1172,19 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor L0 (non bloccante): {e}")
 
+        # STEP 8b2 — Shadow Monitor INVERSO L0 regime (2026-09-02): dal 02/09 la
+        # produzione L0 ha il gate regime RILASSATO (l0_regime_allowed nello YAML).
+        # Questo traccia cosa avrebbe fatto il vecchio gate BULL-only — per dire dal
+        # vivo, nel digest mensile, se rilassare ha aiutato. model_name =
+        # 'baseline_l0_regime_bull'. Vedi shadow_monitor_l0_regime_baseline.py.
+        try:
+            from shadow_monitor_l0_regime_baseline import run_shadow_monitor_l0_regime_baseline
+            shadow_l0_base_entries = run_shadow_monitor_l0_regime_baseline(self.db, results, add_log=add_log)
+            if shadow_l0_base_entries and send_daily_report:
+                self.alert_system.send_shadow_entries(shadow_l0_base_entries, variant='L0_REGIME_BASELINE')
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor L0-baseline (non bloccante): {e}")
+
         # STEP 8c — Shadow Monitor "terza via" Market Breadth (2026-08-20): traccia
         # SOLO i trade extra che il gate 6/7+MACD aprirebbe rispetto al sistema reale
         # (native_7), e SOLO quando la breadth di mercato (EMA20>SMA50 su tutto
@@ -1325,6 +1338,24 @@ class ETFMonitor:
                         self.alert_system.send_shadow_entries(entries, variant=EMAIL_VARIANT[mname])
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor L0-SL-tier1 (non bloccante): {e}")
+
+        # STEP 8L — Digest mensile Shadow Monitor (2026-09-02): il 1° del mese, sul run
+        # principale, manda un'email con lo stato di TUTTI i candidati ombra + la
+        # baseline inversa L0 (N chiusi, WR, PF, verdetto). Sostituisce l'estrazione
+        # SQL manuale al checkpoint. Cadenza scelta: mensile (non settimanale — L0
+        # tiene posizioni settimane/mesi).
+        try:
+            if send_daily_report and date_type.today().day == 1:
+                add_log("Invio digest mensile Shadow Monitor...")
+                stats = self.db.get_shadow_digest_stats()
+                real_l0 = None
+                try:
+                    real_l0 = self.db.get_real_l0_digest_stats()
+                except Exception:
+                    pass
+                self.alert_system.send_shadow_monthly_digest(stats, real_l0=real_l0)
+        except Exception as e:
+            add_log(f"⚠️  Errore digest mensile Shadow (non bloccante): {e}")
 
         # 7. Invia resoconto portafoglio — DOPO l'aggiornamento SL/TP (fix 2026-08-05:
         # prima veniva inviato PRIMA degli STEP 4/7 sopra, quindi l'email mostrava

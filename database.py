@@ -767,6 +767,72 @@ class PriceDatabase:
         finally:
             conn.close()
 
+    def get_shadow_digest_stats(self) -> list:
+        """Aggregato per model_name su etf_shadow_positions — per il digest mensile
+        (alerts.py::send_shadow_monthly_digest). Una riga per candidato ombra."""
+        conn = self._get_connection()
+        if not conn:
+            return []
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT model_name,
+                      COUNT(*) FILTER (WHERE status='closed')                                AS n_closed,
+                      COUNT(*) FILTER (WHERE status='open')                                   AS n_open,
+                      COUNT(*) FILTER (WHERE status='closed' AND gross_pct_gain > 0)          AS n_win,
+                      ROUND(AVG(gross_pct_gain) FILTER (WHERE status='closed')::numeric, 2)   AS avg_gross,
+                      ROUND(SUM(gross_pct_gain) FILTER (WHERE status='closed' AND gross_pct_gain > 0)::numeric, 2) AS sum_win,
+                      ROUND(SUM(-gross_pct_gain) FILTER (WHERE status='closed' AND gross_pct_gain < 0)::numeric, 2) AS sum_loss,
+                      COUNT(*) FILTER (WHERE status='closed' AND exit_reason='TP')            AS n_tp,
+                      COUNT(*) FILTER (WHERE status='closed' AND exit_reason='SL')            AS n_sl,
+                      MIN(entry_date)                                                         AS first_entry,
+                      MAX(COALESCE(exit_date, entry_date))                                    AS last_activity
+                    FROM etf_shadow_positions
+                    GROUP BY model_name
+                    ORDER BY model_name
+                """)
+                return [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            logging.error(f"Errore get_shadow_digest_stats: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def get_real_l0_digest_stats(self) -> dict:
+        """Aggregato delle posizioni L0 REALI (etf_portfolio_entries) — per la riga di
+        confronto nel digest mensile Shadow. Chiuse: gross = exit/entry-1."""
+        conn = self._get_connection()
+        if not conn:
+            return {}
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    WITH l0 AS (
+                        SELECT status, entry_price, exit_price, exit_date, entry_date,
+                               CASE WHEN exit_price IS NOT NULL AND entry_price > 0
+                                    THEN (exit_price/entry_price - 1) * 100 END AS gross
+                        FROM etf_portfolio_entries
+                        WHERE LOWER(COALESCE(portfolio_type, portafoglio)) = 'l0'
+                    )
+                    SELECT
+                      COUNT(*) FILTER (WHERE status='exited' AND gross IS NOT NULL)    AS n_closed,
+                      COUNT(*) FILTER (WHERE status='active')                          AS n_open,
+                      COUNT(*) FILTER (WHERE gross > 0)                                AS n_win,
+                      ROUND(AVG(gross)::numeric, 2)                                    AS avg_gross,
+                      ROUND(SUM(gross) FILTER (WHERE gross > 0)::numeric, 2)           AS sum_win,
+                      ROUND(SUM(-gross) FILTER (WHERE gross < 0)::numeric, 2)          AS sum_loss,
+                      MIN(entry_date)                                                  AS first_entry,
+                      MAX(COALESCE(exit_date, entry_date))                             AS last_activity
+                    FROM l0
+                """)
+                r = cur.fetchone()
+                return dict(r) if r else {}
+        except Exception as e:
+            logging.error(f"Errore get_real_l0_digest_stats: {e}")
+            return {}
+        finally:
+            conn.close()
+
     def get_shadow_positions(self, model_name: str) -> list:
         conn = self._get_connection()
         if not conn:
