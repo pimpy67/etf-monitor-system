@@ -381,18 +381,50 @@ class PriceDatabase:
         """
         conn = self._get_connection()
         if not conn:
+            logging.error(f"save_ohlcv_bulk({ticker}): nessuna connessione DB")
             return 0
 
+        has_isin = bool(isin) and len(str(isin).strip()) >= 8
+
+        # Quando l'ISIN è noto usa l'indice UNIQUE parziale (isin, date) come arbitro:
+        # una riga "legacy" con ticker=ISIN si auto-corregge (ticker=EXCLUDED.ticker)
+        # invece di sollevare UniqueViolation su idx_etf_price_history_isin_date_uniq e
+        # abortire l'intero batch (bug trovato 2026-09-02: storici fermi al 27/08).
+        if has_isin:
+            insert_sql = """
+                INSERT INTO etf_price_history (ticker, date, open, high, low, close, volume, source, isin)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (isin, date) WHERE isin IS NOT NULL
+                DO UPDATE SET ticker = EXCLUDED.ticker, open = EXCLUDED.open,
+                              high = EXCLUDED.high, low = EXCLUDED.low, close = EXCLUDED.close,
+                              volume = EXCLUDED.volume, source = EXCLUDED.source
+            """
+        else:
+            insert_sql = """
+                INSERT INTO etf_price_history (ticker, date, open, high, low, close, volume, source, isin)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (ticker, date)
+                DO UPDATE SET open = EXCLUDED.open, high = EXCLUDED.high,
+                              low = EXCLUDED.low, close = EXCLUDED.close,
+                              volume = EXCLUDED.volume, source = EXCLUDED.source,
+                              isin = COALESCE(EXCLUDED.isin, etf_price_history.isin)
+            """
+
         saved = 0
+        attempted = 0
         skipped_outliers = 0
+        first_err = None
+        median_close = None
         try:
             with conn.cursor() as cur:
                 # Guardia anti-corruzione: scarta prezzi implausibili rispetto allo storico
-                # esistente per questo ticker (es. errori di scraping/provider dati — trovato
-                # 2026-08-23 un valore di ~9x il normale reintrodotto ad ogni refetch storico)
+                # esistente (es. errori di scraping/provider dati — trovato 2026-08-23 un
+                # valore di ~9x il normale reintrodotto ad ogni refetch storico). Cerca per
+                # ticker OR isin: dopo un rename il ticker nuovo ha ~0 righe, l'isin le ha.
                 cur.execute(
-                    "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY close) FROM etf_price_history WHERE ticker = %s",
-                    (ticker,)
+                    "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY close) "
+                    "FROM etf_price_history WHERE ticker = %s OR isin = %s",
+                    (ticker, isin)
                 )
                 row0 = cur.fetchone()
                 median_close = float(row0[0]) if row0 and row0[0] is not None else None
@@ -404,28 +436,31 @@ class PriceDatabase:
                        (close_val > median_close * 5 or close_val < median_close * 0.2):
                         skipped_outliers += 1
                         continue
+                    attempted += 1
+                    # SAVEPOINT per riga: una riga in conflitto NON aborta più tutto il batch
+                    cur.execute("SAVEPOINT r")
                     try:
-                        cur.execute("""
-                            INSERT INTO etf_price_history (ticker, date, open, high, low, close, volume, source, isin)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            ON CONFLICT (ticker, date)
-                            DO UPDATE SET open = EXCLUDED.open, high = EXCLUDED.high,
-                                          low = EXCLUDED.low, close = EXCLUDED.close,
-                                          volume = EXCLUDED.volume, source = EXCLUDED.source,
-                                          isin = COALESCE(EXCLUDED.isin, etf_price_history.isin)
-                        """, (ticker, date_str,
+                        cur.execute(insert_sql, (ticker, date_str,
                               float(row.get('Open', 0)), float(row.get('High', 0)),
                               float(row.get('Low', 0)), close_val,
                               int(row.get('Volume', 0)), source, isin))
+                        cur.execute("RELEASE SAVEPOINT r")
                         saved += 1
-                    except Exception:
-                        continue
+                    except Exception as e:
+                        cur.execute("ROLLBACK TO SAVEPOINT r")
+                        if first_err is None:
+                            first_err = f"{type(e).__name__}: {e}"
                 conn.commit()
         except Exception as e:
             print(f"Errore salvataggio bulk {ticker}: {e}")
+            logging.error(f"save_ohlcv_bulk({ticker}) exception: {e}")
         finally:
             conn.close()
 
+        if attempted > 0 and saved == 0:
+            msg = f"save_ohlcv_bulk({ticker}/{isin}): 0/{attempted} righe salvate — primo errore: {first_err}"
+            logging.error(msg)
+            print(f"⚠️  {msg}")
         if skipped_outliers:
             print(f"⚠️  {ticker}: {skipped_outliers} prezzi scartati (implausibili, oltre 5x/0.2x la mediana storica {median_close})")
 
