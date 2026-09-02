@@ -170,7 +170,13 @@ def etf_detail():
         # Recupera storico prezzi dal DB con indicatori per il grafico
         import math as _math
 
-        identifier = etf_info.get('isin') or isin or ticker
+        # L'ISIN vale solo se è un vero codice a 12 caratteri — l'Excel usa '—' come
+        # placeholder per gli ETF a leva senza ISIN, che altrimenti finirebbe come
+        # identificatore e non matcherebbe nessuna riga (grafico vuoto per gli ETF leva).
+        _isin = etf_info.get('isin') or isin or ''
+        if len(_isin) != 12:
+            _isin = ''
+        identifier = _isin or ticker
         df = db.get_close_by_isin(identifier, days=260)
 
         price_hist = []
@@ -178,8 +184,8 @@ def etf_detail():
             df = df.reset_index()
             df.columns = ['date', 'close']
             df = df.sort_values('date').reset_index(drop=True)
-        elif ticker or etf_info.get('isin'):
-            df_old = db.get_ohlcv(etf_info.get('isin') or ticker, days=260)
+        elif ticker or _isin:
+            df_old = db.get_ohlcv(_isin or ticker, days=260)
             if not df_old.empty:
                 df = df_old[['date', 'close']].copy()
                 df = df.sort_values('date').reset_index(drop=True)
