@@ -1,0 +1,26 @@
+---
+name: etf-l0-rebuild-and-portfolio-bugs
+description: 2026-08-05 — L0 entry/exit rebuilt to match the L1 "no automation, SL/TP-only" philosophy, plus 3 real production bugs found and fixed in the personal-portfolio pipeline (column desync, dashboard showing closed positions as active, stale email data).
+metadata:
+  node_type: memory
+  type: project
+  originSessionId: 6c15300f-1a71-4a05-b9d0-981a69b89d95
+  modified: 2026-08-06T02:27:40.649Z
+---
+
+Same day as the L1 work (see [[etf-l1-smart6-macd-candidate]], [[etf-l1-two-exit-mechanisms]]), the user asked for the same rigor applied to L0 ("Deep Recovery"), then separately reported the daily SL/TP portfolio email wasn't arriving — which led to finding real, previously-unknown production bugs. Full detail lives in `etf_monitor_system/CLAUDE.md` (search "Sessione fix 2026-08-05") — this memory is a pointer + the non-obvious parts.
+
+**L0 entry rebuilt**: `suggest_level_0()` has 3 entry paths (FAST/SLOW regime-based, PRAGMATIC_4CONDITIONS as documented). FAST/SLOW previously entered on crash-detection alone, no confirmation the reversal was real — now both require `_get_l0_confirmation_signal()` (RSI recovery or EMA reclaim) before firing, falling through to the next path otherwise.
+
+**L0 exit — gamma rule removed on explicit user request**: previously, price>EMA20 auto-promoted an L0 position to L2 (both in `suggest_level_0()`'s own logic and redundantly again via a separate `etf_l0_tracking`-based block in `monitor.py`). The user does not want this: "un ETF non deve passare a L2 solo perché il prezzo supera l'EMA20" — that's the FAST/SLOW *entry* confirmation signal, not a reason to stop tracking it as L0. Removed both instances. L0 now only exits (dashboard-level) via β (RSI<25, real trap) or invalidation (price < trigger_low_price).
+
+**L0 never had a Take Profit** — only SL (`calculate_sl_suggerito_l0`). Added `calculate_tp_suggerito_l0()` + `l0_take_profit_pct` per family in `config/etf_families.yaml` (fixed target, ~2-2.5x the family's `dd_threshold`, ranging 6% for bond_governativi to 45% for crypto). `check_l0_exit()` (which used to auto-close real L0 positions on kill-switch/bear-trap/absolute-stop/timeout — same automation contradiction as L1's old `check_l1_exit()`) was removed; real L0 exit is now purely `sl_hit or tp_hit`, same pattern as L1.
+
+**3 real portfolio bugs found (not hypothetical — confirmed against production DB) while investigating "why no email arrives"**:
+1. `etf_portfolio_entries` has two columns for the same L0/L1 concept: `portafoglio` (read by `monitor.py` to compute daily SL/TP, and by `alerts.py`) and `portfolio_type` (written by `app.py::add_to_portfolio()` when the user clicks "+ Port." in the dashboard). They were never synced — `add_portfolio_entry()` only wrote `portfolio_type`, leaving `portafoglio` stuck at its DB default `'L1'`. Confirmed: an ETF added as L0 (WisdomTree Physical Silver, JE00B1VS3333) had `portfolio_type='L0'` but `portafoglio='L1'` — the monitor was computing L1-style SL/TP for it the whole time. Fixed: `add_portfolio_entry()` now writes both; the one mismatched row was corrected with a one-off `UPDATE` on the live DB.
+2. `database.py::get_portfolio_entries()` (feeds the dashboard's "Portafoglio Personale" L1/L0 tabs) never filtered by `status` — closed positions stayed visible as if still open indefinitely. This is why the user was certain the portfolio "wasn't empty" while the email (which does filter `status='active'`) correctly found nothing to send. Fixed with a `WHERE status='active'` filter.
+3. `monitor.py::run()` sent the daily portfolio-report email *before* recalculating that day's SL/TP (the recalculation happened in later STEP 4/7 blocks) — the email always showed yesterday's values. Reordered. A second, now-redundant standalone email send at 17:30 UTC (a workaround for bug #3, added at some earlier point) was also removed — one email/day at 17:00 UTC now, with fresh data.
+
+**Consequence — investigated the real portfolio's history**: found only 5 rows ever existed in `etf_portfolio_entries`, all `status='exited'`. 4 of the 5 were closed via `exit_rule='B_trailing'` — the *dashboard-only* rule (EMA10<EMA20), which per the confirmed no-automation model should never have force-closed a real position (see [[etf-l1-two-exit-mechanisms]]). Only 1 (iShares MSCI Canada, `SG_target_raggiunto`) looks like a genuine target-hit exit. The user confirmed the other 3 L1 positions (Amundi DJ Industrial Average, Amundi MSCI Water, Amundi MSCI Europe) plus the 1 L0 position (WisdomTree Physical Silver) were still genuinely held at the broker — all 4 were reactivated (`status='active'`, original entry price/date preserved) directly on the production DB. See [[etf-portfolio-active-positions]] for current holdings state.
+
+**How to apply**: if a future session is asked to debug "the email isn't arriving" or "the dashboard shows wrong data" again for this system, check these three fixed points first before assuming new bugs — they're deployed (`etf_monitor_system` commits `626072c` through `2b78858` on 2026-08-05, all on `main`, all live per that day's `deploy.sh` run). If something looks like a regression of one of these, it likely means a later change reintroduced it, not that the original fix failed.

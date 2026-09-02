@@ -1630,6 +1630,24 @@ ssh root@76.13.37.133 "docker exec etf_monitor_system-postgres-1 psql -U etfmoni
 ```
 Fa: git push → git reset VPS → docker build → docker up
 
+### Memoria di Claude — sincronizzata nel repo (dal 2026-09-02)
+
+La memoria automatica di Claude Code vive in `memory/claude-auto/` **dentro questo repo**
+(prima era solo in `~/.claude/projects/<slug>/memory/`, locale a un PC, non sincronizzata).
+`memory/claude-auto/MEMORY.md` è l'indice; i singoli fatti sono i `.md` accanto.
+
+**Su un nuovo PC**, dopo `git clone`/`git pull`, eseguire UNA volta:
+```powershell
+powershell -File scripts\setup_claude_memory_junction.ps1
+```
+Crea una directory junction da `~/.claude/projects/<slug>/memory/` a `memory/claude-auto/`
+(no admin). Da lì Claude legge/scrive la memoria e `git pull`/`push` la fanno viaggiare.
+`memory/` (senza `claude-auto/`) resta la vecchia documentazione di progetto, separata.
+
+**Cosa NON arriva con `git pull`** (va copiato a mano su ogni PC): `~/.ssh/id_ed25519_vps`
+(serve per `./deploy.sh`), `.env` (DB_PASSWORD, RESEND_API_KEY). Il DB PostgreSQL e il
+container/monitor stanno sulla VPS — condivisi da tutti i PC, non si "scaricano".
+
 ---
 
 ## Note Operative
