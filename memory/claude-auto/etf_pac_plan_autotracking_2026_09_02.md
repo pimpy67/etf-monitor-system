@@ -28,6 +28,26 @@ Both ETFs already tracked in the universe with ISIN-keyed price history (VWCE si
 2025-05, GAGG since 2025-05). Resulting monthly € flow ≈ 1330 equity / 195 bond = 87/13
 (user's real portfolio is ~75/25 — flagged to user, they chose 1 GAGG lot anyway).
 
+## ✅ DEPLOYED & VERIFIED 2026-09-02 (commit 374478a code, 4e72a20 memory sync)
+
+- Migration 008 applied by hand (`psql -f` — deploy.sh does NOT run migrations).
+  `scripts/seed_pac_plans.sql` run → 2 plans live, stale test row (id 2) deleted.
+- STEP 3b `_process_pac_plans()` verified end-to-end: created the 01/09 backfill —
+  VWCE.MI 2q @166.115=332.23€, GAGG.MI 1q @48.54=48.54€, `source='auto'`.
+- Excel tickers switched VWCE.DE→VWCE.MI, GAGG.PA→GAGG.MI (container restarted).
+- `templates/pac.html`: manual "Registra versamento" form REMOVED (user asked — all auto
+  now), "Piani PAC automatici" section + `auto` badge added. **Commit still pending.**
+- yfinance has NO 2026-09-01 for VWCE.MI/GAGG.MI (spotty coverage, known) though 01/09 was
+  a trading day → inserted an interpolated 01/09 close (source='interp-pac') so the
+  backfill could price it. Watch that the 08/09 exec gets a real price — the monitor's
+  daily save wasn't reliably landing new VWCE.MI/GAGG.MI rows.
+- The deploy was rough: `docker compose build` on the loaded 1-vCPU VPS took ~48 min
+  (layer export alone 18 min), looked hung at 30 min — killed it (image was already
+  built), finished the container recreate manually.
+- Also fixed during the session: real Turkey L0 position (`LU1900067601`, id 19) had
+  `shares` NULL → set to 100, wrote SL 48.96 / TP 60.18 (family mercati_emergenti).
+  Ticker is `TUR.PA` — should be `TUR.MI` for Directa, batch with future ticker cleanup.
+
 ## Build plan (deploy-gated — CANNOT deploy while a backtest runs in the container;
 ## `./deploy.sh` force-recreates `etf_monitor_system-app-1` and would kill it)
 
