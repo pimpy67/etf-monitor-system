@@ -1108,6 +1108,16 @@ class ETFMonitor:
         else:
             add_log("Alert saltati (refresh silenzioso)")
 
+        # STEP 3b — Auto-genera i versamenti PAC dai piani salvati (etf_pac_plan).
+        # L'utente ha impostato un PAC ricorrente su Directa (giorni fissi del mese, quote
+        # fisse) — qui si registrano le esecuzioni automaticamente col prezzo di chiusura,
+        # invece di doverle inserire a mano ogni volta.
+        try:
+            self._process_pac_plans()
+        except Exception as e:
+            add_log(f"⚠️  Errore auto-tracking PAC: {e}")
+            add_log(traceback.format_exc())
+
         # STEP 4 — Aggiorna SL/SG suggerito per portafoglio L1
         tightening_events = []
         try:
@@ -1458,6 +1468,81 @@ class ETFMonitor:
             l0_candidates.append(candidate)
 
         return l0_candidates
+
+    def _process_pac_plans(self):
+        """STEP 3b — genera i versamenti PAC dai piani salvati (etf_pac_plan).
+
+        Per ogni giorno-obiettivo del mese del piano (es. 1/8/15/23), dalla start_date a
+        oggi, se non esiste gia' una riga in etf_pac_contributions per la data di
+        esecuzione effettiva (primo giorno di borsa con prezzo disponibile a partire dal
+        giorno nominale), la crea: quote fisse dal piano, prezzo = chiusura di quel giorno,
+        source='auto'. Idempotente: le righe gia' presenti (auto o manuali) non vengono
+        toccate, cosi' una correzione manuale del fill reale non viene sovrascritta.
+        """
+        plans = self.db.get_pac_plans(only_active=True)
+        if not plans:
+            return
+        today = date_type.today()
+        created = 0
+        for plan in plans:
+            isin = plan['isin']
+            start = plan['start_date']
+            start = start.date() if hasattr(start, 'date') else start
+            exec_days = sorted({int(d) for d in (plan.get('exec_days') or [])})
+            shares = float(plan['shares_per_exec'] or 0)
+            fee = float(plan.get('fee_eur') or 0)
+            if not exec_days or shares <= 0:
+                continue
+
+            px = self.db.get_close_by_isin(isin, days=800)
+            if px.empty:
+                add_log(f"  PAC {isin}: nessuno storico prezzi, salto")
+                continue
+            px = px[px.index.date <= today]
+            if px.empty:
+                continue
+
+            existing = set()
+            for c in self.db.get_pac_contributions(isin):
+                cd = c['contribution_date']
+                existing.add(cd.date() if hasattr(cd, 'date') else cd)
+
+            y, m = start.year, start.month
+            while (y, m) <= (today.year, today.month):
+                for nd in exec_days:
+                    try:
+                        nominal = date_type(y, m, nd)
+                    except ValueError:
+                        continue
+                    if nominal < start or nominal > today:
+                        continue
+                    fut = px[px.index.date >= nominal]
+                    if fut.empty:
+                        continue
+                    exec_date = fut.index[0].date()
+                    # prezzo troppo lontano dal giorno nominale = dati non ancora
+                    # disponibili per quella finestra: riprova al prossimo run
+                    if (exec_date - nominal).days > 7 or exec_date > today:
+                        continue
+                    if exec_date in existing:
+                        continue
+                    close = float(fut.iloc[0]['Close'])
+                    amount = shares * close
+                    ok = self.db.add_pac_contribution(
+                        isin, plan['ticker'], exec_date.isoformat(),
+                        amount_eur=amount, price=close,
+                        fund_name=plan.get('fund_name') or '',
+                        broker=plan.get('broker') or 'Directa',
+                        fee_eur=fee, source='auto')
+                    if ok:
+                        existing.add(exec_date)
+                        created += 1
+                        add_log(f"  PAC auto {isin}: {shares:g}q @ {close:.4f} il {exec_date} ({amount:.2f} EUR)")
+                m += 1
+                if m > 12:
+                    m, y = 1, y + 1
+        if created:
+            add_log(f"PAC auto-tracking: {created} versamenti generati dai piani")
 
     def _update_portfolio_l0_suggerito(self, results: list) -> list:
         """

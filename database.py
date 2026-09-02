@@ -1470,7 +1470,8 @@ class PriceDatabase:
 
     def add_pac_contribution(self, isin: str, ticker: str, contribution_date: str,
                               amount_eur: float, price: float, fund_name: str = '',
-                              broker: str = 'Directa', fee_eur: float = 0.0) -> bool:
+                              broker: str = 'Directa', fee_eur: float = 0.0,
+                              source: str = 'manual') -> bool:
         """Registra un versamento PAC reale — l'utente ha già eseguito l'acquisto su
         Directa il giorno fisso del mese e registra qui a mano quanto/a che prezzo.
         Nessun automatismo: stessa filosofia di add_portfolio_entry. UNIQUE(isin,
@@ -1490,16 +1491,17 @@ class PriceDatabase:
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO etf_pac_contributions
-                        (isin, ticker, fund_name, contribution_date, amount_eur, price, shares, broker, fee_eur)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        (isin, ticker, fund_name, contribution_date, amount_eur, price, shares, broker, fee_eur, source)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (isin, contribution_date) DO UPDATE
                         SET amount_eur = EXCLUDED.amount_eur,
                             price = EXCLUDED.price,
                             shares = EXCLUDED.shares,
                             fund_name = EXCLUDED.fund_name,
                             broker = EXCLUDED.broker,
-                            fee_eur = EXCLUDED.fee_eur
-                """, (isin, ticker, fund_name, contribution_date, amount_eur, price, shares, broker, fee_eur))
+                            fee_eur = EXCLUDED.fee_eur,
+                            source = EXCLUDED.source
+                """, (isin, ticker, fund_name, contribution_date, amount_eur, price, shares, broker, fee_eur, source))
                 conn.commit()
                 return True
         except Exception as e:
@@ -1541,6 +1543,75 @@ class PriceDatabase:
                 return True
         except Exception as e:
             logging.error(f"Errore remove_pac_contribution {contribution_id}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    # ── Piani PAC (auto-tracking) ─────────────────────────────────────────────
+    def get_pac_plans(self, only_active: bool = False) -> List[Dict]:
+        """Piani PAC salvati. Il monitor li legge per generare automaticamente i
+        versamenti in etf_pac_contributions (giorni del mese + quote fisse)."""
+        conn = self._get_connection()
+        if not conn:
+            return []
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                q = "SELECT * FROM etf_pac_plan"
+                if only_active:
+                    q += " WHERE active = TRUE"
+                q += " ORDER BY isin"
+                cur.execute(q)
+                return [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            logging.error(f"Errore get_pac_plans: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def upsert_pac_plan(self, isin: str, ticker: str, shares_per_exec: float,
+                        exec_days: list, start_date: str, fund_name: str = '',
+                        fee_eur: float = 0.0, broker: str = 'Directa',
+                        active: bool = True) -> bool:
+        """Crea o aggiorna il piano PAC per un ISIN (UNIQUE su isin)."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO etf_pac_plan
+                        (isin, ticker, fund_name, shares_per_exec, exec_days, fee_eur, broker, start_date, active)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (isin) DO UPDATE
+                        SET ticker = EXCLUDED.ticker,
+                            fund_name = EXCLUDED.fund_name,
+                            shares_per_exec = EXCLUDED.shares_per_exec,
+                            exec_days = EXCLUDED.exec_days,
+                            fee_eur = EXCLUDED.fee_eur,
+                            broker = EXCLUDED.broker,
+                            start_date = EXCLUDED.start_date,
+                            active = EXCLUDED.active
+                """, (isin, ticker, fund_name, shares_per_exec, list(exec_days),
+                      fee_eur, broker, start_date, active))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore upsert_pac_plan {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def delete_pac_plan(self, isin: str) -> bool:
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM etf_pac_plan WHERE isin = %s", (isin,))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore delete_pac_plan {isin}: {e}")
             return False
         finally:
             conn.close()

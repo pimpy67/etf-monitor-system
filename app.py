@@ -1189,6 +1189,8 @@ def get_pac():
             for k, _ in ranked[1:-1]:
                 comparison[k]['signal'] = 'neutral'
 
+    plans = db.get_pac_plans()
+
     return jsonify({
         'positions': positions,
         'contributions': [{
@@ -1196,9 +1198,54 @@ def get_pac():
             'contribution_date': str(c['contribution_date']), 'amount_eur': float(c['amount_eur']),
             'price': float(c['price']), 'shares': float(c['shares']), 'broker': c['broker'],
             'fee_eur': float(c.get('fee_eur') or 0),
+            'source': c.get('source') or 'manual',
         } for c in contributions],
         'comparison': comparison,
+        'plans': [{
+            'id': p['id'], 'isin': p['isin'], 'ticker': p['ticker'],
+            'fund_name': p.get('fund_name') or '',
+            'shares_per_exec': float(p['shares_per_exec']),
+            'exec_days': list(p['exec_days'] or []),
+            'fee_eur': float(p.get('fee_eur') or 0),
+            'broker': p.get('broker') or 'Directa',
+            'start_date': str(p['start_date']),
+            'active': bool(p['active']),
+        } for p in plans],
     })
+
+
+@app.route('/api/pac-plan', methods=['POST'])
+def upsert_pac_plan_route():
+    """Crea/aggiorna un piano PAC. Il monitor lo usa per generare i versamenti in
+    automatico (giorni fissi del mese + quote fisse), senza inserimento manuale."""
+    data = request.get_json() or {}
+    isin = (data.get('isin') or '').strip().upper()
+    ticker = (data.get('ticker') or '').strip().upper()
+    start_date = (data.get('start_date') or '').strip()
+    fund_name = (data.get('fund_name') or '').strip()
+    broker = (data.get('broker') or 'Directa').strip() or 'Directa'
+    active = bool(data.get('active', True))
+    try:
+        shares_per_exec = float(data.get('shares_per_exec'))
+        exec_days = sorted({int(d) for d in (data.get('exec_days') or [])})
+        fee_eur = float(data.get('fee_eur') or 0)
+        if (not isin or not ticker or not start_date or shares_per_exec <= 0
+                or not exec_days or any(d < 1 or d > 28 for d in exec_days) or fee_eur < 0):
+            raise ValueError
+    except (ValueError, TypeError):
+        return jsonify({'error': 'isin, ticker, start_date, shares_per_exec>0, '
+                                 'exec_days (1-28) obbligatori'}), 400
+    ok = db.upsert_pac_plan(isin, ticker, shares_per_exec, exec_days, start_date,
+                            fund_name=fund_name, fee_eur=fee_eur, broker=broker, active=active)
+    return (jsonify({'status': 'ok', 'isin': isin}) if ok
+            else (jsonify({'error': 'Errore salvataggio piano'}), 503))
+
+
+@app.route('/api/pac-plan/<isin>', methods=['DELETE'])
+def delete_pac_plan_route(isin):
+    ok = db.delete_pac_plan(isin.strip().upper())
+    return (jsonify({'status': 'ok', 'isin': isin}) if ok
+            else (jsonify({'error': 'Errore rimozione piano'}), 503))
 
 
 @app.route('/api/pac', methods=['POST'])
