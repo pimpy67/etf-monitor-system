@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
+:root { --content-max:2160px; }   /* larghezza max area contenuti — alza/abbassa qui */
 body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1a2e,#16213e); min-height:100vh; color:#e6edf3; }
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
@@ -63,7 +64,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 
 /* ── Column header (sticky below main header) ─────────────────────────── */
 .col-header { position:sticky; top:42px; z-index:199; background:rgba(10,15,30,0.97); backdrop-filter:blur(10px); border-bottom:2px solid rgba(255,255,255,0.15); padding:0 20px; }
-.col-header table { width:100%; max-width:1640px; margin:0 auto; border-collapse:collapse; table-layout:fixed; }
+.col-header table { width:100%; max-width:var(--content-max); margin:0 auto; border-collapse:collapse; table-layout:fixed; }
 .col-header th { padding:7px 8px; text-align:left; font-size:0.75em; font-weight:600; color:#aaa; text-transform:uppercase; letter-spacing:.03em; overflow:hidden; }
 
 /* Column widths */
@@ -73,7 +74,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 .col-buy    { width:12%; }
 
 /* ── Container ───────────────────────────────────────────────────────────── */
-.container { max-width:1640px; margin:0 auto; padding:14px 20px; }
+.container { max-width:var(--content-max); margin:0 auto; padding:14px 20px; }
 
 /* ── Level sections ─────────────────────────────────────────────────────── */
 .level-section { background:rgba(255,255,255,0.05); border-radius:12px; margin-bottom:20px; overflow:hidden; }
@@ -529,7 +530,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 
 <!-- ── Market Regime Widget ──────────────────────────────────────────────── -->
 <div id="marketRegimeContainer" style="background:rgba(0,100,200,0.08); border-top:1px solid rgba(88,166,255,0.3); border-bottom:1px solid rgba(88,166,255,0.2); padding:14px 20px;">
-  <div style="max-width:1640px; margin:0 auto; display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+  <div style="max-width:var(--content-max); margin:0 auto; display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
     <div>
       <div style="font-size:0.75em; color:#8b949e; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">📊 Market Regime</div>
       <div style="display:flex; align-items:center; gap:12px;">
