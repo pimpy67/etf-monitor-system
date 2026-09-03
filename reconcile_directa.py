@@ -184,7 +184,7 @@ def reconcile(directa_positions: list[dict],
             "directa_avg_cost": round(d["prezzo_medio"], 4),
             "monitor_avg_cost": round(m_avg, 4),
             "cost_delta_pct": (round((m_avg - d["prezzo_medio"]) / d["prezzo_medio"] * 100, 2)
-                               if d["prezzo_medio"] else None),
+                               if d["prezzo_medio"] and m_avg else None),
             "valore_attuale": d["valore_attuale"],
         })
 
