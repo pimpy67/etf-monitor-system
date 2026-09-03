@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 8ac1bdd4-8873-403f-82c8-16bc1c375114
-  modified: 2026-09-03T08:40:57.238Z
+  modified: 2026-09-03T09:35:04.817Z
 ---
 
 User asked (2026-09-01, late night) to prepare an analysis on **whether to widen the L1
@@ -222,6 +222,46 @@ after launch (process keeps in-memory copy). Backup `/app/technical_analysis.py.
 Structural hypothesis: the regime BULL gate on all 3 L0 paths means a real deep drawdown
 (which breaks EMA20>SMA50 → not BULL) blocks L0, so today L0 only fires on shallow
 pullbacks inside an uptrend — contradicts "Deep Recovery".
+
+## The L1 "gap" — steady low-ADX grind is covered by NOTHING (discussed 2026-09-03)
+
+User asked why nothing has entered L1 or L0 in a month, then reasoned "o il mercato va giù
+o lateralizza". Checked `/api/market-regime` live (2026-09-03): `equity_regime: BULL`,
+`risk_score: 93/100` "Risk-ON attivo" — **but `equity_adx: 12.1`** (RSI 58.5, bond
+LATERALE). So the market is NOT down — it's a **weak/choppy bull, grinding up slowly with
+no directional force**.
+
+Why that explains the drought: L1 condition 5 is `ADX >= adx_entry` (18 for
+equity_sviluppati post-08-24). ADX 12 << 18 → the gate correctly rejects a weak uptrend.
+"Zero L1 entries" is NOT the market falling — it's the market rising *without force*, and
+the gate is built to sit that out. L0 shadows meanwhile are very active (candidate_model_l0
+9 open, oro 5, cooldown/metalli/sl-tier1 all firing 2026-09-03) — mean-reversion likes a
+choppy range.
+
+User's recollection: "we designed L1 for steady constant uptrend, L0 for recoveries from
+declines". L0 recollection is right. **L1 recollection is off** — the implemented gate is
+"strong *forceful* trend" (ADX + MACD-rising + persistence), not "steady grind". The
+original design intent ("L1 = ride the steady climb") drifted into "L1 = ride the strong
+climb" — a stricter, different thing.
+
+The resulting structural gap:
+
+| market type | mechanism |
+|---|---|
+| strong uptrend (high ADX) | L1 ✓ |
+| deep drawdown + bounce | L0 ✓ |
+| **weak persistent grind (low ADX)** ← where we are now | **NOTHING** |
+
+The slow boring climb is how world equity moves most of the time — and it's exactly what
+the passive VWCE PAC captures while the active system sits in cash. This is the mechanical
+reason the PAC comparison shows passive winning in this regime (+23% VWCE vs +1% native_7
+over 3yr = mostly "capital sat idle during a low-ADX grind").
+
+**For the 06/09 checkpoint — Decision 3, sharpened**: either (a) accept that the slow grind
+belongs to a passive PAC sleeve and the active system only works the two extremes (strong
+trend / deep dip), sizing capital accordingly; or (b) design a THIRD mechanism for the
+weak-but-persistent uptrend. The Radar Anticipato and Market Breadth candidates were
+partial gestures in direction (b) but neither targets "low-ADX persistent grind" head-on.
 
 ## Decision framing given to user (full tree in the chat)
 

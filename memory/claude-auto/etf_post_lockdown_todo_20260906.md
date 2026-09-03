@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c23e4e15-4c77-4fcf-a9c0-f0d2dc00b62b
-  modified: 2026-09-03T09:09:36.428Z
+  modified: 2026-09-03T09:35:14.641Z
 ---
 
 ## ⚠️ Aggiornamento 2026-08-23 — processo cambiato da scadenza fissa a checkpoint ricorrente
@@ -521,6 +521,18 @@ exit model. Plan (shared `simulate_directa_exit()` helper → wire into `backtes
 tightened Stop" not "perfect manual Limit at TP"). Read the current shadow data at THIS
 checkpoint first for a clean old-model snapshot. Full detail:
 [[etf-directa-faithful-exit-model-todo]].
+
+## 18. Decision 3 (06/09 checkpoint) — the L1 low-ADX-grind gap
+
+Discussed 2026-09-03. Live regime check: market is BULL/Risk-ON but `equity_adx: 12.1` — a
+weak choppy grind. L1 correctly sits it out (needs ADX ≥ 18). The system covers "strong
+trend" (L1) and "deep dip bounce" (L0) but has **NO mechanism for a weak persistent
+uptrend** — which is how equity moves most of the time and what the passive VWCE PAC
+captures while the active system holds cash. This is the mechanical reason passive beats
+active in the current regime. At 06/09: decide (a) accept the split (slow grind → passive
+PAC sleeve, active system works only the extremes, size capital to match) or (b) design a
+third mechanism for the low-ADX persistent climb. Full reasoning in
+[[etf-l1-gate-widening-analysis-2026-09-01]] ("The L1 gap" section).
 
 ## 16. Shadow-monitor PRUNING — scheduled for the 2026-10-06 checkpoint
 
