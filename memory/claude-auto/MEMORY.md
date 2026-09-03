@@ -1,5 +1,7 @@
 # Memory Index
 
+- [ETF: user acts on SHADOW-monitor signals for real (2026-09-03)](etf_user_acts_on_shadow_signals.md) — The user sometimes buys real positions off shadow-monitor emails, not only production L0/L1. First: TELE.PA on `candidate_model_l0_20260808`. Shadow emails are NOT purely informational for this user — when one is on a weak candidate, flag it plainly alongside the SL/TP (one factual line, no lecture); compute SL/TP with the real production functions.
+
 - [ETF: 64-ETF rotation universe (Directa PAC), resolved 2026-09-03](etf_rotation_universe_64_2026_09_03.md) — Reference. 64 `.MI` Milan-EUR ETFs (broad + World sectors + factors + country + gold miners + commodity) curated from the 650-ETF Directa PAC list, yfinance-verified. Built for a DCA-rotation "PAC level" that FAILED backtest (closed). Kept only in case a subset (World sectors, GDX/GDXJ, momentum/quality factors) is added to normal L0-L3 monitoring — low-priority optional.
 
 - [ETF: Directa-faithful exit model — QUEUED post-2026-09-06](etf_directa_faithful_exit_model_todo.md) — Next project after the 06/09 checkpoint (ahead of the wider-L1-SL analysis): rebuild shadow-monitor + backtest exits to model real Directa (one active sell order, Stop ratchets near TP) via a shared `simulate_directa_exit()` helper, re-certify baselines, same-day cutover. Expect candidates to look worse not better.
