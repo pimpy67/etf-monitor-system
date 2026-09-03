@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 8ac1bdd4-8873-403f-82c8-16bc1c375114
-  modified: 2026-09-03T10:04:26.152Z
+  modified: 2026-09-03T10:12:51.494Z
 ---
 
 User asked (2026-09-01, late night) to prepare an analysis on **whether to widen the L1
@@ -314,6 +314,33 @@ Mechanism to test (`backtest_grind_explore.py`, scratch):
   — NOT oro/crypto/leva (they spike, they don't grind).
 - **Key comparison**: vs BUY-AND-HOLD the same ticker over the same window (not vs PAC). If
   it can't beat just holding, it has no reason to exist.
+
+### Grind mechanism exploratory backtest — DONE 2026-09-03 (`backtest_grind_explore.py`, SCRATCH, deleted)
+
+Ran variant G1 (W=100 regression, R²≥0.75, ATR%≤2.5%, slope 5-40%/yr, entry at/below fit
+line, exit on slope≤0 / R²<0.5 / close<SMA200). Frozen batch `2026-08-07`, ~90 tickers of
+equity_sviluppati/settoriali_growth/mercati_emergenti, IN/OOS split. **Result: decisively
+negative.**
+- **Time in market: 24%** — the strict "calm channel" filter is satisfied only ¼ of the time.
+- IN-sample: **loses money** (PF 0.59, WR 41%, −17,849€, avg gross −0.4%/trade).
+- OOS: looks great (PF 7.56, +32k) — but that's just "any long equity in 2025-26 made money".
+- **vs BUY & HOLD the same ETF: −28.9pp IN, −18.4pp OOS. Beats simple holding on 2-3% of
+  tickers.** The mechanism is out of the market 76% of the time; when its conditions aren't
+  met the ETF usually keeps grinding up anyway → stepping aside costs more than the
+  drawdowns dodged. Exactly what `etf_growth_channel_research_2026_08_29` already found.
+- Looser variants (G2-G5: any-point-in-channel, W60, R²0.70, ATR 3%, SMA50 exit) NOT run to
+  completion (VPS 1-vCPU + production; G1 verdict clear). Loosening the entry → converges
+  toward buy-and-hold with extra cost and worse timing — won't flip an 18-29pp gap.
+
+**Verdict**: for a broad equity ETF in a slow uptrend, **"hold" IS the optimal active
+decision** — no entry-timing beats it. A "grind level", if it exists at all, can only be a
+**maximally-simple regime-gated buy-and-hold** ("long while regime=BULL and price>SMA200,
+exit only on a real regime break", in-market ~90% of the time) — and even that probably
+doesn't beat pure B&H. Every more-selective version (R², linearity, buy-the-dip) makes it
+WORSE. This directly answers the user's 2026-09-03 request ("find parameters/ranges for the
+slow grind"): the parameters that would work are the ones that make it barely a strategy at
+all. Whether to run that regime-gated-hold as an "active" sleeve or just call it the PAC is
+a labeling choice — mechanically they're the same thing. **06/09 Decision 3 item.**
 
 ## Decision framing given to user (full tree in the chat)
 
