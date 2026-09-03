@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c23e4e15-4c77-4fcf-a9c0-f0d2dc00b62b
-  modified: 2026-09-03T08:41:04.936Z
+  modified: 2026-09-03T09:09:36.428Z
 ---
 
 ## ⚠️ Aggiornamento 2026-08-23 — processo cambiato da scadenza fissa a checkpoint ricorrente
@@ -560,6 +560,17 @@ the radar shadows because they filter by LEVEL only. At 06/10: add a family excl
 `/api/approach-radar` / `/api/bounce-radar` in `app.py` show XEON/C3M/LVO too, fix it
 there (the shadow just mirrors those endpoints) — the endpoint fix is the real one, the
 shadow filter follows.
+
+**Related, same batch (found 2026-09-03)**: `0E2B.IL` (LYXOR Smart Overnight,
+`monetario_liquidita`) throws a caught-but-logged error EVERY monitor run —
+`'<=' not supported between 'NoneType' and 'float'` in `check_l1_entry_tiered` /
+`check_l1_entry_accelerated` / `l1_check_7_conditions`, and `- 'NoneType' and 'int'` in
+`l2_calculate_readiness_score` — because `monetario_liquidita` has `adx_entry`/`rsi_entry_*`
+= n/a (None) and those informational motors compare against them unguarded. Non-fatal (ETF
+still classified L3). Fix: in `monitor.py::analyze_etf()` skip those 4 blocks for
+`monetario_liquidita` (STEP 10/12/14/15, lines ~285-408), OR guard the None params inside
+the `technical_analysis.py` methods. Deferred to here (not worth a lockdown deploy for log
+noise) — batch with the radar family-exclusion, one deploy.
 
 ## 17. L1 EXIT analysis — queued AFTER item 15 (Directa-faithful helper)
 

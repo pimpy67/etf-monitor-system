@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: fc7b7d69-6812-47b3-ae17-2ddfa5c1230e
-  modified: 2026-08-29T18:57:59.211Z
+  modified: 2026-09-03T09:09:04.894Z
 ---
 
 **Rule (user, 2026-08-28)**: the monitor must always reference the **same exchange
@@ -36,6 +36,15 @@ user sees on Directa.
   remap can be worse than the original. Always confirm the new ticker returns real,
   current data (regularMarketTime = today) before committing.
 
+**Fix 2026-09-03** (`etf_monitoraggio.xlsx`, commit `d6a00d9`): `3MIB.MI` (GraniteShares
+3x Long FTSE MIB Daily ETP, no ISIN, `leva_single_stock`) was delisted on Yahoo → yfinance
+error every run. GraniteShares' European ETP business was acquired by WisdomTree; the
+product is now **`3ITL.MI`** ("WisdomTree FTSE MIB 3x Daily Leveraged", Milano, EUR — same
+FTSE MIB 3x daily long). Verified via `yf.Ticker('3ITL.MI').info` longName + currency.
+0 rows in `etf_price_history` for `3MIB.MI` (delisted the whole time) so nothing to clean —
+just the ticker + name swap; monitor backfills `3ITL.MI` on the next run. Same WisdomTree
+rebrand may affect other surviving GraniteShares `3xxx.MI` rows — check if they error.
+
 **Fixes 2026-08-28** (`etf_monitoraggio.xlsx`):
 | Row | Was | Now | Status |
 |---|---|---|---|
@@ -48,12 +57,21 @@ is normally ISIN IE00B1XNHC34 — so R208's ISIN may be wrong, or these are genu
 share classes. Ask the user which clean-energy line they hold/watch on Directa before
 touching either.
 
-**⚠️ Bind-mount gotcha (found 2026-08-28)**: `/root/etf_monitor_system/etf_monitoraggio.xlsx`
-is bind-mounted into the container as a **single file**. `git pull`/`git checkout` REPLACES
-the file (new inode) → the running container keeps reading the OLD one. Editing the xlsx on
-the host and pulling is NOT enough — **`docker restart etf_monitor_system-app-1`** is
-required for the container to see the new file. (The `data/` dir is mounted as a directory,
-so it doesn't have this problem; the monitor's own in-place openpyxl writes are also fine.)
+**⚠️ Bind-mount gotcha (found 2026-08-28, refined 2026-09-03)**:
+`/root/etf_monitor_system/etf_monitoraggio.xlsx` is bind-mounted into the container as a
+**single file**. `git pull`/`git checkout` REPLACES the file (new inode) → the running
+container keeps reading the OLD one. **`docker restart etf_monitor_system-app-1`** is
+required after any host-side change for the container to see it.
+- **2026-09-03: editing the xlsx from INSIDE the container** (`docker exec ... python3 -c
+  "openpyxl ... wb.save()"`) **does NOT reliably reach the host file** — openpyxl saves via
+  temp-file + rename, which on a single-file bind mount lands in the container's overlay
+  only; `docker restart` then re-mounts the unchanged host file and the edit vanishes
+  silently (the in-container verification passes right up until the restart). **Always edit
+  the xlsx on the HOST** (`ssh ... 'cd /root/etf_monitor_system && python3 - <<PYEOF ...'`,
+  host has python3 + openpyxl 3.1.5), confirm `git status` shows ` M etf_monitoraggio.xlsx`,
+  THEN `docker restart`, THEN commit. (An earlier note said "the monitor's own in-place
+  openpyxl writes are fine" — the monitor writes to `data/` which IS a directory mount, no
+  problem there; the xlsx single-file case is the trap.)
 
 **Audit of the other `.SW` tickers (2026-08-28) — left as-is, Excel currency matches
 Yahoo, internally consistent** (but if the user trades these on Directa in EUR, revisit):
