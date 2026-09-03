@@ -1050,10 +1050,28 @@ def reconcile_directa_route():
     except Exception:
         monitored = None
 
-    result = reconcile(parsed['positions'], db.get_portfolio_entries(), monitored)
+    try:
+        pac_isins = {p['isin'] for p in db.get_pac_plans() if p.get('isin')}
+    except Exception:
+        pac_isins = set()
+
+    result = reconcile(parsed['positions'], db.get_portfolio_entries(), monitored, pac_isins)
     result['directa_meta'] = parsed['meta']
     result['warnings'] = parsed['warnings']
     return jsonify(result)
+
+
+@app.route('/api/reconcile/apply', methods=['POST'])
+def reconcile_apply_route():
+    """Applica al portafoglio le modifiche scelte nella pagina di riconciliazione.
+    Directa fa da verità su quantità e costo. Vedi reconcile_directa.apply_alignment."""
+    from reconcile_directa import apply_alignment
+    plan = request.get_json(silent=True) or {}
+    if not isinstance(plan, dict):
+        return jsonify({'error': 'body JSON non valido'}), 400
+    result = apply_alignment(db, plan)
+    status = 200 if not result['errors'] else 207
+    return jsonify(result), status
 
 
 @app.route('/api/portfolio/<isin>/partial-exit', methods=['POST'])

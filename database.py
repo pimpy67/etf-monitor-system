@@ -1762,6 +1762,26 @@ class PriceDatabase:
         finally:
             conn.close()
 
+    def update_portfolio_shares(self, isin: str, shares: float) -> bool:
+        """Allinea il numero di quote di una posizione attiva (usato dalla
+        riconciliazione: Directa fa da verità sulla quantità)."""
+        conn = self._get_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE etf_portfolio_entries SET shares=%s
+                    WHERE isin=%s AND status='active'
+                """, (shares, isin))
+                conn.commit()
+                return True
+        except Exception as e:
+            logging.error(f"Errore update_portfolio_shares {isin}: {e}")
+            return False
+        finally:
+            conn.close()
+
     def exit_portfolio_entry(self, isin: str, exit_date: str, exit_price: float) -> bool:
         """Registra l'uscita da un ETF del portafoglio."""
         conn = self._get_connection()

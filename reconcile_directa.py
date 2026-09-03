@@ -18,6 +18,7 @@ from __future__ import annotations
 import io
 import re
 import sys
+from datetime import datetime
 from typing import Any
 
 import openpyxl
@@ -128,14 +129,21 @@ def parse_directa_export(source) -> dict:
 
 def reconcile(directa_positions: list[dict],
               monitor_entries: list[dict],
-              monitored_isins: set[str] | None = None) -> dict:
+              monitored_isins: set[str] | None = None,
+              pac_isins: set[str] | None = None) -> dict:
     """Confronta le posizioni Directa con le entry attive del monitor.
 
     monitor_entries: righe di `database.get_portfolio_entries()` (già status='active').
                      Più righe con lo stesso ISIN vengono sommate (add-to-position).
     monitored_isins: opzionale, ISIN presenti nell'universo monitorato (etf_monitoraggio.xlsx)
                      — serve solo a segnalare "posseduto ma non monitorato".
+    pac_isins:       opzionale, ISIN dei piani PAC (etf_pac_plan). Questi sono gestiti in
+                     /pac, non nel portafoglio attivo: su Directa finiscono nel bucket
+                     `pac` (nessuna azione), nel portafoglio attivo sono righe spurie
+                     da rimuovere.
     """
+    pac_isins = {i.strip().upper() for i in (pac_isins or set())}
+
     # Aggrega il lato monitor per ISIN.
     mon: dict[str, dict] = {}
     for e in monitor_entries:
@@ -158,9 +166,12 @@ def reconcile(directa_positions: list[dict],
 
     dir_by_isin = {p["isin"]: p for p in directa_positions}
 
-    matched, only_directa, only_monitor = [], [], []
+    matched, only_directa, only_monitor, pac, pac_spurious = [], [], [], [], []
 
     for isin, d in dir_by_isin.items():
+        if isin in pac_isins:
+            pac.append({**d, "in_monitor": isin in mon})
+            continue
         m = mon.get(isin)
         if not m:
             only_directa.append({
@@ -189,15 +200,18 @@ def reconcile(directa_positions: list[dict],
         })
 
     for isin, m in mon.items():
-        if isin not in dir_by_isin:
-            only_monitor.append({
-                "isin": isin,
-                "name": m["name"],
-                "layers": sorted(m["layers"]),
-                "brokers": sorted(m["brokers"]),
-                "monitor_qty": round(m["shares"], 4),
-                "monitor_avg_cost": round((m["cost"] / m["shares"]) if m["shares"] else 0.0, 4),
-            })
+        row = {
+            "isin": isin,
+            "name": m["name"],
+            "layers": sorted(m["layers"]),
+            "brokers": sorted(m["brokers"]),
+            "monitor_qty": round(m["shares"], 4),
+            "monitor_avg_cost": round((m["cost"] / m["shares"]) if m["shares"] else 0.0, 4),
+        }
+        if isin in pac_isins:
+            pac_spurious.append(row)          # PAC ISIN nel portafoglio attivo = da rimuovere
+        elif isin not in dir_by_isin:
+            only_monitor.append(row)
 
     matched.sort(key=lambda x: (x["qty_ok"], x["name"].lower()))
     only_directa.sort(key=lambda x: x["name"].lower())
@@ -208,6 +222,8 @@ def reconcile(directa_positions: list[dict],
         "matched": matched,
         "only_directa": only_directa,
         "only_monitor": only_monitor,
+        "pac": pac,
+        "pac_spurious": pac_spurious,
         "summary": {
             "directa_total": len(dir_by_isin),
             "monitor_total": len(mon),
@@ -215,9 +231,72 @@ def reconcile(directa_positions: list[dict],
             "qty_mismatch": n_mismatch,
             "only_directa": len(only_directa),
             "only_monitor": len(only_monitor),
-            "aligned": n_mismatch == 0 and not only_directa and not only_monitor,
+            "pac_spurious": len(pac_spurious),
+            "aligned": (n_mismatch == 0 and not only_directa
+                        and not only_monitor and not pac_spurious),
         },
     }
+
+
+def apply_alignment(db, plan: dict) -> dict:
+    """Applica al portafoglio le modifiche scelte nella pagina di riconciliazione.
+    Directa è la verità: quantità e costo vengono sovrascritti con i valori Directa.
+
+    plan = {
+      "qty_updates":    [{isin, shares, entry_price, entry_date?}],   # posizioni già presenti
+      "new_positions":  [{isin, fund_name, shares, entry_price, entry_date, portfolio_type}],
+      "closures":       [{isin, exit_price, exit_date}],
+      "remove_spurious":[isin, ...]                                    # righe PAC nel portafoglio
+    }
+    Ritorna {applied: [...], errors: [...]}.
+    """
+    applied, errors = [], []
+
+    for x in plan.get("remove_spurious", []):
+        isin = str(x).strip().upper()
+        try:
+            db.remove_portfolio_entry(isin)
+            applied.append(f"rimossa (PAC) {isin}")
+        except Exception as e:
+            errors.append(f"rimozione {isin}: {e}")
+
+    for x in plan.get("closures", []):
+        isin = str(x["isin"]).strip().upper()
+        try:
+            db.exit_portfolio_entry(isin, x["exit_date"], float(x["exit_price"]))
+            applied.append(f"chiusa {isin} @ {x['exit_price']}")
+        except Exception as e:
+            errors.append(f"chiusura {isin}: {e}")
+
+    for x in plan.get("new_positions", []):
+        isin = str(x["isin"]).strip().upper()
+        ptype = x.get("portfolio_type", "L1").upper()
+        if ptype not in ("L0", "L1"):
+            errors.append(f"nuova {isin}: layer '{ptype}' non valido")
+            continue
+        try:
+            db.add_portfolio_entry(isin, x["entry_date"], float(x["entry_price"]),
+                                   fund_name=x.get("fund_name", ""),
+                                   portfolio_type=ptype, broker="Directa")
+            if x.get("shares") is not None:
+                db.update_portfolio_shares(isin, float(x["shares"]))
+            applied.append(f"aggiunta {ptype} {isin} ({x.get('shares')} q. @ {x['entry_price']})")
+        except Exception as e:
+            errors.append(f"nuova {isin}: {e}")
+
+    for x in plan.get("qty_updates", []):
+        isin = str(x["isin"]).strip().upper()
+        try:
+            db.update_portfolio_shares(isin, float(x["shares"]))
+            if x.get("entry_price") is not None:
+                # allinea anche il prezzo di carico (mantiene la data se non passata)
+                ed = x.get("entry_date") or datetime.now().strftime("%Y-%m-%d")
+                db.update_portfolio_entry(isin, ed, float(x["entry_price"]))
+            applied.append(f"quantità {isin} → {x['shares']}")
+        except Exception as e:
+            errors.append(f"quantità {isin}: {e}")
+
+    return {"applied": applied, "errors": errors}
 
 
 def _cli(path: str) -> int:

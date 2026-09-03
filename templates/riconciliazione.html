@@ -101,16 +101,34 @@
         <div class="warn-list" id="warnList"></div>
 
         <div class="section-title">In entrambi</div>
-        <div class="section-desc">Posizioni presenti sia su Directa sia nel monitor. Riga rossa = quantità diversa.</div>
+        <div class="section-desc">Riga rossa = quantità diversa. Spunta "allinea" per portare quote e costo medio ai valori Directa.</div>
         <div class="card" style="padding:0;overflow-x:auto;"><table id="tMatched"></table></div>
 
         <div class="section-title" style="color:var(--color-warning);">Su Directa, non nel monitor</div>
-        <div class="section-desc">Le possiedi ma il monitor non le traccia come posizione attiva — acquisto non registrato, o ETF che non vuoi monitorare.</div>
+        <div class="section-desc">Le possiedi ma non sono in portafoglio. Scegli il livello (L0/L1) per registrarle, oppure "ignora".</div>
         <div class="card" style="padding:0;overflow-x:auto;"><table id="tOnlyDirecta"></table></div>
 
         <div class="section-title" style="color:var(--color-danger);">Nel monitor, non su Directa</div>
-        <div class="section-desc">Il monitor le considera attive ma non risultano su Directa — probabile vendita non registrata (usa "Esci" nella pagina Portafoglio).</div>
+        <div class="section-desc">Il monitor le considera attive ma non risultano su Directa — probabile vendita. Spunta "venduto" e metti il prezzo di uscita.</div>
         <div class="card" style="padding:0;overflow-x:auto;"><table id="tOnlyMonitor"></table></div>
+
+        <div id="pacSpuriousBlock" hidden>
+            <div class="section-title" style="color:#a855f7;">Righe PAC nel portafoglio attivo</div>
+            <div class="section-desc">Questi ISIN sono piani PAC (gestiti in <code>/pac</code>) ma risultano anche come posizione attiva. Vanno rimossi dal portafoglio.</div>
+            <div class="card" style="padding:0;overflow-x:auto;"><table id="tPacSpurious"></table></div>
+        </div>
+
+        <div id="pacBlock" hidden>
+            <div class="section-title" style="color:var(--color-neutral);">PAC su Directa — nessuna azione</div>
+            <div class="section-desc">Tracciati in <code>/pac</code>, esclusi di proposito dal portafoglio attivo.</div>
+            <div class="card" style="padding:0;overflow-x:auto;"><table id="tPac"></table></div>
+        </div>
+
+        <div class="card" id="applyBar" style="position:sticky;bottom:0;display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-primary" id="applyBtn" onclick="applyPlan()">Applica le modifiche selezionate</button>
+            <span id="applySummary" class="hint"></span>
+        </div>
+        <div id="applyResult" class="warn-list" style="color:var(--color-text-primary);"></div>
     </div>
 </div>
 
@@ -155,9 +173,20 @@ async function run() {
     }
 }
 
+let lastData = null;
+let extractionDate = '';
+
+function isoDate(s) {                       // "2026/09/03 23:46:26" -> "2026-09-03"
+    const m = (s || '').match(/(\d{4})[/-](\d{2})[/-](\d{2})/);
+    return m ? `${m[1]}-${m[2]}-${m[3]}` : new Date().toISOString().slice(0, 10);
+}
+
 function render(d) {
+    lastData = d;
+    document.getElementById('applyResult').innerHTML = '';
     document.getElementById('results').hidden = false;
     const m = d.directa_meta || {};
+    extractionDate = isoDate(m.data_estrazione);
     document.getElementById('metaLine').textContent =
         `Estratto: ${m.conto || '?'} · ${m.data_estrazione || '?'} · valore ${m.valore_portafoglio || '?'}`;
 
@@ -168,16 +197,16 @@ function render(d) {
         s.qty_mismatch ? `<span class="badge bad"><b>${s.qty_mismatch}</b> quantità diversa</span>` : '',
         s.only_directa ? `<span class="badge warn"><b>${s.only_directa}</b> solo Directa</span>` : '',
         s.only_monitor ? `<span class="badge bad"><b>${s.only_monitor}</b> solo monitor</span>` : '',
+        s.pac_spurious ? `<span class="badge bad"><b>${s.pac_spurious}</b> PAC in portafoglio</span>` : '',
         `<span class="badge"><b>${s.directa_total}</b> ETF Directa · <b>${s.monitor_total}</b> attivi monitor</span>`,
     ].filter(Boolean).join('');
 
-    const w = d.warnings || [];
-    document.getElementById('warnList').innerHTML = w.map(x => '⚠️ ' + x).join('<br>');
+    document.getElementById('warnList').innerHTML = (d.warnings || []).map(x => '⚠️ ' + x).join('<br>');
 
     // Matched
     let h = `<thead><tr><th>ETF</th><th>Livello</th><th>Broker</th>
         <th class="num">Q.tà Directa</th><th class="num">Q.tà Monitor</th><th class="num">Δ</th>
-        <th class="num">Costo medio Directa</th><th class="num">Costo medio Monitor</th><th class="num">Δ%</th></tr></thead><tbody>`;
+        <th class="num">Costo Directa</th><th class="num">Costo Monitor</th><th>Allinea</th></tr></thead><tbody>`;
     if (!d.matched.length) h += `<tr><td colspan="9" class="empty-note">Nessuna posizione in comune.</td></tr>`;
     for (const x of d.matched) {
         h += `<tr class="${x.qty_ok ? '' : 'mismatch'}">
@@ -189,39 +218,123 @@ function render(d) {
             <td class="num ${x.qty_ok ? 'ok-mark' : 'bad-mark'}">${x.qty_ok ? '✓' : (x.qty_delta > 0 ? '+' : '') + fmt(x.qty_delta)}</td>
             <td class="num">${fmt(x.directa_avg_cost, 4)}</td>
             <td class="num">${fmt(x.monitor_avg_cost, 4)}</td>
-            <td class="num">${x.cost_delta_pct == null ? '—' : (x.cost_delta_pct > 0 ? '+' : '') + fmt(x.cost_delta_pct) + '%'}</td>
+            <td>${x.qty_ok ? '—' : `<label><input type="checkbox" class="act-qty" data-isin="${x.isin}" data-qty="${x.directa_qty}" data-px="${x.directa_avg_cost}" checked> a Directa</label>`}</td>
         </tr>`;
     }
     document.getElementById('tMatched').innerHTML = h + '</tbody>';
 
     // Only Directa
-    h = `<thead><tr><th>ETF</th><th class="num">Quantità</th><th class="num">Valore attuale</th><th>Nota</th></tr></thead><tbody>`;
-    if (!d.only_directa.length) h += `<tr><td colspan="4" class="empty-note">Niente — ogni ETF Directa è tracciato.</td></tr>`;
+    h = `<thead><tr><th>ETF</th><th class="num">Quantità</th><th class="num">Costo medio</th><th class="num">Valore</th><th>Registra come</th><th>Data</th></tr></thead><tbody>`;
+    if (!d.only_directa.length) h += `<tr><td colspan="6" class="empty-note">Niente — ogni ETF Directa è tracciato.</td></tr>`;
     for (const x of d.only_directa) {
         h += `<tr>
-            <td>${x.name}<br><span class="isin">${x.isin} · ${x.ticker || ''}</span></td>
+            <td>${x.name}<br><span class="isin">${x.isin} · ${x.ticker || ''}</span>${x.monitored ? '' : '<br><span class="bad-mark">non nell\'universo monitorato</span>'}</td>
             <td class="num">${fmt(x.quantita)}</td>
+            <td class="num">${fmt(x.prezzo_medio, 4)}</td>
             <td class="num">${fmt(x.valore_attuale)} ${x.divisa || ''}</td>
-            <td>${x.monitored ? 'nell\'universo monitorato, ma non in portafoglio' : '<span class="bad-mark">non è nemmeno nell\'universo monitorato</span>'}</td>
+            <td><select class="act-new" data-isin="${x.isin}" data-name="${(x.name||'').replace(/"/g,'')}" data-qty="${x.quantita}" data-px="${x.prezzo_medio}">
+                <option value="">ignora</option><option value="L1">L1</option><option value="L0">L0</option></select></td>
+            <td><input type="date" class="act-new-date" data-isin="${x.isin}" value="${extractionDate}"></td>
         </tr>`;
     }
     document.getElementById('tOnlyDirecta').innerHTML = h + '</tbody>';
 
     // Only Monitor
-    h = `<thead><tr><th>ETF</th><th>Livello</th><th>Broker</th><th class="num">Quantità</th><th class="num">Costo medio</th></tr></thead><tbody>`;
-    if (!d.only_monitor.length) h += `<tr><td colspan="5" class="empty-note">Niente — ogni posizione del monitor risulta su Directa.</td></tr>`;
+    h = `<thead><tr><th>ETF</th><th>Livello</th><th class="num">Quantità</th><th class="num">Costo medio</th><th>Venduto?</th><th class="num">Prezzo uscita</th><th>Data</th></tr></thead><tbody>`;
+    if (!d.only_monitor.length) h += `<tr><td colspan="7" class="empty-note">Niente — ogni posizione del monitor risulta su Directa.</td></tr>`;
     for (const x of d.only_monitor) {
         h += `<tr>
             <td>${x.name}<br><span class="isin">${x.isin}</span></td>
             <td>${layers(x.layers)}</td>
-            <td>${(x.brokers||[]).join(', ') || '—'}</td>
             <td class="num">${fmt(x.monitor_qty)}</td>
             <td class="num">${fmt(x.monitor_avg_cost, 4)}</td>
+            <td><label><input type="checkbox" class="act-exit" data-isin="${x.isin}"> venduto</label></td>
+            <td class="num"><input type="text" inputmode="decimal" class="act-exit-px" data-isin="${x.isin}" placeholder="prezzo" style="width:90px"></td>
+            <td><input type="date" class="act-exit-date" data-isin="${x.isin}" value="${new Date().toISOString().slice(0,10)}"></td>
         </tr>`;
     }
     document.getElementById('tOnlyMonitor').innerHTML = h + '</tbody>';
 
+    // PAC spurious
+    const ps = d.pac_spurious || [];
+    document.getElementById('pacSpuriousBlock').hidden = !ps.length;
+    if (ps.length) {
+        h = `<thead><tr><th>ETF</th><th>Livello</th><th class="num">Quantità</th><th>Rimuovi</th></tr></thead><tbody>`;
+        for (const x of ps) h += `<tr>
+            <td>${x.name}<br><span class="isin">${x.isin}</span></td>
+            <td>${layers(x.layers)}</td>
+            <td class="num">${fmt(x.monitor_qty)}</td>
+            <td><label><input type="checkbox" class="act-rm" data-isin="${x.isin}" checked> rimuovi (è PAC)</label></td>
+        </tr>`;
+        document.getElementById('tPacSpurious').innerHTML = h + '</tbody>';
+    }
+
+    // PAC (Directa, info only)
+    const pc = d.pac || [];
+    document.getElementById('pacBlock').hidden = !pc.length;
+    if (pc.length) {
+        h = `<thead><tr><th>ETF</th><th class="num">Quantità</th><th class="num">Valore</th></tr></thead><tbody>`;
+        for (const x of pc) h += `<tr>
+            <td>${x.name}<br><span class="isin">${x.isin} · ${x.ticker || ''}</span></td>
+            <td class="num">${fmt(x.quantita)}</td>
+            <td class="num">${fmt(x.valore_attuale)} ${x.divisa || ''}</td>
+        </tr>`;
+        document.getElementById('tPac').innerHTML = h + '</tbody>';
+    }
+
+    const hasActions = d.matched.some(x => !x.qty_ok) || d.only_directa.length || d.only_monitor.length || ps.length;
+    document.getElementById('applyBar').style.display = hasActions ? 'flex' : 'none';
     document.getElementById('results').scrollIntoView({ behavior:'smooth' });
+}
+
+function buildPlan() {
+    const plan = { qty_updates:[], new_positions:[], closures:[], remove_spurious:[] };
+    document.querySelectorAll('.act-qty:checked').forEach(el => plan.qty_updates.push({
+        isin: el.dataset.isin, shares: +el.dataset.qty, entry_price: +el.dataset.px, entry_date: extractionDate,
+    }));
+    document.querySelectorAll('.act-rm:checked').forEach(el => plan.remove_spurious.push(el.dataset.isin));
+    document.querySelectorAll('.act-new').forEach(sel => {
+        if (!sel.value) return;
+        const date = document.querySelector(`.act-new-date[data-isin="${sel.dataset.isin}"]`).value;
+        plan.new_positions.push({
+            isin: sel.dataset.isin, fund_name: sel.dataset.name, shares: +sel.dataset.qty,
+            entry_price: +sel.dataset.px, entry_date: date || extractionDate, portfolio_type: sel.value,
+        });
+    });
+    document.querySelectorAll('.act-exit:checked').forEach(el => {
+        const px = document.querySelector(`.act-exit-px[data-isin="${el.dataset.isin}"]`).value.replace(',', '.');
+        const date = document.querySelector(`.act-exit-date[data-isin="${el.dataset.isin}"]`).value;
+        plan.closures.push({ isin: el.dataset.isin, exit_price: parseFloat(px), exit_date: date });
+    });
+    return plan;
+}
+
+async function applyPlan() {
+    const plan = buildPlan();
+    const bad = plan.closures.find(c => !c.exit_price || !c.exit_date);
+    if (bad) { err('Metti prezzo e data di uscita per ogni posizione segnata "venduto".'); return; }
+    const n = plan.qty_updates.length + plan.new_positions.length + plan.closures.length + plan.remove_spurious.length;
+    if (!n) { err('Niente da applicare — seleziona almeno una modifica.'); return; }
+    if (!confirm(`Applico ${n} modifiche al portafoglio? Directa fa da verità su quantità e costo.`)) return;
+
+    const btn = document.getElementById('applyBtn');
+    btn.disabled = true; btn.textContent = 'Applico…';
+    document.getElementById('errorBanner').style.display = 'none';
+    try {
+        const res = await fetch('/api/reconcile/apply', {
+            method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(plan),
+        });
+        const r = await res.json();
+        if (!res.ok && res.status !== 207) throw new Error(r.error || ('HTTP ' + res.status));
+        document.getElementById('applyResult').innerHTML =
+            (r.applied || []).map(x => '✅ ' + x).join('<br>') +
+            ((r.errors || []).length ? '<br>' + r.errors.map(x => '<span class="bad-mark">❌ ' + x + '</span>').join('<br>') : '');
+        await run();   // ri-confronta per mostrare lo stato aggiornato
+    } catch (e) {
+        err('Errore applicazione: ' + e.message);
+    } finally {
+        btn.disabled = false; btn.textContent = 'Applica le modifiche selezionate';
+    }
 }
 </script>
 </body>
