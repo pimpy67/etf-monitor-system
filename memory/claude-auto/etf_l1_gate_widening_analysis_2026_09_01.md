@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 8ac1bdd4-8873-403f-82c8-16bc1c375114
-  modified: 2026-09-03T09:35:04.817Z
+  modified: 2026-09-03T10:04:26.152Z
 ---
 
 User asked (2026-09-01, late night) to prepare an analysis on **whether to widen the L1
@@ -262,6 +262,58 @@ belongs to a passive PAC sleeve and the active system only works the two extreme
 trend / deep dip), sizing capital accordingly; or (b) design a THIRD mechanism for the
 weak-but-persistent uptrend. The Radar Anticipato and Market Breadth candidates were
 partial gestures in direction (b) but neither targets "low-ADX persistent grind" head-on.
+
+## Momentum/breakout exploratory backtest — DONE 2026-09-03 (`backtest_momentum_explore.py`, SCRATCH, deleted after run)
+
+Tested whether a Donchian breakout entry (Close > prior-N-day high + ADX≥threshold, NO RSI
+cap, NO EMA20-distance cap) with a chandelier ATR trailing stop (k×ATR14, no fixed TP)
+catches the parabolas L1 structurally rejects (silver +49% early 2026). Frozen batch
+`2026-08-07`, 7 volatile-ish families, IN 2023-08→2025-08 / OOS 2025-08→2026-08, 10k/trade,
+costs 5+5, tax 26%. 4 variants (N20/N55 × trail 2.5/3.0 × ADX 20/25 ± SMA200 filter).
+
+**The silver move: caught by every variant** — `PHAG.MI 2025-12-01 @45.84 → 2026-01-30
+@72.28 = +57.7% gross` (one trade, exited by the trailing stop). Concept validated: a
+breakout+trail entry gets exactly what L1's conditions 3/4/mm200 exclude.
+
+**But as a system it's marginal and tail-dependent:**
+- Every variant DECAYS out-of-sample: pooled PF IN ~1.4-1.6 → OOS ~1.10-1.23 (barely above
+  break-even after costs; +16-41€/trade on 10k = +0.2-0.4%). Classic overfit signature.
+- 441-772 pooled trades, WR 40-48% — a flood of small stop-outs to catch a few winners.
+- Per-family, inconsistent: `oro_metalli_preziosi` IN **negative** (PF 0.54-0.90) → OOS
+  PF 9-49 **entirely = the one silver trade** (before it, the family lost money on
+  gold/metals). `crypto_digital_assets` IN PF 3-4 → OOS **0% WR**. `leva_single_stock` IN
+  positive → OOS PF 0.2-0.4, worst trade **−83 to −87%** (3x product, stop gaps through).
+- **Only `settoriali_growth` is consistent** (IN PF 1.5-1.7 → OOS 2.1-2.5, WR ~50%) — and
+  that's already one of the 2 families where L1/smart_6_macd works.
+
+**Verdict**: concept works (parabola IS catchable), system is NOT ready — marginal edge that
+decays OOS, carried by tail events, brutal worst-case on leverage. Same pattern as most
+rejected candidates. NOT "let's build it". For 06/09 it's an honest discussion point: the
+parabola can be caught but the price is many small stops + tail risk; if the user wants
+precious-metals parabola exposure it's a targeted accept-the-risk choice, not a validated
+system.
+
+## Slow-grind mechanism — TO BACKTEST (user 2026-09-03: PAC is a PARALLEL strategy, not a substitute)
+
+User rejects "let the slow grind be the passive PAC sleeve" — wants an ACTIVE mechanism for
+"crescite lente ma costanti". Prior against it: `etf_growth_channel_research_2026_08_29`
+found no edge (selection among uptrend candidates didn't beat random, random didn't beat
+DCA). But that research was about entry-timing/selection, NOT this specific "calm-channel
+hold + regime exit". Worth ONE clean backtest.
+
+Mechanism to test (`backtest_grind_explore.py`, scratch):
+- **Entry**: linear regression of log(close) over ~90-120d → slope in a positive band
+  (~+5%..+30%/yr, not flat, not a rocket) AND R² ≥ ~0.75-0.85 (price hugs the line =
+  "linear/constant") AND ATR14/price low (~<2%, smooth not jagged) AND price > SMA200 AND
+  price at/slightly-below the fit line (buy small dips in the channel, not the top). ADX
+  LOW is fine — this is the anti-L1.
+- **Exit**: trend breaks — slope turns negative, OR R² collapses (<0.5), OR close < SMA200,
+  OR a WIDE trailing stop (SMA50-based or 2×ATR — a tight stop whipsaws a slow grind). No
+  fixed TP.
+- **Universe**: broad equity only (equity_sviluppati, settoriali_growth, mercati_emergenti)
+  — NOT oro/crypto/leva (they spike, they don't grind).
+- **Key comparison**: vs BUY-AND-HOLD the same ticker over the same window (not vs PAC). If
+  it can't beat just holding, it has no reason to exist.
 
 ## Decision framing given to user (full tree in the chat)
 
