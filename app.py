@@ -177,7 +177,7 @@ def etf_detail():
         if len(_isin) != 12:
             _isin = ''
         identifier = _isin or ticker
-        df = db.get_close_by_isin(identifier, days=260)
+        df = db.get_close_by_isin(identifier, days=320)
 
         price_hist = []
         if not df.empty:
@@ -185,7 +185,7 @@ def etf_detail():
             df.columns = ['date', 'close']
             df = df.sort_values('date').reset_index(drop=True)
         elif ticker or _isin:
-            df_old = db.get_ohlcv(_isin or ticker, days=260)
+            df_old = db.get_ohlcv(_isin or ticker, days=320)
             if not df_old.empty:
                 df = df_old[['date', 'close']].copy()
                 df = df.sort_values('date').reset_index(drop=True)
@@ -212,7 +212,10 @@ def etf_detail():
                 except Exception:
                     return None
 
-            for _, row in df.tail(90).iterrows():
+            # La modal ha i bottoni 30/120/240gg che affettano questa serie lato
+            # client (history.slice(-days)): va inviato abbastanza storico per il
+            # range piu' lungo, altrimenti 120gg e 240gg mostrano gli stessi punti.
+            for _, row in df.tail(300).iterrows():
                 price_hist.append({
                     'date':  str(row['date'].date()) if hasattr(row['date'], 'date') else str(row['date'])[:10],
                     'close': _fmt(row['close']),
