@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: f0161496-431a-4e32-b1ad-b7395c4f0d9e
-  modified: 2026-09-03T20:55:35.145Z
+  modified: 2026-09-03T22:12:02.891Z
 ---
 
 2026-09-03. User asked whether to connect this ETF monitor with the separate
@@ -52,6 +52,24 @@ The monitor only knows what it was told and drifts if you forget to register a b
 - No DB schema change. Read-only against `etf_portfolio_entries` via `get_portfolio_entries()`.
 
 Tested against a real Directa export (2026-08-07 sample in `../PATRIMONIO/export/`). Parser OK.
+Also verified live 2026-09-03 against `P_TOTALE_S7997_20260903.xlsx` (user's current holdings):
+4 positions perfectly aligned (TELE.PA/TUR.PA/Water-Acc/EM-Latam), VWCE flagged (it's PAC),
+GAGG L0 row had shares=0.
+
+## 2026-09-04 — "Allinea a Directa" button added (committed `<pending>`, deploy slow on overloaded VPS)
+
+- `reconcile()` gained `pac_isins` param (from `db.get_pac_plans()`): PAC holdings on Directa →
+  `pac` bucket (no action); a PAC ISIN in the active portfolio → `pac_spurious` (remove).
+- `reconcile_directa.apply_alignment(db, plan)` + `POST /api/reconcile/apply`. Plan shape:
+  `{qty_updates, new_positions, closures, remove_spurious}`. Directa = truth on qty/cost.
+  qty updates auto; new positions need user L0/L1 choice + date; closures need user exit price.
+- `database.update_portfolio_shares()` added.
+- The spurious **GAGG L0 row (id 21, created 2026-09-03 18:50, shares NULL) was deleted**
+  via `DELETE /api/portfolio/LU1437024729` — PAC contributions untouched, did not reappear
+  after monitor re-runs (one-off, not a recurring auto-add). Active portfolio now = 4
+  positions, all matching Directa.
+- **TODO next session**: verify `/riconciliazione` apply flow end-to-end once the VPS deploy
+  lands (was mid-`docker compose up` at load-avg 8, ~22:10 on 2026-09-03).
 
 ## Real data issue surfaced by the first test run (needs a fresh Directa export to confirm)
 
