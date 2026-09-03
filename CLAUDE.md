@@ -454,10 +454,13 @@ dal 2026-08-06, si aggiunge un **5° gate obbligatorio di regime**:
    2. **RSI Ipervenduto:** RSI < rsi_max (es. 45 per equity)
    3. **Divergenza Rialzista:** Il prezzo fa un minimo più basso, ma RSI fa un minimo più alto
    4. **Segnale di Recupero:** RSI risorge > 40, OPPURE prezzo sale ≥ 1% su 5 giorni
-5. **Regime BULL** (nuovo 2026-08-06): `regime_ok = (calculate_regime(ema20, sma50) == 'BULL')`,
-   applicato a tutti e 3 i percorsi (`entry_ok = cond1 and cond2 and cond3 and cond4 and regime_ok`
-   in `technical_analysis.py:1003-1008`). Blocca ingressi in mercato strutturalmente ribassista
-   ("catching a falling knife"), parametro `global_params.l0_regime_required: BULL` nel YAML.
+5. ~~**Regime BULL** (nuovo 2026-08-06)~~ **RILASSATO 2026-09-03**: il gate ora legge
+   `global_params.l0_regime_allowed` (lista) — dal 03/09 è `[BULL, LATERALE, BEAR]`, cioè
+   **nessun blocco di regime su L0**. Motivo: il backtest 01-02/09 ha mostrato che il gate
+   BULL-only era controproducente (un deep drawdown reale rompe EMA20>SMA50 → regime ≠ BULL
+   → bloccava proprio i setup L0 legittimi; `l0_prod` era in perdita in-sample, PF 0.96 →
+   rilassato PF 1.7). Shadow inverso `baseline_l0_regime_bull` (STEP 8b2) traccia cosa
+   avrebbe fatto il vecchio gate. Vedi "Sessione 2026-09-03" più sotto.
 
 > **Fix 2026-08-05**: prima FAST e SLOW entravano in L0 al solo rilevamento del crollo,
 > senza nessuna prova che l'inversione fosse davvero iniziata — a differenza del
@@ -2390,6 +2393,125 @@ ORDER BY model_name, entry_date;
 (whitelist+blacklist bypassate) — buffer 2%: IN N=86 WR=20,9% PF=1,23 | **OUT N=19 WR=0,0%
 PF=0,0 −4.730€**. L0 su emergenti non ha edge (già visto il 24/08) — nessuno stop lo
 salva. Nessun candidato per EM.
+
+---
+
+## Sessione 2026-09-03 — deploy L0, fix ticker, e "il buco L1" (grind + parabola)
+
+### Deploy e fix (tutti in produzione)
+
+- **Gate regime L0 rilassato**: `global_params.l0_regime_allowed: [BULL, LATERALE, BEAR]`
+  (= nessun gate di regime su L0) — deployato via cron one-shot `scripts/deploy_l0_3am.sh`
+  alle 03:00 CEST del 03/09. Motivo: il backtest del 01-02/09 aveva mostrato che il gate
+  BULL su L0 è **controproducente** (`l0_prod` in perdita in-sample, PF 0.96; rilassato
+  PF 1.7). Un vero deep drawdown rompe EMA20>SMA50 → regime ≠ BULL → il vecchio gate
+  bloccava proprio i setup per cui L0 esiste. Aggiunto **shadow inverso**
+  `baseline_l0_regime_bull` (`shadow_monitor_l0_regime_baseline.py`, STEP 8b2) che traccia
+  cosa avrebbe fatto il vecchio gate. Digest mensile shadow (`alerts.py::
+  send_shadow_monthly_digest`, il 1° del mese).
+- **`save_ohlcv_bulk` Part B** (commit `b5a36ae`): SAVEPOINT per riga + arbitro
+  `ON CONFLICT (isin, date)` quando l'ISIN è noto. Fix del bug "grafici congelati al 27/08"
+  — dopo un rename di ticker, la vecchia riga `ticker=ISIN` collideva su un indice unico
+  parziale `(isin,date)` non coperto dall'arbitro `(ticker,date)` → UniqueViolation →
+  abort dell'intera transazione psycopg2 → batch perso in silenzio. Ora un errore isola la
+  singola riga.
+- **`UST.PA` condiviso da due fondi** → `LU1954152853` (Amundi Core Nasdaq-100 Swap **EUR
+  Hedged**) riassegnato a **`USTH.MI`** (Milano, EUR ~20); `LU1829221024` (unhedged) resta
+  `UST.PA` (~100). Storico `etf_price_history` di LU1954152853 era contaminato (prezzi
+  unhedged) → svuotato e ribackfillato pulito (503 righe). Commit `a4a067c`.
+- **`3MIB.MI` delistato** → **`3ITL.MI`** ("WisdomTree FTSE MIB 3x Daily Leveraged" —
+  GraniteShares Europa acquisita da WisdomTree, rebrand). `leva_single_stock`, nessun dato
+  in DB, solo swap ticker+nome. Commit `d6a00d9`.
+- **Dashboard**: `--content-max` 1640→2160px, righe/font più grandi (leggibilità), fix
+  grafico vuoto per gli 8 ETF a leva senza ISIN (`app.py`: l'ISIN conta solo se 12 char).
+- **Bug noto NON risolto (accorpato al 06/10)**: `0E2B.IL` (LYXOR Smart Overnight,
+  `monetario_liquidita`) genera a ogni run errori `'<=' NoneType/float` in
+  `check_l1_entry_tiered`/`_accelerated`/`l1_check_7_conditions` + `l2_calculate_readiness_score`
+  (soglie ADX/RSI = null per quella famiglia). Non fatale. Fix = saltare quei 4 blocchi per
+  `monetario_liquidita` in `monitor.py::analyze_etf()`. Stesso batch dell'esclusione
+  `monetario_liquidita`/`leva_single_stock` dai radar shadow (che pescano `XEON.DE`/`C3M.PA`/
+  `LVO.MI` — filtrano solo per livello, non per famiglia).
+
+### "Il buco L1" — L1 copre una banda stretta
+
+Regime di mercato live al 03/09: **BULL** (risk_score 93/100) **ma `equity_adx: 12`** — un
+rialzo debole, a strappi, senza forza direzionale. L1 richiede ADX ≥ 18 (condizione 5)
+quindi **sta correttamente fuori**. "0 ingressi L1 in un mese" NON è il mercato che scende —
+è il mercato che sale *piano*, e il gate è fatto per non lavorarci.
+
+Il sistema copre **due estremi** e lascia scoperto **il centro**:
+
+| Tipo di mercato | Meccanismo | Nota |
+|---|---|---|
+| Trend forte e ordinato | **L1** | funziona (PF 1,72 core), ma raro |
+| Rimbalzo da crollo profondo | **L0** | funziona, ora attivo (gate regime rilassato) |
+| **Parabola violenta** (argento +49% inizio 2026) | **nessuno** | L1 la rifiuta: condizioni 3 (RSI caldo), 4 (distanza EMA20), filtro SMA200 escludono strutturalmente le parabole. Verificato: `oro_metalli_preziosi` = 0 giorni in 3 anni raggiunge anche solo smart_6_macd |
+| **Grind lento** (adesso, ADX basso) | **nessuno** | L1 vuole forza, L0 vuole un calo — il grind non offre né l'uno né l'altro |
+
+> L1 era stato pensato dall'utente per "la crescita costante", ma il gate implementato è
+> diventato "il trend **forte**" — una cosa diversa e più restrittiva. Non è un problema di
+> calibrazione dei parametri (allargare RSI/ADX/distanza non cattura la parabola, servirebbe
+> svuotare le condizioni = altra logica). È un problema di **copertura**.
+
+### Tre backtest esplorativi (tutti scratch, cancellati dopo il run)
+
+**1. Momentum/breakout per la parabola** (`backtest_momentum_explore.py`): ingresso Donchian
+(Close > max High N gg) + ADX, NIENTE cap RSI/distanza, uscita chandelier ATR trailing.
+- **Cattura la mossa**: `PHAG.MI 2025-12-01 @45,84 → 2026-01-30 @72,28 = +57,7%` (un trade,
+  tutte le varianti).
+- **Ma come sistema è marginale**: pooled OOS PF ~1,10-1,23 (appena sopra il pareggio dopo
+  costi), 440-770 trade, WR 40-48%, decade IN→OOS. Per-famiglia incoerente: l'"edge" di
+  `oro_metalli_preziosi` OOS è **interamente il singolo trade silver** (in-sample perdeva);
+  `crypto` crolla a 0% WR OOS; `leva_single_stock` worst trade −83/−87%. Solo
+  `settoriali_growth` coerente (già driver L1).
+- **Decisione utente**: opzione (b) — costruire versione stretta (solo `settoriali_growth`
+  + `oro_metalli_preziosi`, **hard stop %** che tiene, size piccola) come Shadow Monitor,
+  MA con backtest per-famiglia prima (barra: OOS PF ≥ 1,3 su entrambe, mai pooled), N≥30
+  forward prima di promuovere. **Priorità più bassa** — dietro checkpoint 06/09, helper
+  Directa-fedele, analisi uscita L1. Dettaglio in `memory/claude-auto/etf_post_lockdown_todo_20260906.md`
+  item 18b.
+
+**2. Grind — canale di crescita selettivo** (`backtest_grind_explore.py`): ingresso
+regressione lineare log(close) su 100gg con R²≥0,75 + ATR% basso + sopra SMA200 + buy-the-dip
+nel canale. Risultato: **a mercato solo 24% del tempo**, in-sample **in perdita**,
+**−18/−29pp vs buy-and-hold**, batte il semplice tenere nel 2-3% dei ticker.
+
+**3. Grind — regime-gated hold permissivo** (`backtest_regimehold_explore.py`): hold mentre
+il regime benchmark è BULL (`(EMA20−SMA50)/SMA50 > banda`) + close > SMA200; uscita su
+rottura regime o sotto SMA200. Nessun SL giornaliero — lo "stop" è l'uscita di regime
+(~8-15% sotto il picco). Finestra **2022-06 → 2026-08 (include il bear 2022)**:
+
+| variante | rend. netto mecc. | **buy&hold** | delta | maxDD mecc. | maxDD B&H | tempo a mercato |
+|---|---|---|---|---|---|---|
+| SELF banda 0,0 | +13,3% | **+71,4%** | **−58pp** | −14,1% | −20,5% | 68% |
+| SELF banda 0,01 | +8,0% | +71,4% | **−63pp** | −12,6% | −20,5% | 48% |
+| SELF banda 0,02 | +4,0% | +71,4% | **−67pp** | −10,1% | −20,5% | 28% |
+| MKT (gate IWDA) | +7,5% | +71,4% | **−64pp** | −12,1% | −20,5% | 49% |
+
+Cattura ~15% del rendimento del buy-and-hold, risparmia ~7pp di drawdown. **Scambio
+pessimo.** Causa: il bear 2022 a V — il filtro EMA20/SMA50 esce *dopo* il calo e rientra
+*dopo* il recupero (mangia il drawdown E si perde il rimbalzo), 11 round-trip/4anni di
+whipsaw. Banda più stretta = peggio.
+
+### Conclusione sul grind — CHIUSA (testata 3 modi)
+
+**Nessun meccanismo attivo cattura il grind lento.** Selettivo o permissivo, "essere furbi
+su quando stare in equity" perde nettamente contro "stare in equity e basta". Per un ETF
+azionario ampio in salita lenta, **tenere È la decisione attiva ottimale** — nessun timing
+la batte.
+
+→ **Il PAC passivo su un all-world (VWCE) NON è un ripiego per il centro, è la risposta
+corretta**, dimostrata tre volte. Il sistema attivo lavora i due estremi (L1 trend forte,
+L0 tuffo); il centro è il PAC; la decisione reale al 06/09 è **quanto dimensionare lo sleeve
+PAC**. Per ridurre il drawdown la leva è l'**allocazione bond** (il 75/25 che l'API regime
+già suggerisce), non il market timing.
+
+### Nota infrastruttura
+
+Il PC Windows (Utente) **ora ha la chiave SSH VPS funzionante**:
+`ssh -i ~/.ssh/id_ed25519_vps root@76.13.37.133` (passare sempre `-i`, non è l'identità di
+default). Claude può operare su VPS/docker/psql direttamente — le vecchie note "l'utente
+incolla l'output" sono superate.
 
 ---
 
