@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c23e4e15-4c77-4fcf-a9c0-f0d2dc00b62b
-  modified: 2026-09-03T10:13:04.140Z
+  modified: 2026-09-03T11:12:17.453Z
 ---
 
 ## ⚠️ Aggiornamento 2026-08-23 — processo cambiato da scadenza fissa a checkpoint ricorrente
@@ -539,10 +539,14 @@ for the parabola — concept works (caught silver +57.7% Jan 2026) but marginal 
 PF ~1.1-1.2, tail-dependent, brutal worst-case on leverage; only settoriali_growth
 consistent. (2) **grind/slow-climb** — decisively NEGATIVE: any selective "calm channel"
 entry is in the market only 24% of the time and underperforms plain buy-and-hold by
-18-29pp. The only "grind" that could work is a maximally-simple regime-gated hold (~90%
-in-market) which is mechanically identical to the PAC. → Decision 3 now has DATA: the
-extremes (momentum, deep-dip L0) are marginally addable; the middle (grind) is not
-beatable by timing — it's hold-or-PAC, a labeling choice.
+18-29pp. **Then tested the regime-gated hold too (3rd grind test same day): −58 to −67pp vs
+buy-and-hold** over 2022-06→2026-08 (captures ~15% of B&H return, saves only ~7pp
+drawdown). Grind now tested 3 ways, all fail decisively. → **Decision 3 grind side is
+SETTLED: no active mechanism beats buy-and-hold for the slow grind; the PAC IS the correct
+answer (not a fallback), and the real decision is how big to size the PAC sleeve.** For
+drawdown, the lever is asset allocation (bonds, the 75/25 the regime API suggests), not
+timing. Only the momentum/parabola mechanism stays open as a "could we add it" (marginal,
+tail-risky). Full data in [[etf-l1-gate-widening-analysis-2026-09-01]].
 
 ## 16. Shadow-monitor PRUNING — scheduled for the 2026-10-06 checkpoint
 

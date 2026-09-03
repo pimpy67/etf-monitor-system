@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 8ac1bdd4-8873-403f-82c8-16bc1c375114
-  modified: 2026-09-03T10:12:51.494Z
+  modified: 2026-09-03T11:12:08.150Z
 ---
 
 User asked (2026-09-01, late night) to prepare an analysis on **whether to widen the L1
@@ -341,6 +341,42 @@ WORSE. This directly answers the user's 2026-09-03 request ("find parameters/ran
 slow grind"): the parameters that would work are the ones that make it barely a strategy at
 all. Whether to run that regime-gated-hold as an "active" sleeve or just call it the PAC is
 a labeling choice — mechanically they're the same thing. **06/09 Decision 3 item.**
+
+### Regime-gated-hold exploratory backtest — DONE 2026-09-03 (`backtest_regimehold_explore.py`, SCRATCH, deleted) — DECISIVE NO
+
+User asked to test + operationalize the "maximally permissive" grind mechanism (hold while
+benchmark regime BULL — `(EMA20−SMA50)/SMA50 > band` — AND close>SMA200; exit on regime
+break or close<SMA200; NO daily SL, the "stop" is the slow ~8-15%-below-peak regime exit).
+107 equity_sviluppati tickers, frozen batch, window **2022-06 → 2026-08 (includes the 2022
+bear)**, costs 10€/round-trip + 26% tax, vs buy-and-hold same ticker.
+
+| variant | mech net ret | **B&H ret** | delta | mech maxDD | B&H maxDD | time-in-mkt | round-trips |
+|---|---|---|---|---|---|---|---|
+| SELF band 0.0 | +13.3% | **+71.4%** | **−58pp** | −14.1% | −20.5% | 68% | 11.2 |
+| SELF band 0.01 (code default) | +8.0% | +71.4% | **−63pp** | −12.6% | −20.5% | 48% | 10.9 |
+| SELF band 0.02 | +4.0% | +71.4% | **−67pp** | −10.1% | −20.5% | 28% | 8.6 |
+| MKT gate (IWDA.AS) | +7.5% | +71.4% | **−64pp** | −12.1% | −20.5% | 49% | 11.7 |
+
+The mechanism captures only ~15% of B&H's return (+8% vs +71%). It DOES cut max drawdown
+(−20.5% → −12/−14%, shallower on 85-98% of tickers, ~7pp saved) — but you give up ~60pp of
+return to save ~7pp of drawdown. Cause: the 2022 bear was V-shaped; an EMA20/SMA50 regime
+filter exits AFTER the drop and re-enters AFTER the recovery — eats the drawdown AND misses
+the bounce. 11 round-trips/4yr = whipsaw compounds (sell near local lows, rebuy near local
+highs). Stricter band = worse (again).
+
+**FINAL VERDICT ON THE GRIND — tested 3 ways on 2026-09-03, all fail:**
+1. selective channel entry (R²/linearity/ATR/buy-the-dip): −18-29pp vs B&H, 24% in-market
+2. permissive regime-gated hold: −58-67pp vs B&H
+3. (implied) anything between: converges to one of the above
+
+**No active mechanism captures the slow grind. "Stay invested unconditionally" = buy &
+hold = a PAC is the CORRECT answer, not a fallback — proven three ways.** For drawdown
+reduction, the lever is ASSET ALLOCATION (hold some bonds, e.g. the 75/25 the regime API
+already suggests) — structural, no whipsaw cost — NOT market timing. Decision 3 at 06/09 is
+therefore effectively settled on the grind side: the active system works the two extremes
+(rare strong trend = L1, deep dip = L0), the middle is the PAC's job, and sizing the PAC
+sleeve is the real decision. The momentum/parabola mechanism remains the one genuinely open
+"could we add it" question (marginal, tail-risky, see above).
 
 ## Decision framing given to user (full tree in the chat)
 
