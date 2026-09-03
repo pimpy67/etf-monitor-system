@@ -2493,18 +2493,49 @@ pessimo.** Causa: il bear 2022 a V — il filtro EMA20/SMA50 esce *dopo* il calo
 *dopo* il recupero (mangia il drawdown E si perde il rimbalzo), 11 round-trip/4anni di
 whipsaw. Banda più stretta = peggio.
 
-### Conclusione sul grind — CHIUSA (testata 3 modi)
+**4. DCA-rotation "livello PAC dinamico"** (`backtest_dca_rotation.py`): idea utente —
+filtrare i migliori ETF dalla lista PAC Directa (650 ETF → universo curato di 64, tutti
+`.MI` Milano EUR, risolti e verificati — lista in
+`memory/claude-auto/etf_rotation_universe_64_2026_09_03.md`), DCA ~1000€/mese sui top N,
+ruotare a fine trend. Testato in 3 varianti (base / de-churned SMA200+2-strike / market
+risk-off su VWCE<sua SMA200):
 
-**Nessun meccanismo attivo cattura il grind lento.** Selettivo o permissivo, "essere furbi
-su quando stare in equity" perde nettamente contro "stare in equity e basta". Per un ETF
-azionario ampio in salita lenta, **tenere È la decisione attiva ottimale** — nessun timing
-la batte.
+| variante | FULL | IN (bear 2022) | OOS (bull) |
+|---|---|---|---|
+| PAC VWCE | +31,2% / DD −21% | **+14,9% / DD −12%** | +14,2% / DD −21% |
+| rotation base | +9-21% | **−6/−8%** | +5-15% |
+| rotation de-churned | +21-26% / DD −22-25% | +10-11% / **DD −20-23%** | +15-18% |
+| rotation + risk-off | +43-48% / **DD −30-34%** | **~0% / DD −34% / 47-75 rotazioni** | +24-25% / DD −15-18% |
 
-→ **Il PAC passivo su un all-world (VWCE) NON è un ripiego per il centro, è la risposta
-corretta**, dimostrata tre volte. Il sistema attivo lavora i due estremi (L1 trend forte,
-L0 tuffo); il centro è il PAC; la decisione reale al 06/09 è **quanto dimensionare lo sleeve
-PAC**. Per ridurre il drawdown la leva è l'**allocazione bond** (il 75/25 che l'API regime
-già suggerisce), non il market timing.
+Ogni variante **fallisce lo stress test 2022**. Il risk-off è un miraggio da finestra
+bull: +43-48% FULL solo perché il 2023-2026 domina la finestra; nel 2022 = rendimento ~0,
+drawdown −34%, whipsaw brutale (VWCE oscilla attorno alla sua SMA200 → liquida+ricompra
+10-15 volte) + momentum-crash all'inflessione bear→bull (ranking momentum-6m a inizio 2023
+guarda al minimo di ago-2022 → compra i maggiori rimbalzatori che poi ritracciano).
+
+### Conclusione grind + rotation — CHIUSA (testata **5 modi**)
+
+**Nessun meccanismo attivo cattura il grind lento.** Selettivo, permissivo, o rotation DCA —
+tutti perdono contro "tenere VWCE e basta", e ogni versione che sembra funzionare funziona
+solo perché la finestra è dominata dal bull 2023-2026 (miraggio regime-dipendente, già
+scartato più volte nel progetto). Anche l'idea "filtro dei migliori PAC ETF" è chiusa:
+come trigger di rotazione è disprovata; come allocazione statica multi-ETF era già stata
+respinta il 30/08 (VWCE è già ~3.700 titoli); come radar informativo non ha uso azionabile.
+
+### Decision 3 — RISOLTA con dati (2026-09-03)
+
+- **PAC = 100% VWCE (sleeve azionaria) + GAGG (sleeve bond, un solo ETF basta) + riserva
+  cassa ~40-60k (polvere secca per L1/L0).**
+- **Sistema attivo** lavora solo i due estremi: L1 (trend forte) + L0 (tuffo profondo).
+- **Flusso di capitale**: cassa ferma → PAC. L1/L0 scatta → finanziato dalla **riserva** +
+  contributi temporaneamente dirottati, **MAI vendendo PAC** (26% tassa realizzata + è di
+  nuovo rotazione + quando L0 scatta il PAC è anch'esso giù = vendere sul minimo).
+  Posizione chiude → ricavato torna in riserva, eccesso → PAC. Il PAC si riduce solo per
+  spese di vita o un'opportunità davvero eccezionale.
+- **Unica taratura aperta**: i contributi PAC scorrono ~87/13 azionario/bond, il target
+  utente è 75/25 → alzare la quota GAGG o ribilanciare il totale periodicamente.
+- Resta aperto solo il momentum/parabola come "si potrebbe aggiungere" (item 18b, Shadow-
+  only, priorità più bassa).
 
 ### Nota infrastruttura
 

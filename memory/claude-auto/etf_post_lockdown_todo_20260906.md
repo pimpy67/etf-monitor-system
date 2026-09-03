@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c23e4e15-4c77-4fcf-a9c0-f0d2dc00b62b
-  modified: 2026-09-03T11:17:02.257Z
+  modified: 2026-09-03T12:33:19.463Z
 ---
 
 ## ⚠️ Aggiornamento 2026-08-23 — processo cambiato da scadenza fissa a checkpoint ricorrente
@@ -541,12 +541,24 @@ consistent. (2) **grind/slow-climb** — decisively NEGATIVE: any selective "cal
 entry is in the market only 24% of the time and underperforms plain buy-and-hold by
 18-29pp. **Then tested the regime-gated hold too (3rd grind test same day): −58 to −67pp vs
 buy-and-hold** over 2022-06→2026-08 (captures ~15% of B&H return, saves only ~7pp
-drawdown). Grind now tested 3 ways, all fail decisively. → **Decision 3 grind side is
-SETTLED: no active mechanism beats buy-and-hold for the slow grind; the PAC IS the correct
-answer (not a fallback), and the real decision is how big to size the PAC sleeve.** For
-drawdown, the lever is asset allocation (bonds, the 75/25 the regime API suggests), not
-timing. Only the momentum/parabola mechanism stays open as a "could we add it" (marginal,
-tail-risky). Full data in [[etf-l1-gate-widening-analysis-2026-09-01]].
+drawdown). **(3rd test: regime-gated hold −58-67pp vs B&H.) (4th: DCA-rotation "PAC level"** — user's
+idea to filter the best Directa-PAC ETFs and DCA-rotate into them — base/de-churned/
+market-risk-off ALL fail the 2022-bear stress test; risk-off is a bull-window mirage
+(+43-48% FULL, but IN ~0% return / −34% DD / 47-75 whipsaw rotations). Grind now tested
+**5 ways, all fail.**
+
+→ **Decision 3 SETTLED with data (2026-09-03):** no active mechanism beats passive
+VWCE-DCA for the slow grind. **PAC = 100% VWCE (equity) + GAGG (bond, one ETF enough) +
+cash reserve ~40-60k (dry powder for L1/L0).** Active system works only the extremes
+(L1 strong trend, L0 deep dip). **Capital flow rule**: idle cash → PAC; L1/L0 fires →
+funded from the reserve + temporarily-redirected contributions, **NEVER by selling PAC**
+(26% realized tax + it's rotation again + when L0 fires the PAC is also down = selling
+low); position closes → proceeds back to the reserve, overflow → PAC; PAC only shrinks
+for life expenses or a truly exceptional opportunity. **One open tuning**: PAC flows
+~87/13 equity/bond, user target 75/25 — bump GAGG or rebalance the total periodically.
+Only the momentum/parabola mechanism stays open (item 18b). Full data +
+64-ETF universe in [[etf-l1-gate-widening-analysis-2026-09-01]] +
+[[etf-rotation-universe-64-2026-09-03]].
 
 ### 18b — DECIDE at 06/09: add a momentum/breakout mechanism for the parabolas? (user asked 2026-09-03 to put this on the agenda)
 

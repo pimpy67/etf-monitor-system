@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 8ac1bdd4-8873-403f-82c8-16bc1c375114
-  modified: 2026-09-03T11:12:08.150Z
+  modified: 2026-09-03T12:29:40.248Z
 ---
 
 User asked (2026-09-01, late night) to prepare an analysis on **whether to widen the L1
@@ -377,6 +377,58 @@ therefore effectively settled on the grind side: the active system works the two
 (rare strong trend = L1, deep dip = L0), the middle is the PAC's job, and sizing the PAC
 sleeve is the real decision. The momentum/parabola mechanism remains the one genuinely open
 "could we add it" question (marginal, tail-risky, see above).
+
+## DCA-rotation "livello PAC dinamico" — user's idea, DONE 2026-09-03, CLOSED
+
+User (after the grind was closed): PAC = parallel strategy not substitute → wants an ACTIVE
+mechanism. New framing: a "PAC level" — filter the best-trending ETFs from the Directa PAC
+list, DCA ~€1000/month into the top N, rotate out on trend break, proceeds recycled. Not
+the lump-timing the earlier tests used — DCA accumulation + rotation.
+
+**Step 0 (done)**: curated a 64-ETF rotation universe from the 650-ETF Directa PAC list
+(broad + MSCI-World sectors + factors + country + gold-miners + commodity), all resolved to
+`.MI` (Milan EUR) yfinance tickers with 2-10yr history. List saved in
+[[etf_rotation_universe_64_2026_09_03]].
+
+**Step 3 backtest** (`backtest_dca_rotation.py`, scratch, deleted): monthly selection
+(price>SMA200 & EMA20>SMA50), rank by 6mo momentum, top N slots, contributions 1/8/15/23,
+BUY 0€ (PAC) / SELL 5€ + 26% tax, vs same €1000/mo all into VWCE. Window 2022-06→2026-09,
+split IN/OOS at 2024-09. Three variants:
+
+| variant | FULL ret / DD | IN (2022 bear) ret / DD | OOS (bull) ret / DD |
+|---|---|---|---|
+| **PAC VWCE** | **+31.2% / −21%** | **+14.9% / −12%** | +14.2% / −21% |
+| rotation base | +9-21% / −19-28%, 73-135 sells | **−6 to −8%** / −5-9% | +5-15% / −15-19% |
+| rotation de-churned (SMA200 exit, 2-strike, tight universe) | +21-26% / −22-25%, ~6-8 sells/yr | +10-11% / **−20-23%** | +15-18% / −15-30% |
+| rotation + market risk-off (VWCE<its SMA200 → all cash) | +43-48% / **−30-34%** | **−2.5 to +1.6% / −30-34%**, 47-75 sells | +24-25% / −15-18% |
+
+**VERDICT — closed, all 3 variants fail:**
+- **base**: loses to PAC-VWCE on return in every window.
+- **de-churned**: closes the return gap but loses IN, and DELIVERS WORSE DRAWDOWN not better
+  (the value prop was "less drawdown"). SMA200 exit lags → rode the 2022 drawdown down
+  further than the diversified index PAC.
+- **risk-off**: bull-market hero (+43-48% FULL) but **bear-market catastrophe** — IN window
+  ~0% return, −34% drawdown, 47-75 whipsaw rotations (VWCE oscillates around its SMA200
+  through 2022-23 → repeated full liquidate+rebuild) + a momentum-crash at the bear→bull
+  inflection (6mo-momentum ranking in early 2023 looks back to the Aug-2022 bottom → buys
+  the biggest bouncers, which reverse). The big FULL number is entirely the 2023-26 bull
+  dominating the window — the exact regime-dependent mirage this project keeps rejecting.
+
+**Every version that "works" only works because the window is bull-dominated. Rotation is
+dead.** Consistent with the 3 grind tests and every equity-timing test in this project.
+
+### The "filter best Directa PAC ETFs" idea — also closed
+
+- As a rotation trigger: disproven above.
+- As a static multi-ETF PAC allocation: already answered 2026-08-30 ([[etf_pac_feature_2026_08_24]])
+  — VWCE is already ~3,700 stocks, a multi-equity basket adds overlap not diversification,
+  only a bond ETF helps → VWCE + GAGG is enough, which the user has.
+- As an informational radar: no actionable use (acting = rotation = bad; not acting = noise).
+
+**FINAL: PAC stays VWCE + GAGG passive. Active system = L1 + L0. No rotation level, no PAC
+filter.** The only surviving thread: optionally add ~10-20 of the 64 ETFs (World sectors,
+gold miners GDX/GDXJ, momentum/quality factors) to the NORMAL L0-L3 monitoring universe —
+not for a PAC filter, for more L1/L0 entry chances. Low priority, separate decision.
 
 ## Decision framing given to user (full tree in the chat)
 
