@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 8ac1bdd4-8873-403f-82c8-16bc1c375114
-  modified: 2026-09-02T09:41:44.744Z
+  modified: 2026-09-03T08:40:57.238Z
 ---
 
 User asked (2026-09-01, late night) to prepare an analysis on **whether to widen the L1
@@ -61,6 +61,25 @@ negative (0% WR, −4.15%, N=2).
 - The real lever is the **EXIT** (78-83% of exits are SL in every variant) — NOT tested
   yet. Candidate next analysis: wider / ATR-based / less-reactive L1 SL vs the current
   EMA20-based `calculate_sl_suggerito_l1`.
+
+### EXIT ANALYSIS — queued 2026-09-03, runs AFTER the Directa-faithful exit helper
+
+Order is fixed: 06/09 checkpoint → [[etf-directa-faithful-exit-model-todo]] → this. Testing
+a wider SL against the current exact-fill-at-TP model would give the wrong answer.
+
+Current `calculate_sl_suggerito_l1` is EMA20-based (SL tracks EMA20 tick-by-tick → one dip
+below EMA20 = stopped; very reactive). Variants to backtest:
+- **ATR-based**: SL = entry − k·ATR(14), trailing on `max(price) − k·ATR` (scales with the
+  instrument's own volatility)
+- **wider buffer**: SL = EMA20 − wide buffer (fixed % floor or 1.5·ATR) — same shape as the
+  L0-SL-tier1 change that worked (2%→4%)
+- **2-day confirmation**: exit only after 2 consecutive closes below the SL level (kills
+  intraday whipsaw)
+- **weekly recompute**: SL updated once/week instead of daily (fewer noise stops)
+
+Method idea (user's, agreed): the exit is entry-agnostic → backtest the SL variants on a
+LARGE pool of entries (every L1/L2 crossing, or the ~1000+ radar entries) for real
+statistical power on "which SL", decoupled from the entry gate, then apply the winner.
 
 ## Run 1 — DONE (core-only, single 3yr window 2023-08→2026-08, 10k€/trade, costs+tax)
 

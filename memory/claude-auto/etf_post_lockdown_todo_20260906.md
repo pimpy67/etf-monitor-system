@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c23e4e15-4c77-4fcf-a9c0-f0d2dc00b62b
-  modified: 2026-08-28T21:08:31.136Z
+  modified: 2026-09-03T08:41:04.936Z
 ---
 
 ## ⚠️ Aggiornamento 2026-08-23 — processo cambiato da scadenza fissa a checkpoint ricorrente
@@ -508,6 +508,68 @@ L3, low buy_count, no real position affected.
   WHERE model_name IN ('candidate_l0_sl_tier1_5pct_20260828','candidate_l0_sl_tier1_6pct_20260828')
   ORDER BY model_name, entry_date;
   ```
+
+## 15. Directa-faithful exit model — QUEUED for right after this checkpoint (2026-09-03)
+
+User wants shadow monitors + backtests to model real Directa execution (one active sell
+order; Stop ratchets toward price near TP via `order_pricing.compute_order_prices`)
+instead of the current clean "SL-or-TP-first-touched, exact fill". This is the **next
+project after the 06/09 checkpoint**, ahead of the wider-L1-SL analysis (item in
+[[etf-l1-gate-widening-analysis-2026-09-01]]) which would otherwise run on the wrong
+exit model. Plan (shared `simulate_directa_exit()` helper → wire into `backtest_l0_v2.py`
++ all 11 live shadow monitors → re-certify baselines → same-day cutover, "ride the
+tightened Stop" not "perfect manual Limit at TP"). Read the current shadow data at THIS
+checkpoint first for a clean old-model snapshot. Full detail:
+[[etf-directa-faithful-exit-model-todo]].
+
+## 16. Shadow-monitor PRUNING — scheduled for the 2026-10-06 checkpoint
+
+User asked (2026-09-03) to prune the shadow pipeline at the **October checkpoint** (give
+them one more month of data first, don't prune at 06/09). Context: as of 2026-09-03 there
+are **11 active shadow monitor modules tracking 13 model_names** (STEPs 8b–8k in
+`monitor.py::run()`), none near N≥30 closed after ~1 month, and many are minor variations
+on the same theme (3 models just on L0 tier-1 SL width 4/5/6%, 2 on L0 entry timing, 2 on
+L0 in extra families). User's own words: "ma quanti modelli stiamo testando???" — the
+pipeline has sprawled (each session added one without retiring others).
+
+**At 2026-10-06**: don't just read the numbers — **cut**. Retire any shadow that after
+~2 months has 0–1 closed trades and no signal; keep only the 3–4 with enough forward
+volume to say something by year-end. Removing a shadow = delete its `shadow_monitor_*.py`
++ its STEP call in `monitor.py` + its `_SHADOW_VARIANTS` entry in `alerts.py` (same
+cleanup pattern used when `candidate_model_b`/`candidate_model_l0_sl` were promoted). Keep
+the `etf_shadow_positions` rows (historical record), just stop generating new ones.
+
+Snapshot to compare against at that checkpoint (2026-09-03): candidate_radar_approach 14
+closed (most), candidate_l0_oro 5, candidate_model_l0_20260808 3 (all 3 losses, 0% WR —
+below its certified 44-52% backtest WR), candidate_radar_bounce 4, everything else 0–2.
+
+### Sub-item: `monetario_liquidita` exclusion from the radar shadows (found 2026-09-03)
+
+`shadow_monitor_radars.py` filters the candidate universe by LEVEL only (`suggested_level`
+in {1,2,3} for bounce, {2,3} for approach) — **no family filter**. Result: on 2026-09-03
+the bounce shadow opened positions on `XEON.DE`/`LU0290358497` (EUR overnight rate — grinds
+up ~linearly, no real V-bottom) and `C3M.PA`/`FR0010754200` (0-6M govt bond, near-cash).
+A "rebound" trade on a money-market instrument is meaningless. **Also 2026-09-03**: the
+approach radar shadow opened on `LVO.MI` (Amundi S&P 500 VIX Futures Enhanced Roll —
+reclassified `leva_single_stock` on 07/08, structurally decays -82%/4yr by contango,
+blocked from L1 via `min_buy_count:8` and from L0 via blacklist) — yet still slips into
+the radar shadows because they filter by LEVEL only. At 06/10: add a family exclusion to
+`shadow_monitor_radars.py` (both approach + bounce) covering at least
+`monetario_liquidita` + `leva_single_stock`, probably the whole speculative cluster
+(`crypto_digital_assets`, `commodities` too). **Also check the live dashboard**: if
+`/api/approach-radar` / `/api/bounce-radar` in `app.py` show XEON/C3M/LVO too, fix it
+there (the shadow just mirrors those endpoints) — the endpoint fix is the real one, the
+shadow filter follows.
+
+## 17. L1 EXIT analysis — queued AFTER item 15 (Directa-faithful helper)
+
+Fixed order: 06/09 checkpoint → item 15 (Directa-faithful exit model) → this.
+The 2026-09-01 analysis concluded the EXIT is the real problem (78-83% of L1 exits are
+stop losses in every variant), not the entry gate. Test wider / ATR-based / 2-day-confirm /
+weekly-recompute SL variants vs the current EMA20-based `calculate_sl_suggerito_l1`, on a
+LARGE entry pool (every L1/L2 crossing or the ~1000+ radar entries) for statistical power,
+decoupled from the entry gate. Full detail + variant list in
+[[etf-l1-gate-widening-analysis-2026-09-01]].
 
 ## 8. Known gaps, not yet built (lower priority, not blocking)
 
