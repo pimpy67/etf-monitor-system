@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c23e4e15-4c77-4fcf-a9c0-f0d2dc00b62b
-  modified: 2026-09-03T11:13:26.803Z
+  modified: 2026-09-03T11:17:02.257Z
 ---
 
 ## ⚠️ Aggiornamento 2026-08-23 — processo cambiato da scadenza fissa a checkpoint ricorrente
@@ -576,6 +576,30 @@ trade −83 to −87%. **Only `settoriali_growth` is consistent** (already an L1
 Recommendation leaning (b) as a Shadow-only experiment IF the user wants parabola exposure
 at all — but (a) is defensible and simpler given the pipeline is already being pruned
 (item 16). Do NOT let this become a straight-to-production exception.
+
+**DECISION (user, 2026-09-03): option (b)** — build the narrow guarded momentum mechanism
+as a Shadow Monitor. Concrete plan, in order:
+
+1. **Proper narrow backtest first** (`backtest_momentum_narrow.py`, scratch): restrict to
+   `settoriali_growth` + `oro_metalli_preziosi` ONLY. Sweep: Donchian N ∈ {20,55}, entry
+   ADX_min ∈ {20,25}, and crucially a **HARD % stop** ∈ {−6,−8,−10,−12%} that overrides the
+   ATR chandelier (the leverage-gap problem — a hard stop that actually holds). Small
+   position size baked into the P&L model (e.g. 5k not 10k). Frozen batch, IN/OOS split,
+   per-family breakdown (never pooled — the 2026-09-03 run showed oro's "edge" was ONE
+   silver trade). Bar to clear: OOS PF ≥ ~1.3 on BOTH families independently, no IN→OOS
+   collapse. If it doesn't clear → fall back to option (a), tell the user.
+2. **If it clears**: build `shadow_monitor_momentum.py` (new STEP in `monitor.py::run()`,
+   same non-invasive try/except pattern as the other shadows), `model_name =
+   `candidate_momentum_YYYYMMDD``, log to `etf_shadow_positions`, email via a new
+   `_SHADOW_VARIANTS` entry. NO production entry-logic change, NO YAML change.
+3. **N≥30 closed forward + explicit user decision** before any promotion — same discipline
+   as every other candidate. NOT a straight-to-production exception.
+
+**Priority: LOWEST of the queued work** — behind 06/09 checkpoint, the Directa-faithful
+exit helper (item 15), and the L1 exit analysis (item 17). It's the weakest candidate
+(marginal edge) and the user is already concerned about shadow-monitor sprawl (item 16). Do
+step 1 (the backtest) around the same time as / just after item 17; only build the shadow
+(step 2) if step 1 clears the bar.
 
 ## 16. Shadow-monitor PRUNING — scheduled for the 2026-10-06 checkpoint
 
