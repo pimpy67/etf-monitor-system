@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c23e4e15-4c77-4fcf-a9c0-f0d2dc00b62b
-  modified: 2026-09-03T11:12:17.453Z
+  modified: 2026-09-03T11:13:26.803Z
 ---
 
 ## ⚠️ Aggiornamento 2026-08-23 — processo cambiato da scadenza fissa a checkpoint ricorrente
@@ -547,6 +547,35 @@ answer (not a fallback), and the real decision is how big to size the PAC sleeve
 drawdown, the lever is asset allocation (bonds, the 75/25 the regime API suggests), not
 timing. Only the momentum/parabola mechanism stays open as a "could we add it" (marginal,
 tail-risky). Full data in [[etf-l1-gate-widening-analysis-2026-09-01]].
+
+### 18b — DECIDE at 06/09: add a momentum/breakout mechanism for the parabolas? (user asked 2026-09-03 to put this on the agenda)
+
+What the 2026-09-03 exploratory backtest showed: Donchian breakout + ATR chandelier trail
+DOES catch the moves L1 structurally rejects (`PHAG.MI` silver +57.7% Jan 2026, one trade).
+But as a system it's **marginal** — pooled OOS PF only ~1.10-1.23 (barely above break-even
+after costs), 440-770 trades, WR 40-48%, decays IN→OOS (overfit signature). Per-family
+wildly inconsistent: `oro_metalli_preziosi` "works" OOS only because of the ONE silver
+trade (IN-sample it lost money); `crypto` collapses to 0% WR OOS; `leva_single_stock` worst
+trade −83 to −87%. **Only `settoriali_growth` is consistent** (already an L1 driver).
+
+**Options for 06/09:**
+- (a) **Don't build it.** The edge is too thin and tail-dependent; same pattern as most
+  rejected candidates. Accept that the parabola is not systematically capturable and the
+  active system stays L1+L0.
+- (b) **Build a narrow, guarded version + Shadow Monitor first** (NOT straight to
+  production): restrict to `settoriali_growth` + maybe `oro_metalli_preziosi`; HARD % stop
+  that actually holds (leverage products gap through ATR trails); small position size;
+  exclude `leva_single_stock`/`crypto`/`commodities` where it collapses OOS. Then N≥30
+  forward before any promotion, same discipline as every other candidate. This is real
+  work (new entry logic, new exit logic, new shadow monitor) — not a config tweak.
+- (c) **Targeted, accept-the-risk manual play** — no system, but a documented rule: "when a
+  precious-metals ETF breaks a 20-day high with ADX rising, the user MAY take a discretionary
+  position with a −8% hard stop, sized small." Removes the backtest-validation burden by
+  making it explicitly discretionary.
+
+Recommendation leaning (b) as a Shadow-only experiment IF the user wants parabola exposure
+at all — but (a) is defensible and simpler given the pipeline is already being pruned
+(item 16). Do NOT let this become a straight-to-production exception.
 
 ## 16. Shadow-monitor PRUNING — scheduled for the 2026-10-06 checkpoint
 
