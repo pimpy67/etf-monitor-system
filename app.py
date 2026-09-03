@@ -44,6 +44,10 @@ def portfolio():
 def pac_page():
     return send_file('templates/pac.html')
 
+@app.route('/riconciliazione')
+def riconciliazione_page():
+    return send_file('templates/riconciliazione.html')
+
 @app.route('/data/<path:filename>')
 def serve_data(filename):
     return send_from_directory('data', filename)
@@ -1016,6 +1020,40 @@ def exit_portfolio_route(isin):
         db.add_portfolio_event(isin, 'exit', exit_date, exit_price)
         return jsonify({'status': 'ok', 'isin': isin})
     return jsonify({'error': 'Errore salvataggio'}), 503
+
+
+@app.route('/api/reconcile', methods=['POST'])
+def reconcile_directa_route():
+    """Riconciliazione: estratto Directa P_TOTALE_*.xlsx vs posizioni attive del monitor.
+    Non modifica nulla — solo un report di differenze. La verità è Directa."""
+    from reconcile_directa import parse_directa_export, reconcile
+
+    f = request.files.get('file')
+    if not f or not f.filename:
+        return jsonify({'error': 'Nessun file caricato (campo "file")'}), 400
+    if not f.filename.lower().endswith(('.xlsx', '.xls')):
+        return jsonify({'error': 'Serve un file Excel (.xlsx) — l\'estratto P_TOTALE di Directa'}), 400
+
+    try:
+        parsed = parse_directa_export(f.read())
+    except Exception as e:
+        return jsonify({'error': f'Impossibile leggere il file: {e}'}), 400
+
+    # ISIN dell'universo monitorato — per marcare "posseduto ma non monitorato".
+    monitored = set()
+    try:
+        with open('data/dashboard_data.json', 'r') as fh:
+            for lst in json.load(fh).get('levels', {}).values():
+                for e in lst:
+                    if e.get('isin'):
+                        monitored.add(str(e['isin']).strip().upper())
+    except Exception:
+        monitored = None
+
+    result = reconcile(parsed['positions'], db.get_portfolio_entries(), monitored)
+    result['directa_meta'] = parsed['meta']
+    result['warnings'] = parsed['warnings']
+    return jsonify(result)
 
 
 @app.route('/api/portfolio/<isin>/partial-exit', methods=['POST'])

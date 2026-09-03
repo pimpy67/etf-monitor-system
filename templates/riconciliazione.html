@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Riconciliazione — ETF Monitor</title>
+<style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+        --color-text-primary:#1f2937; --color-text-muted:#6b7280; --color-border:#e5e7eb;
+        --color-hover:#f3f4f6; --color-bg:#ffffff; --color-bg-secondary:#f9fafb;
+        --color-safe:#10b981; --color-warning:#f59e0b; --color-danger:#ef4444;
+        --color-neutral:#9ca3af; --color-primary:#3b82f6; --color-primary-hover:#1d4ed8;
+        --shadow-sm:0 1px 2px 0 rgba(0,0,0,0.05);
+    }
+    @media (prefers-color-scheme:dark) {
+        :root {
+            --color-text-primary:#f9fafb; --color-text-muted:#d1d5db; --color-border:#374151;
+            --color-hover:#1f2937; --color-bg:#111827; --color-bg-secondary:#1f2937;
+            --color-safe:#34d399; --color-warning:#fbbf24; --color-danger:#f87171;
+            --color-neutral:#9ca3af; --color-primary:#3b82f6; --color-primary-hover:#1d4ed8;
+            --shadow-sm:0 1px 2px 0 rgba(0,0,0,0.3);
+        }
+    }
+    html { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Roboto',sans-serif; color-scheme:light dark; }
+    body { background:var(--color-bg); color:var(--color-text-primary); line-height:1.6; }
+    .container { max-width:1200px; margin:0 auto; padding:24px 16px 60px; }
+    .header-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:12px; }
+    .header-title { font-size:24px; font-weight:700; }
+    .back-link { color:var(--color-primary); text-decoration:none; font-size:14px; font-weight:600; }
+    .back-link:hover { text-decoration:underline; }
+    .subtitle { color:var(--color-text-muted); font-size:14px; margin-bottom:24px; }
+
+    .card { background:var(--color-bg-secondary); border:1px solid var(--color-border); border-radius:12px; padding:20px; margin-bottom:20px; box-shadow:var(--shadow-sm); }
+    .drop { border:2px dashed var(--color-border); border-radius:10px; padding:26px; text-align:center; color:var(--color-text-muted); font-size:14px; transition:border-color .15s,background .15s; }
+    .drop.over { border-color:var(--color-primary); background:var(--color-hover); }
+    .drop strong { color:var(--color-text-primary); }
+    .btn { padding:10px 18px; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; transition:background .15s; }
+    .btn-primary { background:var(--color-primary); color:#fff; }
+    .btn-primary:hover { background:var(--color-primary-hover); }
+    .btn-primary:disabled { opacity:.5; cursor:default; }
+    .filename { font-size:13px; color:var(--color-text-primary); margin-top:12px; }
+    .hint { font-size:12px; color:var(--color-text-muted); margin-top:10px; }
+
+    .badges { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+    .badge { border-radius:999px; padding:5px 12px; font-size:13px; font-weight:600; border:1px solid var(--color-border); }
+    .badge b { font-size:15px; }
+    .badge.ok { color:var(--color-safe); border-color:var(--color-safe); }
+    .badge.warn { color:var(--color-warning); border-color:var(--color-warning); }
+    .badge.bad { color:var(--color-danger); border-color:var(--color-danger); }
+    .aligned-banner { text-align:center; padding:16px; border-radius:10px; background:var(--color-hover); font-size:16px; font-weight:700; color:var(--color-safe); margin-bottom:20px; }
+
+    .section-title { font-size:16px; font-weight:700; margin:26px 0 6px; }
+    .section-desc { font-size:12.5px; color:var(--color-text-muted); margin-bottom:12px; }
+
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--color-border); }
+    th { color:var(--color-text-muted); font-weight:600; font-size:11.5px; text-transform:uppercase; }
+    td.num { text-align:right; font-variant-numeric:tabular-nums; }
+    tr.mismatch td { background:rgba(239,68,68,0.09); }
+    .pill { font-size:11px; font-weight:700; padding:1px 7px; border-radius:6px; border:1px solid var(--color-border); color:var(--color-text-muted); }
+    .pill.L0 { color:#a855f7; border-color:#a855f7; }
+    .pill.L1 { color:var(--color-warning); border-color:var(--color-warning); }
+    .ok-mark { color:var(--color-safe); font-weight:700; }
+    .bad-mark { color:var(--color-danger); font-weight:700; }
+    .isin { font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:var(--color-text-muted); }
+    .empty-note { color:var(--color-text-muted); font-size:13px; padding:10px 0; }
+    .error-banner { display:none; background:var(--color-danger); color:#fff; padding:10px 14px; border-radius:8px; margin-bottom:16px; font-size:13px; }
+    .warn-list { font-size:12.5px; color:var(--color-warning); margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header-top">
+        <div>
+            <div class="header-title">🔀 Riconciliazione ETF</div>
+            <div class="subtitle">Confronta l'estratto Directa con le posizioni registrate nel monitor. La verità è <strong>Directa</strong> — questo confronto non modifica niente, segnala solo le differenze.</div>
+        </div>
+        <a href="/" class="back-link">← Torna alla dashboard</a>
+    </div>
+
+    <div class="error-banner" id="errorBanner"></div>
+
+    <div class="card">
+        <div class="drop" id="drop">
+            <strong>Trascina qui l'estratto Directa</strong> — <code>P_TOTALE_*.xlsx</code><br>
+            (Directa → Portafoglio → Estratto portafoglio totale)<br>
+            oppure <label style="color:var(--color-primary);cursor:pointer;text-decoration:underline;">scegli il file<input type="file" id="fileInput" accept=".xlsx,.xls" hidden></label>
+        </div>
+        <div class="filename" id="filename"></div>
+        <div style="margin-top:14px;">
+            <button class="btn btn-primary" id="goBtn" disabled onclick="run()">Confronta</button>
+        </div>
+        <div class="hint">Il file resta nel browser e viene inviato solo al tuo server per il confronto — non viene salvato.</div>
+    </div>
+
+    <div id="results" hidden>
+        <div id="metaLine" class="subtitle"></div>
+        <div id="alignedBanner" class="aligned-banner" hidden>✅ Directa e monitor coincidono — tutto allineato.</div>
+        <div class="badges" id="badges"></div>
+        <div class="warn-list" id="warnList"></div>
+
+        <div class="section-title">In entrambi</div>
+        <div class="section-desc">Posizioni presenti sia su Directa sia nel monitor. Riga rossa = quantità diversa.</div>
+        <div class="card" style="padding:0;overflow-x:auto;"><table id="tMatched"></table></div>
+
+        <div class="section-title" style="color:var(--color-warning);">Su Directa, non nel monitor</div>
+        <div class="section-desc">Le possiedi ma il monitor non le traccia come posizione attiva — acquisto non registrato, o ETF che non vuoi monitorare.</div>
+        <div class="card" style="padding:0;overflow-x:auto;"><table id="tOnlyDirecta"></table></div>
+
+        <div class="section-title" style="color:var(--color-danger);">Nel monitor, non su Directa</div>
+        <div class="section-desc">Il monitor le considera attive ma non risultano su Directa — probabile vendita non registrata (usa "Esci" nella pagina Portafoglio).</div>
+        <div class="card" style="padding:0;overflow-x:auto;"><table id="tOnlyMonitor"></table></div>
+    </div>
+</div>
+
+<script>
+let selectedFile = null;
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const goBtn = document.getElementById('goBtn');
+
+function setFile(f) {
+    selectedFile = f;
+    document.getElementById('filename').textContent = f ? '📄 ' + f.name : '';
+    goBtn.disabled = !f;
+}
+fileInput.addEventListener('change', e => setFile(e.target.files[0] || null));
+['dragover','dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) setFile(f); });
+
+function err(msg) {
+    const b = document.getElementById('errorBanner');
+    b.textContent = msg; b.style.display = 'block';
+}
+
+const fmt = (n, d=2) => (n == null ? '—' : Number(n).toLocaleString('it-IT', {minimumFractionDigits:d, maximumFractionDigits:d}));
+const layers = arr => (arr && arr.length ? arr.map(l => `<span class="pill ${l}">${l}</span>`).join(' ') : '—');
+
+async function run() {
+    document.getElementById('errorBanner').style.display = 'none';
+    goBtn.disabled = true; goBtn.textContent = 'Confronto…';
+    try {
+        const fd = new FormData();
+        fd.append('file', selectedFile);
+        const res = await fetch('/api/reconcile', { method:'POST', body:fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        render(data);
+    } catch (e) {
+        err('Errore: ' + e.message);
+    } finally {
+        goBtn.disabled = false; goBtn.textContent = 'Confronta';
+    }
+}
+
+function render(d) {
+    document.getElementById('results').hidden = false;
+    const m = d.directa_meta || {};
+    document.getElementById('metaLine').textContent =
+        `Estratto: ${m.conto || '?'} · ${m.data_estrazione || '?'} · valore ${m.valore_portafoglio || '?'}`;
+
+    const s = d.summary;
+    document.getElementById('alignedBanner').hidden = !s.aligned;
+    document.getElementById('badges').innerHTML = [
+        `<span class="badge ok"><b>${s.ok}</b> allineate</span>`,
+        s.qty_mismatch ? `<span class="badge bad"><b>${s.qty_mismatch}</b> quantità diversa</span>` : '',
+        s.only_directa ? `<span class="badge warn"><b>${s.only_directa}</b> solo Directa</span>` : '',
+        s.only_monitor ? `<span class="badge bad"><b>${s.only_monitor}</b> solo monitor</span>` : '',
+        `<span class="badge"><b>${s.directa_total}</b> ETF Directa · <b>${s.monitor_total}</b> attivi monitor</span>`,
+    ].filter(Boolean).join('');
+
+    const w = d.warnings || [];
+    document.getElementById('warnList').innerHTML = w.map(x => '⚠️ ' + x).join('<br>');
+
+    // Matched
+    let h = `<thead><tr><th>ETF</th><th>Livello</th><th>Broker</th>
+        <th class="num">Q.tà Directa</th><th class="num">Q.tà Monitor</th><th class="num">Δ</th>
+        <th class="num">Costo medio Directa</th><th class="num">Costo medio Monitor</th><th class="num">Δ%</th></tr></thead><tbody>`;
+    if (!d.matched.length) h += `<tr><td colspan="9" class="empty-note">Nessuna posizione in comune.</td></tr>`;
+    for (const x of d.matched) {
+        h += `<tr class="${x.qty_ok ? '' : 'mismatch'}">
+            <td>${x.name}<br><span class="isin">${x.isin}</span></td>
+            <td>${layers(x.layers)}</td>
+            <td>${(x.brokers||[]).join(', ') || '—'}</td>
+            <td class="num">${fmt(x.directa_qty)}</td>
+            <td class="num">${fmt(x.monitor_qty)}</td>
+            <td class="num ${x.qty_ok ? 'ok-mark' : 'bad-mark'}">${x.qty_ok ? '✓' : (x.qty_delta > 0 ? '+' : '') + fmt(x.qty_delta)}</td>
+            <td class="num">${fmt(x.directa_avg_cost, 4)}</td>
+            <td class="num">${fmt(x.monitor_avg_cost, 4)}</td>
+            <td class="num">${x.cost_delta_pct == null ? '—' : (x.cost_delta_pct > 0 ? '+' : '') + fmt(x.cost_delta_pct) + '%'}</td>
+        </tr>`;
+    }
+    document.getElementById('tMatched').innerHTML = h + '</tbody>';
+
+    // Only Directa
+    h = `<thead><tr><th>ETF</th><th class="num">Quantità</th><th class="num">Valore attuale</th><th>Nota</th></tr></thead><tbody>`;
+    if (!d.only_directa.length) h += `<tr><td colspan="4" class="empty-note">Niente — ogni ETF Directa è tracciato.</td></tr>`;
+    for (const x of d.only_directa) {
+        h += `<tr>
+            <td>${x.name}<br><span class="isin">${x.isin} · ${x.ticker || ''}</span></td>
+            <td class="num">${fmt(x.quantita)}</td>
+            <td class="num">${fmt(x.valore_attuale)} ${x.divisa || ''}</td>
+            <td>${x.monitored ? 'nell\'universo monitorato, ma non in portafoglio' : '<span class="bad-mark">non è nemmeno nell\'universo monitorato</span>'}</td>
+        </tr>`;
+    }
+    document.getElementById('tOnlyDirecta').innerHTML = h + '</tbody>';
+
+    // Only Monitor
+    h = `<thead><tr><th>ETF</th><th>Livello</th><th>Broker</th><th class="num">Quantità</th><th class="num">Costo medio</th></tr></thead><tbody>`;
+    if (!d.only_monitor.length) h += `<tr><td colspan="5" class="empty-note">Niente — ogni posizione del monitor risulta su Directa.</td></tr>`;
+    for (const x of d.only_monitor) {
+        h += `<tr>
+            <td>${x.name}<br><span class="isin">${x.isin}</span></td>
+            <td>${layers(x.layers)}</td>
+            <td>${(x.brokers||[]).join(', ') || '—'}</td>
+            <td class="num">${fmt(x.monitor_qty)}</td>
+            <td class="num">${fmt(x.monitor_avg_cost, 4)}</td>
+        </tr>`;
+    }
+    document.getElementById('tOnlyMonitor').innerHTML = h + '</tbody>';
+
+    document.getElementById('results').scrollIntoView({ behavior:'smooth' });
+}
+</script>
+</body>
+</html>
