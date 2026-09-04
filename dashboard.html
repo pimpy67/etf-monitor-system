@@ -618,6 +618,10 @@ let favoriteIsins = new Set();     // isin ticker seguiti manualmente ("Preferit
 let favoritesSectionOpen = true;   // aperto di default
 let approachRadarOpen = true;      // aperto di default
 let bounceRadarOpen = true;        // aperto di default
+let sectorMomentumOpen = true;     // aperto di default
+let taxoDim = 'settori';           // 'settori' | 'geografie'
+let taxoSort = 'momentum_score';   // colonna di ordinamento
+let taxoSortDir = -1;              // -1 desc, 1 asc
 let level3Open = false;            // L3 (Universo) chiuso di default, si apre a tendina
 let historyCache = {};
 let pfEditMode = false;      // true = modifica, false = aggiunta
@@ -844,10 +848,11 @@ function renderDashboard() {
     sections.push(renderLevelSection(parseInt(lvl), label, cls, list));
   }
 
-  // Preferiti + Radar Anticipato + Radar Rimbalzo EMA20 + param ref
+  // Preferiti + Radar Anticipato + Radar Rimbalzo EMA20 + Momentum Settori + param ref
   sections.push(renderFavoritesSection());
   sections.push(renderApproachRadarSection());
   sections.push(renderBounceRadarSection());
+  sections.push(renderSectorMomentumSection());
   sections.push(renderParamRef());
 
   document.getElementById('mainContent').innerHTML = sections.join('');
@@ -1441,6 +1446,100 @@ function renderBounceRadarTable(rows) {
     <tbody>${trs}</tbody>
   </table>
   <p style="margin:8px 0 0;font-size:0.78em;color:#8b949e;">🥇🥈🥉 = top 3 per qualità tecnica (ADX+RVOL) tra i segnali di oggi — solo priorità di lettura quando scattano tanti segnali insieme, non un filtro d'ingresso.</p>`;
+}
+
+// ── Momentum Settori / Geografie ───────────────────────────────────────────
+function renderSectorMomentumSection() {
+  const tm = (allData && allData.taxonomy_momentum) || {};
+  const rows = tm[taxoDim] || [];
+  const disp = sectorMomentumOpen ? 'block' : 'none';
+  const tog  = sectorMomentumOpen ? '&#9650;' : '&#9660;';
+  return `
+  <div class="portfolio-section" id="sectorMomentumSection">
+    <div class="portfolio-header" onclick="event.stopPropagation();toggleSectorMomentumSection()">
+      <h3>&#128202; Momentum Settori</h3>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:0.78em;color:#555">${(tm.settori||[]).length} settori · ${(tm.geografie||[]).length} aree</span>
+        <span id="sectorMomentumToggle" style="color:#555;font-size:0.75em">${tog}</span>
+      </div>
+    </div>
+    <div class="portfolio-body" id="sectorMomentumBody" style="display:${disp};">
+      <p style="margin:0 0 10px;font-size:0.85em;color:#aaa;">
+        Aggregato degli ETF monitorati per <b>Settore</b> o <b>Geografia</b>.
+        <b>Score</b> = media dei percentile-rank del gruppo su %1M, %1W e ampiezza (quota di ETF sopra la EMA20), scala 0-100.
+        Puramente informativo — non è un segnale d'ingresso del sistema. Clic sulle intestazioni per riordinare.
+      </p>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <button class="cat-btn ${taxoDim==='settori'?'active':''}" onclick="setTaxoDim('settori')">Settori</button>
+        <button class="cat-btn ${taxoDim==='geografie'?'active':''}" onclick="setTaxoDim('geografie')">Geografie</button>
+      </div>
+      <div style="overflow-x:auto;">${renderTaxoTable(rows)}</div>
+    </div>
+  </div>`;
+}
+
+function renderTaxoTable(rows) {
+  if (!rows.length) return `<p style="text-align:center;padding:16px;color:#8b949e">Dati momentum non ancora disponibili (attendi il prossimo giro del monitor).</p>`;
+  const dir = taxoSortDir;
+  const sorted = [...rows].sort((a,b) => {
+    const va = a[taxoSort], vb = b[taxoSort];
+    if (va == null) return 1; if (vb == null) return -1;
+    return (va - vb) * dir;
+  });
+  const nMax = sorted.length;
+  const cols = [
+    ['nome','Gruppo','left'], ['n','N','center'],
+    ['momentum_score','Score','center'], ['med_1m','%1M','right'],
+    ['med_1w','%1W','right'], ['med_1d','%1G','right'],
+    ['med_rsi','RSI','center'], ['med_adx','ADX','center'],
+    ['breadth_ema20','>EMA20','center'], ['pct_l1l2','L1+L2','center'],
+    ['med_drawdown','DD picco','right'],
+  ];
+  const arrow = c => taxoSort===c ? (dir<0?' ▾':' ▴') : '';
+  const th = cols.map(([k,lab,al]) =>
+    `<th onclick="setTaxoSort('${k}')" style="padding:7px 9px;text-align:${al};cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.15);white-space:nowrap;font-size:0.82em">${lab}${arrow(k)}</th>`
+  ).join('');
+  const fmtPct = v => v==null ? '–' : `<span style="color:${v>0?'#3fb950':(v<0?'#f85149':'#8b949e')}">${v>0?'+':''}${v.toFixed(1)}%</span>`;
+  const scoreCol = v => v==null ? '#8b949e' : `hsl(${Math.round(v*1.2)},60%,55%)`;
+  const trs = sorted.map((r,i) => {
+    const medal = taxoSort==='momentum_score' && dir<0 ? (i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'') : '';
+    return `<tr style="border-bottom:1px solid rgba(255,255,255,0.06)">
+      <td style="padding:6px 9px;font-weight:600">${medal}${r.nome}</td>
+      <td style="padding:6px 9px;text-align:center;color:#8b949e">${r.n}</td>
+      <td style="padding:6px 9px;text-align:center;font-weight:700;color:${scoreCol(r.momentum_score)}">${r.momentum_score==null?'–':r.momentum_score.toFixed(0)}</td>
+      <td style="padding:6px 9px;text-align:right">${fmtPct(r.med_1m)}</td>
+      <td style="padding:6px 9px;text-align:right">${fmtPct(r.med_1w)}</td>
+      <td style="padding:6px 9px;text-align:right">${fmtPct(r.med_1d)}</td>
+      <td style="padding:6px 9px;text-align:center;color:#c9d1d9">${r.med_rsi==null?'–':r.med_rsi.toFixed(0)}</td>
+      <td style="padding:6px 9px;text-align:center;color:#c9d1d9">${r.med_adx==null?'–':r.med_adx.toFixed(0)}</td>
+      <td style="padding:6px 9px;text-align:center;color:#8b949e">${r.breadth_ema20.toFixed(0)}%</td>
+      <td style="padding:6px 9px;text-align:center;color:#8b949e">${r.pct_l1l2.toFixed(0)}%</td>
+      <td style="padding:6px 9px;text-align:right">${fmtPct(r.med_drawdown)}</td>
+    </tr>`;
+  }).join('');
+  return `<table style="width:100%;border-collapse:collapse;font-size:0.88em">
+    <thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`;
+}
+
+function toggleSectorMomentumSection() {
+  sectorMomentumOpen = !sectorMomentumOpen;
+  const body = document.getElementById('sectorMomentumBody');
+  const tog  = document.getElementById('sectorMomentumToggle');
+  if (body) body.style.display = sectorMomentumOpen ? 'block' : 'none';
+  if (tog)  tog.innerHTML = sectorMomentumOpen ? '&#9650;' : '&#9660;';
+}
+
+function setTaxoDim(d) {
+  taxoDim = d;
+  const host = document.getElementById('sectorMomentumSection');
+  if (host) host.outerHTML = renderSectorMomentumSection();
+}
+
+function setTaxoSort(col) {
+  if (taxoSort === col) taxoSortDir = -taxoSortDir;
+  else { taxoSort = col; taxoSortDir = (col === 'nome') ? 1 : -1; }
+  const host = document.getElementById('sectorMomentumSection');
+  if (host) host.outerHTML = renderSectorMomentumSection();
 }
 
 // ── Param ref HTML ─────────────────────────────────────────────────────────

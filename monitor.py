@@ -30,9 +30,95 @@ from database import PriceDatabase
 from pdf_generator import generate_parameters_pdf
 from pdf_generator_complete import generate_complete_pdf
 from order_pricing import compute_order_prices
+from etf_taxonomy import classify as classify_taxonomy
 
 
 monitor_log = []
+
+
+def _tax_cell(v) -> str:
+    """Legge una cella tassonomia dall'Excel gestendo NaN/None."""
+    if v is None:
+        return ''
+    try:
+        if isinstance(v, float) and pd.isna(v):
+            return ''
+    except Exception:
+        pass
+    return str(v).strip()
+
+
+def _median(xs):
+    xs = sorted(v for v in xs if v is not None)
+    if not xs:
+        return None
+    n = len(xs)
+    m = n // 2
+    return round(xs[m] if n % 2 else (xs[m - 1] + xs[m]) / 2, 2)
+
+
+def build_taxonomy_rollup(dashboard: dict) -> dict:
+    """Aggrega gli ETF monitorati per Settore e per Geografia → momentum ranking.
+
+    Puramente informativo: legge da dashboard['levels'], non tocca l'engine.
+    momentum_score = media dei percentile-rank del bucket su med_1m, med_1w,
+    breadth_ema20 (solo bucket con n>=2), scala 0-100.
+    """
+    etfs = []
+    for lvl, lst in dashboard.get('levels', {}).items():
+        for e in (lst or []):
+            etfs.append((int(lvl), e))
+
+    def agg(key):
+        buckets = {}
+        for lvl, e in etfs:
+            b = (e.get(key) or '').strip() or 'n/d'
+            if b == '—':
+                b = 'Bond & Monetario'
+            buckets.setdefault(b, []).append((lvl, e))
+        rows = []
+        for name, items in buckets.items():
+            n = len(items)
+            lvls = [l for l, _ in items]
+            es = [e for _, e in items]
+            rows.append({
+                'nome': name,
+                'n': n,
+                'n_l0': lvls.count(0), 'n_l1': lvls.count(1),
+                'n_l2': lvls.count(2), 'n_l3': lvls.count(3),
+                'pct_l1l2': round(100 * (lvls.count(1) + lvls.count(2)) / n, 1),
+                'med_1m': _median([e.get('pct_1m') for e in es]),
+                'med_1w': _median([e.get('pct_1w') for e in es]),
+                'med_1d': _median([e.get('pct_1d') for e in es]),
+                'med_rsi': _median([e.get('rsi') for e in es]),
+                'med_adx': _median([e.get('adx') for e in es]),
+                'med_drawdown': _median([e.get('drawdown_from_peak') for e in es]),
+                'breadth_ema20': round(
+                    100 * sum(1 for e in es if (e.get('dist_ema20') or 0) > 0) / n, 1),
+            })
+        scored = [r for r in rows if r['n'] >= 2]
+        for metric in ('med_1m', 'med_1w', 'breadth_ema20'):
+            vals = sorted(r[metric] for r in scored if r[metric] is not None)
+            for r in scored:
+                v = r[metric]
+                if v is None or len(vals) < 2:
+                    r.setdefault('_pr', []).append(50.0)
+                else:
+                    below = sum(1 for x in vals if x < v)
+                    r.setdefault('_pr', []).append(100.0 * below / (len(vals) - 1))
+        for r in rows:
+            pr = r.pop('_pr', None)
+            r['momentum_score'] = round(sum(pr) / len(pr), 1) if pr else None
+        rows.sort(key=lambda r: (r['momentum_score'] is not None,
+                                 r['momentum_score'] if r['momentum_score'] is not None else -1),
+                  reverse=True)
+        return rows
+
+    return {
+        'settori': agg('settore'),
+        'geografie': agg('geografia'),
+        'generated': datetime.now().isoformat(),
+    }
 
 
 def add_log(message: str):
@@ -204,6 +290,17 @@ class ETFMonitor:
         categoria = str(row.get('Categoria', ''))
         borsa    = str(row.get('Borsa', ''))
         level    = int(row.get('Livello', 3))
+
+        # Tassonomia (Asset Class / Geografia / Settore) — colonne Excel come override
+        # editabile; se una manca si deriva al volo da nome+categoria (etf_taxonomy).
+        asset_class = _tax_cell(row.get('Asset Class'))
+        geografia   = _tax_cell(row.get('Geografia'))
+        settore     = _tax_cell(row.get('Settore'))
+        if not (asset_class and geografia and settore):
+            _t = classify_taxonomy(nome, categoria)
+            asset_class = asset_class or _t['asset_class']
+            geografia   = geografia   or _t['geografia']
+            settore     = settore     or _t['settore']
 
         # Nuovi sistema: usa famiglia da config YAML
         famiglia = ETFTechnicalAnalyzer.detect_family(categoria)
@@ -415,6 +512,9 @@ class ETFMonitor:
             'borsa':     borsa,
             'livello':   level,
             'etf_type':  etf_type,
+            'asset_class': asset_class,
+            'geografia':   geografia,
+            'settore':     settore,
             'analysis':  analysis,
             'l0_signal': l0_entry_signal,
             'l1_tiered': l1_tiered,
@@ -428,10 +528,14 @@ class ETFMonitor:
 
     def _empty_result(self, ticker, isin, nome, categoria, borsa, level, reason):
         famiglia = ETFTechnicalAnalyzer.detect_family(categoria)
+        _t = classify_taxonomy(nome, categoria)
         return {
             'ticker': ticker, 'isin': isin, 'nome': nome,
             'categoria': categoria, 'borsa': borsa, 'livello': level,
             'etf_type': famiglia,  # backward compatibility
+            'asset_class': _t['asset_class'],
+            'geografia': _t['geografia'],
+            'settore': _t['settore'],
             'analysis': {
                 'current_price': None,
                 'ema20': None, 'sma50': None, 'sma200': None,
@@ -460,6 +564,18 @@ class ETFMonitor:
             COL_MACD            = 12
             COL_SEGNALE         = 13
             COL_ULTIMA_MODIFICA = 14
+
+            # Colonne tassonomia (Asset Class / Geografia / Settore): create se mancano,
+            # popolate se vuote. Restano un override editabile a mano.
+            _hdr = [c.value for c in ws[1]]
+            _tax_col = {}
+            for _name in ('Asset Class', 'Geografia', 'Settore'):
+                if _name in _hdr:
+                    _tax_col[_name] = _hdr.index(_name) + 1
+                else:
+                    _hdr.append(_name)
+                    _tax_col[_name] = len(_hdr)
+                    ws.cell(row=1, column=_tax_col[_name], value=_name)
 
             excel_row_map = {row_idx - 2: row_idx for row_idx in range(2, ws.max_row + 1)}
             level_changes = []
@@ -518,6 +634,14 @@ class ETFMonitor:
 
                 ws.cell(row=row, column=COL_ULTIMA_MODIFICA,
                         value=datetime.now().strftime('%Y-%m-%d %H:%M'))
+
+                # Tassonomia: scrivi solo se la cella è vuota (override manuale preservato)
+                for _name, _val in (('Asset Class', result.get('asset_class')),
+                                    ('Geografia',   result.get('geografia')),
+                                    ('Settore',     result.get('settore'))):
+                    _c = ws.cell(row=row, column=_tax_col[_name])
+                    if _val and (_c.value is None or str(_c.value).strip() == ''):
+                        _c.value = _val
 
             wb.save(self.excel_path)
             add_log(f"File Excel aggiornato")
@@ -578,6 +702,9 @@ class ETFMonitor:
                 'isin':              r.get('isin', ''),
                 'nome':              r['nome'],
                 'categoria':         category,
+                'asset_class':       r.get('asset_class', ''),
+                'geografia':         r.get('geografia', ''),
+                'settore':           r.get('settore', ''),
                 'borsa':             r.get('borsa', ''),
                 'etf_type':          r.get('etf_type', 'equity_developed'),
                 'price':             float(price) if price is not None else None,
@@ -660,6 +787,13 @@ class ETFMonitor:
             'etfs_with_price': sum(1 for r in results if r['analysis'].get('current_price') is not None),
             'etfs_no_price': sum(1 for r in results if r['analysis'].get('current_price') is None),
         }
+
+        # Momentum per Settore / Geografia (informativo — non tocca l'engine)
+        try:
+            dashboard['taxonomy_momentum'] = build_taxonomy_rollup(dashboard)
+        except Exception as e:
+            add_log(f"  ⚠️  taxonomy rollup error: {e}")
+            dashboard['taxonomy_momentum'] = {'settori': [], 'geografie': []}
 
         os.makedirs('data', exist_ok=True)
         with open('data/dashboard_data.json', 'w') as f:
