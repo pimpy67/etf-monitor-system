@@ -622,6 +622,7 @@ let sectorMomentumOpen = true;     // aperto di default
 let taxoDim = 'settori';           // 'settori' | 'geografie'
 let taxoSort = 'momentum_score';   // colonna di ordinamento
 let taxoSortDir = -1;              // -1 desc, 1 asc
+let taxoExpanded = new Set();      // gruppi espansi (mostra ETF)
 let level3Open = false;            // L3 (Universo) chiuso di default, si apre a tendina
 let historyCache = {};
 let pfEditMode = false;      // true = modifica, false = aggiunta
@@ -804,8 +805,8 @@ function renderDashboard() {
     asOfEl.style.display = 'none';
   }
 
-  // Category filters
-  const cats = Object.keys(allData.categories || {});
+  // Category filters (ordine alfabetico, "Tutte" resta primo)
+  const cats = Object.keys(allData.categories || {}).sort((a,b) => a.localeCompare(b,'it'));
   const cf = document.getElementById('catFilters');
   if (cats.length > 1) {
     cf.style.display = 'flex';
@@ -1501,10 +1502,12 @@ function renderTaxoTable(rows) {
   ).join('');
   const fmtPct = v => v==null ? '–' : `<span style="color:${v>0?'#3fb950':(v<0?'#f85149':'#8b949e')}">${v>0?'+':''}${v.toFixed(1)}%</span>`;
   const scoreCol = v => v==null ? '#8b949e' : `hsl(${Math.round(v*1.2)},60%,55%)`;
+  const esc = s => (s||'').replace(/'/g,"\\'");
   const trs = sorted.map((r,i) => {
     const medal = taxoSort==='momentum_score' && dir<0 ? (i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':'') : '';
-    return `<tr style="border-bottom:1px solid rgba(255,255,255,0.06)">
-      <td style="padding:6px 9px;font-weight:600">${medal}${r.nome}</td>
+    const exp = taxoExpanded.has(r.nome);
+    const main = `<tr onclick="toggleTaxoRow('${esc(r.nome)}')" style="border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;${exp?'background:rgba(88,166,255,0.08)':''}">
+      <td style="padding:6px 9px;font-weight:600"><span style="color:#58a6ff;font-size:0.85em">${exp?'▾':'▸'}</span> ${medal}${r.nome}</td>
       <td style="padding:6px 9px;text-align:center;color:#8b949e">${r.n}</td>
       <td style="padding:6px 9px;text-align:center;font-weight:700;color:${scoreCol(r.momentum_score)}">${r.momentum_score==null?'–':r.momentum_score.toFixed(0)}</td>
       <td style="padding:6px 9px;text-align:right">${fmtPct(r.med_1m)}</td>
@@ -1516,9 +1519,62 @@ function renderTaxoTable(rows) {
       <td style="padding:6px 9px;text-align:center;color:#8b949e">${r.pct_l1l2.toFixed(0)}%</td>
       <td style="padding:6px 9px;text-align:right">${fmtPct(r.med_drawdown)}</td>
     </tr>`;
+    const detail = exp ? `<tr><td colspan="${cols.length}" style="padding:0 0 10px 0;background:rgba(88,166,255,0.04)">${renderTaxoEtfList(r.nome)}</td></tr>` : '';
+    return main + detail;
   }).join('');
   return `<table style="width:100%;border-collapse:collapse;font-size:0.88em">
     <thead><tr>${th}</tr></thead><tbody>${trs}</tbody></table>`;
+}
+
+function taxoEtfsFor(group) {
+  const key = taxoDim === 'settori' ? 'settore' : 'geografia';
+  const match = v => {
+    v = (v||'').trim();
+    if (group === 'Bond & Monetario') return v === '—' || v === '';
+    if (group === 'n/d') return v === '' || v === 'n/d';
+    return v === group;
+  };
+  const out = [];
+  const levels = (allData && allData.levels) || {};
+  for (const [lvl, list] of Object.entries(levels)) {
+    for (const e of (list || [])) {
+      if (match(e[key])) out.push({...e, level: parseInt(lvl)});
+    }
+  }
+  out.sort((a,b) => (b.pct_1m ?? -999) - (a.pct_1m ?? -999));
+  return out;
+}
+
+function renderTaxoEtfList(group) {
+  const ets = taxoEtfsFor(group);
+  if (!ets.length) return `<p style="padding:8px 12px;color:#8b949e;font-size:0.85em">Nessun ETF.</p>`;
+  const fp = v => v==null ? '–' : `<span style="color:${v>0?'#3fb950':(v<0?'#f85149':'#8b949e')}">${v>0?'+':''}${v.toFixed(1)}%</span>`;
+  const lvlBadge = l => ({0:'#f0883e',1:'#3fb950',2:'#d29922',3:'#6e7681'}[l]||'#6e7681');
+  const rows = ets.map(e => {
+    const tk = encodeURIComponent(e.ticker||'');
+    return `<tr style="cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.05)" onclick="openETFDetail('${tk}','${e.isin||''}')">
+      <td style="padding:4px 9px 4px 24px"><span style="display:inline-block;width:22px;text-align:center;border-radius:3px;font-size:0.72em;font-weight:700;color:#000;background:${lvlBadge(e.level)}">L${e.level}</span> ${e.nome||e.ticker}</td>
+      <td style="padding:4px 9px;color:#8b949e;font-size:0.85em">${e.ticker||''}</td>
+      <td style="padding:4px 9px;text-align:right">${e.price!=null?e.price.toFixed(2):'–'}</td>
+      <td style="padding:4px 9px;text-align:right">${fp(e.pct_1m)}</td>
+      <td style="padding:4px 9px;text-align:right">${fp(e.pct_1w)}</td>
+      <td style="padding:4px 9px;text-align:center;color:#c9d1d9">${e.rsi!=null?e.rsi.toFixed(0):'–'}</td>
+      <td style="padding:4px 9px;text-align:center;color:#8b949e">${e.buy_count!=null?e.buy_count+'/7':''}</td>
+    </tr>`;
+  }).join('');
+  return `<table style="width:100%;border-collapse:collapse;font-size:0.85em;margin:2px 0">
+    <thead><tr style="color:#6e7681;font-size:0.82em">
+      <th style="padding:3px 9px 3px 24px;text-align:left">ETF (${ets.length})</th><th style="padding:3px 9px;text-align:left">Ticker</th>
+      <th style="padding:3px 9px;text-align:right">Prezzo</th><th style="padding:3px 9px;text-align:right">%1M</th>
+      <th style="padding:3px 9px;text-align:right">%1W</th><th style="padding:3px 9px;text-align:center">RSI</th>
+      <th style="padding:3px 9px;text-align:center">Cond.</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function toggleTaxoRow(name) {
+  if (taxoExpanded.has(name)) taxoExpanded.delete(name); else taxoExpanded.add(name);
+  const host = document.getElementById('sectorMomentumSection');
+  if (host) host.outerHTML = renderSectorMomentumSection();
 }
 
 function toggleSectorMomentumSection() {
