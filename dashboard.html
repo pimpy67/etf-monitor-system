@@ -606,6 +606,7 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
 // ── State ─────────────────────────────────────────────────────────────────
 let allData = null;
 let activeCat = 'all';
+let catDim = 'settore';            // 'settore' | 'geografia' | 'categoria' — dimensione filtro
 let searchQuery = '';
 let portfolioIsins = new Set();
 let portfolioMap   = {};     // isin → {entry_date, entry_price, fund_name} — portafoglio personale
@@ -805,12 +806,18 @@ function renderDashboard() {
     asOfEl.style.display = 'none';
   }
 
-  // Category filters (ordine alfabetico, "Tutte" resta primo)
-  const cats = Object.keys(allData.categories || {}).sort((a,b) => a.localeCompare(b,'it'));
+  // Filtri: dimensione Settore / Geografia / Categoria (ordine alfabetico, "Tutte" primo).
+  // Settore/Geografia usano la stessa tassonomia di "Momentum Settori".
+  const allEtfsFlat = Object.values(allData.levels || {}).flat();
+  const cats = [...new Set(allEtfsFlat.map(etfGroupVal))].filter(Boolean)
+                 .sort((a,b) => a.localeCompare(b,'it'));
   const cf = document.getElementById('catFilters');
   if (cats.length > 1) {
     cf.style.display = 'flex';
-    cf.innerHTML = `<button class="cat-btn ${activeCat==='all'?'active':''}" onclick="filterCat('all',this)">Tutte</button>` +
+    const dimBtn = (d,lab) => `<button class="cat-btn ${catDim===d?'active':''}" style="font-weight:700" onclick="setCatDim('${d}')">${lab}</button>`;
+    cf.innerHTML = dimBtn('settore','▸ Settore') + dimBtn('geografia','▸ Geografia') + dimBtn('categoria','▸ Categoria') +
+      `<span style="width:8px"></span>` +
+      `<button class="cat-btn ${activeCat==='all'?'active':''}" onclick="filterCat('all',this)">Tutte</button>` +
       cats.map(c => `<button class="cat-btn ${activeCat===c?'active':''}" onclick="filterCat('${c.replace(/'/g,"\\'")}',this)">${c}</button>`).join('');
   }
 
@@ -878,8 +885,15 @@ function renderDashboard() {
 
 }
 
+function etfGroupVal(e) {
+  if (catDim === 'categoria') return e.categoria || 'n/d';
+  const v = ((catDim === 'geografia' ? e.geografia : e.settore) || '').trim();
+  if (catDim === 'settore' && (v === '—' || v === '')) return 'Bond & Monetario';
+  return v || 'n/d';
+}
+
 function applyFilters(e) {
-  const catOk = activeCat === 'all' || e.categoria === activeCat;
+  const catOk = activeCat === 'all' || etfGroupVal(e) === activeCat;
   const sq = searchQuery;
   const searchOk = !sq || (e.nome||'').toLowerCase().includes(sq) || (e.isin||'').toLowerCase().includes(sq) || (e.ticker||'').toLowerCase().includes(sq);
   return catOk && searchOk;
@@ -889,6 +903,13 @@ function filterCat(cat, btn) {
   activeCat = cat;
   document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
   if(btn) btn.classList.add('active');
+  renderDashboard();
+}
+
+function setCatDim(d) {
+  if (catDim === d) return;
+  catDim = d;
+  activeCat = 'all';
   renderDashboard();
 }
 
