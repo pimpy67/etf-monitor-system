@@ -857,17 +857,24 @@ class ETFMonitor:
         today     = datetime.now().date()
         today_str = today.strftime('%Y-%m-%d')
 
-        # Costruisci l'elenco dei livelli ATTUALI da results (source-of-truth)
-        # Non leggiamo dal database per evitare out-of-sync con i results appena calcolati
-        existing_l1 = {}
-        existing_l0 = {}
-        for r in results:
-            isin = r.get('isin', '') or r['ticker']
-            lvl = r['analysis'].get('suggested_level', r.get('livello', 3))
-            if lvl == 1:
-                existing_l1[isin] = r
-            elif lvl == 0:
-                existing_l0[isin] = r
+        # Stato PRECEDENTE (persistito nel DB) — serve per rilevare nuovi
+        # ingressi/uscite rispetto a ieri.
+        #
+        # FIX 2026-09-05 (bug reale trovato indagando "Nessun nuovo ingresso
+        # oggi" loggato mentre un ETF era visibilmente nuovo in L0 su
+        # dashboard): fino ad oggi questo dict veniva ricostruito da 'results'
+        # — cioè i livelli DI OGGI, non quelli di ieri. Il confronto sotto
+        # ("isin not in existing_l0") diventava quindi sempre falso per
+        # costruzione: qualunque isin con suggested_level==0 in results finiva
+        # anche in existing_l0 nello stesso loop, PRIMA ancora di essere
+        # controllato. Risultato concreto, verificato sul DB di produzione:
+        # etf_l0_tracking, etf_l1_tracking e etf_l1_exit_history avevano TUTTE
+        # e tre 0 righe, sempre — set_l0_entry/set_l1_entry non erano mai
+        # stati chiamati in tutta la storia del sistema, quindi send_new_entries
+        # (l'email che abbiamo appena scelto come unica email di ingresso) non
+        # ha mai potuto segnalare correttamente un ingresso reale.
+        existing_l1 = self.db.get_all_l1_entries()
+        existing_l0 = self.db.get_all_l0_entries()
 
         current_l1_isins  = set()
         current_l0_isins  = set()
