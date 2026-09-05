@@ -806,13 +806,21 @@ def action_summary():
                                   f"{ticker}: vicino al Target — aggiorna lo Stop su Directa"})
             continue
         if sl is not None:
-            sl_inserted = p.get('sl_inserted')
-            if sl_inserted is None:
+            # Fix 2026-09-05: confrontava sl_suggested (il Trigger suggerito)
+            # contro sl_inserted (stop_loss_inserted = "Prezzo Limite
+            # Personale", ~1% SOTTO il Trigger per design — vedi
+            # order_pricing.compute_order_prices) — due valori diversi per
+            # definizione, risultava "diverso" anche quando l'utente aveva
+            # inserito correttamente entrambi. Il confronto corretto è
+            # trigger_inserted ("Prezzo Stop Personale (Trigger)") contro sl
+            # (anch'esso un Trigger) — stessa coppia di grandezze.
+            trigger_inserted = p.get('trigger_inserted')
+            if trigger_inserted is None:
                 items.append({'level': 'warn', 'icon': '⚠️', 'isin': p['isin'],
                               'text': f"{ticker}: nessuno Stop registrato in dashboard — imposta {sl:.2f} su Directa e registralo qui"})
-            elif sl > 0 and abs(sl_inserted - sl) / sl > 0.003:
+            elif sl > 0 and abs(trigger_inserted - sl) / sl > 0.003:
                 items.append({'level': 'warn', 'icon': '🔧', 'isin': p['isin'],
-                              'text': f"{ticker}: Stop da aggiornare — attuale {sl_inserted:.2f}, nuovo suggerito {sl:.2f}"})
+                              'text': f"{ticker}: Stop da aggiornare — attuale {trigger_inserted:.2f}, nuovo suggerito {sl:.2f}"})
 
     # Nomi ETF per i nuovi ingressi (stessa fonte già usata da l1/l0-tracking)
     fund_names = {}
