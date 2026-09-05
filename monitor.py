@@ -846,9 +846,10 @@ class ETFMonitor:
     def send_alerts(self, results: list):
         """
         Invia alert giornalieri:
-        - send_new_entries: solo nuovi ingressi in L1 (+ nuovi L0)
-        - send_l1_exit: ogni uscita da L1
-        - send_portfolio_signals: RSI > 72 o condizioni in deterioramento
+        - send_new_entries: SOLO nuovi ingressi reali in L1 (+ nuovi L0) — unica
+          email inviata da qui dal 2026-09-05 (richiesta utente: niente più
+          digest/segnali/avvicinamento TP via email, quello si legge dal banner
+          "Cosa devo fare oggi" della dashboard).
 
         **IMPORTANTE**: usa results come source-of-truth per i livelli, NON il database
         (il DB potrebbe essere out-of-sync con i results appena calcolati)
@@ -1123,11 +1124,9 @@ class ETFMonitor:
         else:
             add_log("  Nessun nuovo ingresso oggi")
 
-        if portfolio_signals:
-            add_log(f"  Email segnali portafoglio: {len(portfolio_signals)}")
-            self.alert_system.send_portfolio_signals(portfolio_signals)
-        else:
-            add_log("  Nessun segnale portafoglio oggi")
+        # send_portfolio_signals rimossa 2026-09-05 (richiesta utente: solo ingressi
+        # L1/L0 + digest settimanale) — portfolio_signals resta calcolato sopra ma
+        # non genera più email; nessun altro consumatore lo legge.
 
     def run(self, send_daily_report: bool = True):
         """Esegue il ciclo completo di monitoraggio.
@@ -1269,16 +1268,12 @@ class ETFMonitor:
             add_log(f"⚠️  Errore aggiornamento L0 suggerito: {e}")
             add_log(traceback.format_exc())
 
-        # STEP 7b — Alert dedicato "avvicinamento TP" (2026-08-20): invia SUBITO,
-        # non aspetta il resoconto serale (send_daily_report) — questo è il punto,
-        # arrivare prima del giro schedulato successivo. Gira anche sul run
-        # silenzioso del mattino, a differenza del resto degli alert sopra.
-        if tightening_events:
-            try:
-                add_log(f"Invio alert avvicinamento TP ({len(tightening_events)} posizioni)...")
-                self.alert_system.send_tp_proximity_alert(tightening_events)
-            except Exception as e:
-                add_log(f"⚠️  Errore alert avvicinamento TP: {e}")
+        # STEP 7b — email "avvicinamento TP" rimossa 2026-09-05 (richiesta utente:
+        # solo ingressi L1/L0 + digest settimanale). tightening_events resta
+        # calcolato sopra (side-effect reale: _update_portfolio_l1/l0_suggerito
+        # salvano sl_suggerito/sg_suggerito/tp_proximity_stop_max nel DB, letti da
+        # /api/portfolio-sl e dal banner "Cosa devo fare oggi" della dashboard) ma
+        # non genera più email.
 
         # STEP 8 — RIMOSSO 2026-08-24: CANDIDATE_MODEL_B_20260807 (smart_6_macd +
         # mm200_distance_max=7.0% assoluto + adx-4 + TP=15%) e' stato promosso in
@@ -1301,8 +1296,6 @@ class ETFMonitor:
         try:
             from shadow_monitor_l0 import run_shadow_monitor_l0
             shadow_l0_entries = run_shadow_monitor_l0(self.db, results, add_log=add_log)
-            if shadow_l0_entries and send_daily_report:
-                self.alert_system.send_shadow_entries(shadow_l0_entries, variant='L0')
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor L0 (non bloccante): {e}")
 
@@ -1314,8 +1307,6 @@ class ETFMonitor:
         try:
             from shadow_monitor_l0_regime_baseline import run_shadow_monitor_l0_regime_baseline
             shadow_l0_base_entries = run_shadow_monitor_l0_regime_baseline(self.db, results, add_log=add_log)
-            if shadow_l0_base_entries and send_daily_report:
-                self.alert_system.send_shadow_entries(shadow_l0_base_entries, variant='L0_REGIME_BASELINE')
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor L0-baseline (non bloccante): {e}")
 
@@ -1328,8 +1319,6 @@ class ETFMonitor:
         try:
             from shadow_monitor_breadth import run_shadow_monitor_breadth
             shadow_breadth_entries = run_shadow_monitor_breadth(self.db, results, add_log=add_log)
-            if shadow_breadth_entries and send_daily_report:
-                self.alert_system.send_shadow_entries(shadow_breadth_entries, variant='BREADTH')
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor Breadth (non bloccante): {e}")
 
@@ -1354,8 +1343,6 @@ class ETFMonitor:
         try:
             from shadow_monitor_l0_oro import run_shadow_monitor_l0_oro
             shadow_l0_oro_entries = run_shadow_monitor_l0_oro(self.db, results, add_log=add_log)
-            if shadow_l0_oro_entries and send_daily_report:
-                self.alert_system.send_shadow_entries(shadow_l0_oro_entries, variant='L0_ORO')
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor L0-oro (non bloccante): {e}")
 
@@ -1367,8 +1354,6 @@ class ETFMonitor:
         try:
             from shadow_monitor_l0_metalli import run_shadow_monitor_l0_metalli
             shadow_l0_metalli_entries = run_shadow_monitor_l0_metalli(self.db, results, add_log=add_log)
-            if shadow_l0_metalli_entries and send_daily_report:
-                self.alert_system.send_shadow_entries(shadow_l0_metalli_entries, variant='L0_METALLI')
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor L0-metalli (non bloccante): {e}")
 
@@ -1385,8 +1370,6 @@ class ETFMonitor:
         try:
             from shadow_monitor_bond_trend import run_shadow_monitor_bond_trend
             shadow_bond_trend_entries = run_shadow_monitor_bond_trend(self.db, results, add_log=add_log)
-            if shadow_bond_trend_entries and send_daily_report:
-                self.alert_system.send_shadow_entries(shadow_bond_trend_entries, variant='BOND_TREND')
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor Bond-Trend (non bloccante): {e}")
 
@@ -1403,8 +1386,6 @@ class ETFMonitor:
         try:
             from shadow_monitor_tighten_rsi import run_shadow_monitor_tighten_rsi
             shadow_tighten_rsi_entries = run_shadow_monitor_tighten_rsi(self.db, results, add_log=add_log)
-            if shadow_tighten_rsi_entries and send_daily_report:
-                self.alert_system.send_shadow_entries(shadow_tighten_rsi_entries, variant='TIGHTEN_RSI')
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor Tighten-RSI (non bloccante): {e}")
 
@@ -1420,16 +1401,12 @@ class ETFMonitor:
         try:
             from shadow_monitor_radars import run_shadow_monitor_radar_approach
             shadow_radar_approach_entries = run_shadow_monitor_radar_approach(self.db, results, add_log=add_log)
-            if shadow_radar_approach_entries and send_daily_report:
-                self.alert_system.send_shadow_entries(shadow_radar_approach_entries, variant='RADAR_APPROACH')
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor Radar Anticipato (non bloccante): {e}")
 
         try:
             from shadow_monitor_radars import run_shadow_monitor_radar_bounce
             shadow_radar_bounce_entries = run_shadow_monitor_radar_bounce(self.db, results, add_log=add_log)
-            if shadow_radar_bounce_entries and send_daily_report:
-                self.alert_system.send_shadow_entries(shadow_radar_bounce_entries, variant='RADAR_BOUNCE')
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor Radar Rimbalzo (non bloccante): {e}")
 
@@ -1449,8 +1426,6 @@ class ETFMonitor:
         try:
             from shadow_monitor_l0_cooldown import run_shadow_monitor_l0_cooldown
             shadow_l0_cooldown_entries = run_shadow_monitor_l0_cooldown(self.db, results, add_log=add_log)
-            if shadow_l0_cooldown_entries and send_daily_report:
-                self.alert_system.send_shadow_entries(shadow_l0_cooldown_entries, variant='L0_COOLDOWN')
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor L0-cooldown (non bloccante): {e}")
 
@@ -1464,53 +1439,49 @@ class ETFMonitor:
         # sono risultate PEGGIO. N OOS piccolo (10-11) -> Shadow, non promozione.
         # Traccia 2 model_name: candidate_l0_sl_tier1_5pct/6pct_20260828.
         try:
-            from shadow_monitor_l0_sl_tier1 import run_shadow_monitor_l0_sl_tier1, EMAIL_VARIANT
-            shadow_l0_sl_map = run_shadow_monitor_l0_sl_tier1(self.db, results, add_log=add_log)
-            if send_daily_report:
-                for mname, entries in shadow_l0_sl_map.items():
-                    if entries:
-                        self.alert_system.send_shadow_entries(entries, variant=EMAIL_VARIANT[mname])
+            from shadow_monitor_l0_sl_tier1 import run_shadow_monitor_l0_sl_tier1
+            run_shadow_monitor_l0_sl_tier1(self.db, results, add_log=add_log)
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor L0-SL-tier1 (non bloccante): {e}")
 
-        # STEP 8L — Digest mensile Shadow Monitor (2026-09-02): il 1° del mese, sul run
-        # principale, manda un'email con lo stato di TUTTI i candidati ombra + la
-        # baseline inversa L0 (N chiusi, WR, PF, verdetto). Sostituisce l'estrazione
-        # SQL manuale al checkpoint. Cadenza scelta: mensile (non settimanale — L0
-        # tiene posizioni settimane/mesi).
+        # STEP 8L — Shadow Monitor CANDIDATE_MOMENTUM_20260905 (item 18b): Donchian
+        # breakout (Close > max(High) 20gg precedenti) + ADX>=20, uscita SOLO
+        # trailing stop percentuale fisso 8% (non chandelier ATR — "gappa" sui
+        # prodotti volatili, worst trade leva -83/-87% nel test esplorativo del
+        # 03/09). Ristretto a settoriali_growth + oro_metalli_preziosi (le uniche 2
+        # famiglie che superano la barra OOS PF>=1.3 senza collasso IN->OOS, su un
+        # backtest per-famiglia mai pooled — vedi shadow_monitor_momentum.py).
         try:
-            if send_daily_report and date_type.today().day == 1:
-                add_log("Invio digest mensile Shadow Monitor...")
-                stats = self.db.get_shadow_digest_stats()
-                real_l0 = None
-                try:
-                    real_l0 = self.db.get_real_l0_digest_stats()
-                except Exception:
-                    pass
-                self.alert_system.send_shadow_monthly_digest(stats, real_l0=real_l0)
+            from shadow_monitor_momentum import run_shadow_monitor_momentum
+            run_shadow_monitor_momentum(self.db, results, add_log=add_log)
         except Exception as e:
-            add_log(f"⚠️  Errore digest mensile Shadow (non bloccante): {e}")
+            add_log(f"⚠️  Errore Shadow Monitor Momentum (non bloccante): {e}")
 
-        # 7. Invia resoconto portafoglio — DOPO l'aggiornamento SL/TP (fix 2026-08-05:
-        # prima veniva inviato PRIMA degli STEP 4/7 sopra, quindi l'email mostrava
-        # sempre i valori SL/TP del giorno precedente invece di quelli appena calcolati
-        # sul prezzo di oggi)
+        # STEP 8M — Digest settimanale Shadow Monitor (sostituisce dal 2026-09-05 il
+        # digest mensile + tutte le email di ingresso per-modello, richiesta utente:
+        # "solo ingressi L1/L0 reali + una mail il sabato"). Ogni sabato (run
+        # principale): nuovi ingressi ombra della settimana, tabella di TUTTE le
+        # posizioni ombra aperte con performance dalla data di ingresso, archivio di
+        # tutte le uscite con giorni di permanenza — vedi alerts.py::send_weekly_
+        # shadow_digest e database.py::get_all_shadow_positions.
+        try:
+            if send_daily_report and date_type.today().weekday() == 5:  # sabato
+                add_log("Invio digest settimanale Shadow Monitor...")
+                all_positions = self.db.get_all_shadow_positions()
+                self.alert_system.send_weekly_shadow_digest(all_positions)
+        except Exception as e:
+            add_log(f"⚠️  Errore digest settimanale Shadow (non bloccante): {e}")
+
+        # 7. Email resoconto portafoglio rimossa 2026-09-05 (richiesta utente: solo
+        # ingressi L1/L0 + digest settimanale). _build_favorites_digest resta
+        # chiamato ogni giorno per il suo side-effect reale: aggiorna lo snapshot
+        # last_buy_count/last_level/last_regime letto da app.py /api/favorites per
+        # mostrare i delta giorno-su-giorno nella dashboard — non è solo per l'email.
         if send_daily_report:
-            favorites_digest = []
             try:
-                favorites_digest = self._build_favorites_digest(results)
+                self._build_favorites_digest(results)
             except Exception as e:
-                add_log(f"⚠️  Errore digest Preferiti: {e}")
-            l2_radar = []
-            try:
-                l2_radar = self._build_l2_radar(results)
-            except Exception as e:
-                add_log(f"⚠️  Errore Radar L2: {e}")
-            try:
-                add_log("Invio resoconto portafoglio...")
-                self.alert_system.send_portfolio_report(favorites_digest=favorites_digest, l2_radar=l2_radar)
-            except Exception as e:
-                add_log(f"ERRORE Resoconto portafoglio: {e}")
+                add_log(f"⚠️  Errore aggiornamento snapshot Preferiti: {e}")
 
         # STEP 8 — Sincronizza segnali L1 al portafoglio personale
         try:
@@ -1959,68 +1930,6 @@ class ETFMonitor:
             self.db.update_favorite_snapshot(isin, buy_count, level, regime)
 
         return digest
-
-    # Etichette leggibili delle 7 condizioni L1 (stesso ordine/nomi di CLAUDE.md
-    # "L1 — Come Si Entra"), usate per tradurre il dict 'conditions' in un elenco
-    # "cosa manca" nel Radar L2.
-    _L1_CONDITION_LABELS = {
-        'allineamento_ok':  'Allineamento',
-        'persistenza_ok':   'Persistenza',
-        'rsi_ok':           'RSI',
-        'distance_ok':      'Distanza EMA20',
-        'adx_ok':           'ADX',
-        'macd_ok':          'MACD',
-        'space_residuo_ok': 'Spazio Residuo',
-    }
-
-    def _build_l2_radar(self, results: list) -> list:
-        """
-        Costruisce il 'Radar L2' per l'email quotidiana: a differenza del digest
-        Preferiti (lista curata a mano dall'utente), questo scandisce TUTTO
-        l'universo classificato L2 oggi (buy_count>=5/7, vedi
-        technical_analysis.py::suggest_level()) e per ognuno mostra quale
-        condizione manca ancora per L1 — non solo il conteggio, come fa invece
-        il tab dashboard.
-
-        Include anche il caso "7/7 ma bloccato dalle fondamenta" (regime non
-        BULL o prezzo<SMA50, vedi CLAUDE.md "FONDAMENTA IRRINUNCIABILI") — qui
-        le 7 condizioni sono tutte vere, quindi 'conditions' non aiuta: il
-        motivo si legge da 'level_reason' (livello 2, buy_count già a 7).
-        """
-        radar = []
-        for r in results:
-            a = r.get('analysis', {}) or {}
-            if a.get('suggested_level') != 2:
-                continue
-
-            buy_count = a.get('buy_count', 0)
-            conditions = a.get('conditions', {}) or {}
-            level_reason = a.get('level_reason', '') or ''
-
-            if buy_count >= 7:
-                if 'non BULL' in level_reason:
-                    missing = ['Regime non BULL']
-                elif '< SMA50' in level_reason:
-                    missing = ['Prezzo < SMA50']
-                else:
-                    missing = ['Fondamenta']
-            else:
-                missing = [label for key, label in self._L1_CONDITION_LABELS.items()
-                           if conditions.get(key) is False]
-                if not missing:
-                    missing = ['—']
-
-            radar.append({
-                'isin':      r.get('isin'),
-                'ticker':    r.get('ticker'),
-                'nome':      r.get('nome'),
-                'buy_count': buy_count,
-                'missing':   missing,
-                'regime':    conditions.get('regime') or a.get('regime'),
-            })
-
-        radar.sort(key=lambda x: (-x['buy_count'], x['ticker'] or ''))
-        return radar[:20]
 
     def _update_portfolio_l1_suggerito(self, results: list) -> list:
         """

@@ -888,6 +888,35 @@ class PriceDatabase:
         finally:
             conn.close()
 
+    def get_all_shadow_positions(self) -> list:
+        """Tutte le posizioni ombra di TUTTI i model_name, con il prezzo corrente
+        per le aperte (LEFT JOIN LATERAL su etf_price_history) — per il digest
+        settimanale (alerts.py::send_weekly_shadow_digest, 2026-09-05)."""
+        conn = self._get_connection()
+        if not conn:
+            return []
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT sp.model_name, sp.ticker, sp.isin, sp.famiglia,
+                           sp.entry_date, sp.entry_price, sp.exit_date, sp.exit_price,
+                           sp.exit_reason, sp.status, sp.gross_pct_gain,
+                           p.close AS current_price
+                    FROM etf_shadow_positions sp
+                    LEFT JOIN LATERAL (
+                        SELECT close FROM etf_price_history
+                        WHERE isin = sp.isin OR ticker = sp.ticker
+                        ORDER BY date DESC LIMIT 1
+                    ) p ON true
+                    ORDER BY sp.model_name, sp.entry_date
+                """)
+                return [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            logging.error(f"Errore get_all_shadow_positions: {e}")
+            return []
+        finally:
+            conn.close()
+
     def get_breadth_regime_state(self, model_name: str) -> Optional[str]:
         """Stato di ieri (NORMAL/SUPER_BULL) per l'isteresi del Market Breadth Shadow
         Monitor — vedi migrations/005_add_breadth_regime_state.sql. None se mai
