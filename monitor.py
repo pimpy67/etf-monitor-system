@@ -1464,6 +1464,21 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor Momentum (non bloccante): {e}")
 
+        # STEP 8N — Shadow Monitor CANDIDATE_ADX_SLOPE_20260905: idea esterna "ADX
+        # Slope" — richiede ADX in salita (pendenza 3gg > 0), non solo sopra soglia
+        # come fa gia' la condizione 5 nativa. Diagnosticato PRIMA segmentando i
+        # trade gia' prodotti da smart_6_macd (equity_sviluppati) per segno della
+        # pendenza: sottogruppo "in salita" PF 1.41/+0.96% (IN) e PF inf/+5.29% (OOS,
+        # N=4) contro "in discesa/piatto" PF 0.83/-0.47% (IN, sotto breakeven) e
+        # PF 1.49/+1.18% (OOS) — effetto reale, coerente IN e OOS (a differenza del
+        # gemello lato L0 su oro/metalli, respinto per firma di overfitting, vedi
+        # CLAUDE.md). N ancora molto sotto 30 -> Shadow Monitor, non promozione.
+        try:
+            from shadow_monitor_adx_slope import run_shadow_monitor_adx_slope
+            run_shadow_monitor_adx_slope(self.db, results, add_log=add_log)
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor ADX-Slope (non bloccante): {e}")
+
         # STEP 8M — Digest settimanale Shadow Monitor (sostituisce dal 2026-09-05 il
         # digest mensile + tutte le email di ingresso per-modello, richiesta utente:
         # "solo ingressi L1/L0 reali + una mail il sabato"). Ogni sabato (run
