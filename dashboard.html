@@ -727,8 +727,8 @@ async function loadActionSummary() {
     const items = data.items || [];
     if (items.length === 0) {
       el.innerHTML = `
-        <div style="background:rgba(63,185,80,0.08);border-top:1px solid rgba(63,185,80,0.3);border-bottom:1px solid rgba(63,185,80,0.2);padding:14px 20px;">
-          <div style="max-width:var(--content-max);margin:0 auto;color:#3fb950;font-weight:600;font-size:0.95em;">
+        <div style="background:rgba(63,185,80,0.08);border-top:1px solid rgba(63,185,80,0.3);border-bottom:1px solid rgba(63,185,80,0.2);padding:16px 20px;">
+          <div style="max-width:var(--content-max);margin:0 auto;color:#3fb950;font-weight:600;font-size:1.15em;">
             ✅ Nessuna azione richiesta oggi
           </div>
         </div>`;
@@ -736,14 +736,14 @@ async function loadActionSummary() {
     }
     const colors = { action: '#f85149', warn: '#d29922', info: '#58a6ff' };
     const rows = items.map(it => `
-      <div style="padding:4px 0;color:#e6edf3;font-size:0.92em;">
-        <span style="margin-right:6px;">${it.icon}</span>${it.text}
+      <div style="padding:6px 0;color:#f0f4f8;font-size:1.15em;line-height:1.5;">
+        <span style="margin-right:8px;">${it.icon}</span>${it.text}
       </div>`).join('');
     const worst = items[0].level;
     el.innerHTML = `
-      <div style="background:rgba(248,81,73,0.06);border-top:2px solid ${colors[worst] || '#58a6ff'};border-bottom:1px solid rgba(255,255,255,0.08);padding:14px 20px;">
+      <div style="background:rgba(248,81,73,0.06);border-top:2px solid ${colors[worst] || '#58a6ff'};border-bottom:1px solid rgba(255,255,255,0.08);padding:16px 20px;">
         <div style="max-width:var(--content-max);margin:0 auto;">
-          <div style="font-size:0.75em;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-weight:700;">📌 Cosa devo fare oggi</div>
+          <div style="font-size:1em;color:#c3cad4;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;font-weight:700;">📌 Cosa devo fare oggi</div>
           ${rows}
         </div>
       </div>`;
