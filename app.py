@@ -318,20 +318,19 @@ def get_prices():
                     'count': len(df)})
 
 
-@app.route('/api/portfolio-sl')
-def portfolio_sl():
-    """Restituisce SL attuali per tutte le posizioni L1, opzionalmente filtrate per ISIN."""
+def _compute_portfolio_sl_positions(isin_filter=None):
+    """Calcola SL/TP correnti per le posizioni reali attive — logica estratta da
+    /api/portfolio-sl (2026-09-05) per essere riusata anche da /api/action-summary
+    senza duplicare query e formule. Ritorna None se il DB non è raggiungibile,
+    solleva le eccezioni verso il chiamante (che decide come rispondere)."""
     conn = None
     try:
         conn = db.get_connection()
         if not conn:
-            return jsonify({'error': 'Database unavailable'}), 500
+            return None
 
         from psycopg2.extras import RealDictCursor
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # Leggi posizioni L1 da portfolio_entries, opzionalmente filtrate per ISIN
-            isin_filter = request.args.get('isin', '').strip()
-
             if isin_filter:
                 cur.execute("""
                     SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
@@ -417,21 +416,32 @@ def portfolio_sl():
                         'order_parallel_ok': op['parallel_ok'],
                     })
 
-        return jsonify({
-            'timestamp': datetime.now().isoformat(),
-            'positions': result,
-            'count': len(result)
-        })
+        return result
 
-    except Exception as e:
-        print(f"Errore portfolio-sl: {e}")
-        return jsonify({'error': str(e)}), 500
     finally:
         # close SEMPRE la connessione: se un'eccezione salta qui senza chiuderla,
         # psycopg2 la lascia "idle in transaction" e nel giro di qualche settimana
         # si esauriscono i 100 slot di Postgres ("sorry, too many clients already").
         if conn is not None:
             conn.close()
+
+
+@app.route('/api/portfolio-sl')
+def portfolio_sl():
+    """Restituisce SL attuali per tutte le posizioni L1, opzionalmente filtrate per ISIN."""
+    try:
+        isin_filter = request.args.get('isin', '').strip()
+        result = _compute_portfolio_sl_positions(isin_filter or None)
+        if result is None:
+            return jsonify({'error': 'Database unavailable'}), 500
+        return jsonify({
+            'timestamp': datetime.now().isoformat(),
+            'positions': result,
+            'count': len(result)
+        })
+    except Exception as e:
+        print(f"Errore portfolio-sl: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/accept-sl-suggestion', methods=['POST'])
@@ -750,6 +760,111 @@ def l1_exits_api():
             'pct_gain':     float(e['pct_gain']) if e['pct_gain'] is not None else None,
         })
     return jsonify({'exits': result, 'count': len(result)})
+
+
+@app.route('/api/action-summary')
+def action_summary():
+    """Banner 'Cosa devo fare oggi' (2026-09-05, richiesta utente): aggrega
+    segnali già calcolati altrove (SL/TP reali via _compute_portfolio_sl_positions,
+    nuovi ingressi L1/L0) — nessuna nuova logica di trading, solo segnalazione.
+    Filosofia 'nessun automatismo' invariata: un'uscita L1 solo-dashboard (regole
+    B/C/E/F di suggest_level()) NON genera un'azione qui, perché non è una vendita
+    reale — vedi etf_no_auto_exit_real_positions. L'unica azione reale segnalata
+    sulle posizioni tenute è il tocco di SL/TP, coerente con check_l1_exit/L0.
+    """
+    from datetime import date as date_type
+    items = []
+    held_isins = set()
+
+    try:
+        positions = _compute_portfolio_sl_positions() or []
+    except Exception as e:
+        positions = []
+        print(f"action-summary: portfolio-sl fallita: {e}")
+
+    for p in positions:
+        held_isins.add(p['isin'])
+        ticker = p['ticker'] or p['isin']
+        price = p['current_price']
+        sl = p['sl_suggested']
+        sg = p['sg_suggested']
+
+        if sl is not None and price is not None and price <= sl:
+            items.append({'level': 'action', 'icon': '🔴', 'isin': p['isin'],
+                          'text': f"{ticker}: prezzo {price:.2f} ha toccato/superato lo Stop suggerito ({sl:.2f}) — controlla l'ordine su Directa"})
+            continue
+        if sg is not None and price is not None and price >= sg:
+            items.append({'level': 'action', 'icon': '🟢', 'isin': p['isin'],
+                          'text': f"{ticker}: prezzo {price:.2f} ha raggiunto/superato il Target ({sg:.2f}) — valuta la vendita"})
+            continue
+        if p.get('stop_tightened'):
+            items.append({'level': 'action', 'icon': '🎯', 'isin': p['isin'],
+                          'text': f"{ticker}: vicino al Target — lo Stop si è stretto a {sl:.2f}, aggiornalo su Directa" if sl else
+                                  f"{ticker}: vicino al Target — aggiorna lo Stop su Directa"})
+            continue
+        if sl is not None:
+            sl_inserted = p.get('sl_inserted')
+            if sl_inserted is None:
+                items.append({'level': 'warn', 'icon': '⚠️', 'isin': p['isin'],
+                              'text': f"{ticker}: nessuno Stop registrato in dashboard — imposta {sl:.2f} su Directa e registralo qui"})
+            elif sl > 0 and abs(sl_inserted - sl) / sl > 0.003:
+                items.append({'level': 'warn', 'icon': '🔧', 'isin': p['isin'],
+                              'text': f"{ticker}: Stop da aggiornare — attuale {sl_inserted:.2f}, nuovo suggerito {sl:.2f}"})
+
+    # Nomi ETF per i nuovi ingressi (stessa fonte già usata da l1/l0-tracking)
+    fund_names = {}
+    try:
+        with open('data/dashboard_data.json', 'r') as f:
+            dash = json.load(f)
+        for lv_funds in dash.get('levels', {}).values():
+            for etf in lv_funds:
+                if etf.get('isin'):
+                    fund_names[etf['isin']] = etf.get('nome', etf['isin'])
+        for etf in dash.get('l0_funds', []):
+            if etf.get('isin'):
+                fund_names[etf['isin']] = etf.get('nome', etf['isin'])
+    except Exception:
+        pass
+
+    today = date_type.today()
+
+    # Nuovi ingressi L1 (candidati del sistema, non ancora posizioni reali)
+    try:
+        conn = db.get_connection()
+        if conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT isin, entry_date FROM etf_l1_tracking")
+                    l1_rows = cur.fetchall()
+            finally:
+                conn.close()
+            for isin, entry_date in l1_rows:
+                if isin in held_isins:
+                    continue
+                ed = entry_date if isinstance(entry_date, date_type) else date_type.fromisoformat(str(entry_date))
+                if ed == today:
+                    items.append({'level': 'info', 'icon': '🆕', 'isin': isin,
+                                  'text': f"Nuovo ingresso L1: {fund_names.get(isin, isin)} ({isin}) — valuta apertura posizione"})
+    except Exception as e:
+        print(f"action-summary: nuovi ingressi L1 falliti: {e}")
+
+    # Nuovi ingressi L0
+    try:
+        for isin, entry in db.get_all_l0_entries().items():
+            if isin in held_isins:
+                continue
+            ed = entry['entry_date']
+            ed = ed if isinstance(ed, date_type) else date_type.fromisoformat(str(ed))
+            if ed == today:
+                items.append({'level': 'info', 'icon': '🆕', 'isin': isin,
+                              'text': f"Nuovo ingresso L0: {fund_names.get(isin, isin)} ({isin}) — valuta apertura posizione"})
+    except Exception as e:
+        print(f"action-summary: nuovi ingressi L0 falliti: {e}")
+
+    order = {'action': 0, 'warn': 1, 'info': 2}
+    items.sort(key=lambda x: order.get(x['level'], 9))
+
+    return jsonify({'items': items, 'count': len(items), 'timestamp': datetime.now().isoformat()})
 
 
 @app.route('/api/l2-watchlist')

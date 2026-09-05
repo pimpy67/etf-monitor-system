@@ -535,6 +535,9 @@ body { font-family:'Segoe UI',sans-serif; background:linear-gradient(135deg,#1a1
   </div>
 </div>
 
+<!-- ── Action Banner: cosa devo fare oggi (2026-09-05) ───────────────────── -->
+<div id="actionBannerContainer"></div>
+
 <!-- ── Market Regime Widget ──────────────────────────────────────────────── -->
 <div id="marketRegimeContainer" style="background:rgba(0,100,200,0.08); border-top:1px solid rgba(88,166,255,0.3); border-bottom:1px solid rgba(88,166,255,0.2); padding:14px 20px;">
   <div style="max-width:var(--content-max); margin:0 auto; display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
@@ -707,6 +710,47 @@ async function loadData() {
   buildRecentExitsMap();
   renderDashboard();
   loadMarketRegime();  // Carica regime di mercato
+  loadActionSummary(); // Banner "Cosa devo fare oggi" (2026-09-05)
+}
+
+// ── Action Banner: "Cosa devo fare oggi" ────────────────────────────────────
+// Aggrega segnali già calcolati dal backend (/api/action-summary) — SL/TP
+// toccati sulle posizioni reali, nuovi ingressi L1/L0. Nessuna logica nuova qui,
+// solo presentazione: l'obiettivo è che la prima cosa vista in dashboard sia
+// "cosa fare", non l'elenco parametri (richiesta utente 2026-09-05).
+async function loadActionSummary() {
+  const el = document.getElementById('actionBannerContainer');
+  if (!el) return;
+  try {
+    const res = await fetch('/api/action-summary');
+    const data = await res.json();
+    const items = data.items || [];
+    if (items.length === 0) {
+      el.innerHTML = `
+        <div style="background:rgba(63,185,80,0.08);border-top:1px solid rgba(63,185,80,0.3);border-bottom:1px solid rgba(63,185,80,0.2);padding:14px 20px;">
+          <div style="max-width:var(--content-max);margin:0 auto;color:#3fb950;font-weight:600;font-size:0.95em;">
+            ✅ Nessuna azione richiesta oggi
+          </div>
+        </div>`;
+      return;
+    }
+    const colors = { action: '#f85149', warn: '#d29922', info: '#58a6ff' };
+    const rows = items.map(it => `
+      <div style="padding:4px 0;color:#e6edf3;font-size:0.92em;">
+        <span style="margin-right:6px;">${it.icon}</span>${it.text}
+      </div>`).join('');
+    const worst = items[0].level;
+    el.innerHTML = `
+      <div style="background:rgba(248,81,73,0.06);border-top:2px solid ${colors[worst] || '#58a6ff'};border-bottom:1px solid rgba(255,255,255,0.08);padding:14px 20px;">
+        <div style="max-width:var(--content-max);margin:0 auto;">
+          <div style="font-size:0.75em;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-weight:700;">📌 Cosa devo fare oggi</div>
+          ${rows}
+        </div>
+      </div>`;
+  } catch (e) {
+    console.warn('action-summary non disponibile:', e.message);
+    el.innerHTML = '';
+  }
 }
 
 // ── Recent L1 exits map ───────────────────────────────────────────────────
