@@ -784,7 +784,10 @@ def action_summary():
 
     for p in positions:
         held_isins.add(p['isin'])
-        ticker = p['ticker'] or p['isin']
+        # Nome per esteso + ISIN davanti (richiesta utente 2026-09-05) invece
+        # del solo ticker, cosi' l'ETF e' identificabile senza dover aprire
+        # la scheda dettaglio.
+        ticker = f"{p['isin']} {p.get('fund_name') or p['ticker'] or ''}".strip()
         price = p['current_price']
         sl = p['sl_suggested']
         sg = p['sg_suggested']
@@ -844,7 +847,7 @@ def action_summary():
                 ed = entry_date if isinstance(entry_date, date_type) else date_type.fromisoformat(str(entry_date))
                 if ed == today:
                     items.append({'level': 'info', 'icon': '🆕', 'isin': isin,
-                                  'text': f"Nuovo ingresso L1: {fund_names.get(isin, isin)} ({isin}) — valuta apertura posizione"})
+                                  'text': f"Nuovo ingresso L1: {isin} {fund_names.get(isin, '')} — valuta apertura posizione".strip()})
     except Exception as e:
         print(f"action-summary: nuovi ingressi L1 falliti: {e}")
 
@@ -857,7 +860,7 @@ def action_summary():
             ed = ed if isinstance(ed, date_type) else date_type.fromisoformat(str(ed))
             if ed == today:
                 items.append({'level': 'info', 'icon': '🆕', 'isin': isin,
-                              'text': f"Nuovo ingresso L0: {fund_names.get(isin, isin)} ({isin}) — valuta apertura posizione"})
+                              'text': f"Nuovo ingresso L0: {isin} {fund_names.get(isin, '')} — valuta apertura posizione".strip()})
     except Exception as e:
         print(f"action-summary: nuovi ingressi L0 falliti: {e}")
 
