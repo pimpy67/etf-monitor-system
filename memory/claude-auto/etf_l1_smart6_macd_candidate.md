@@ -5,8 +5,20 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 6c15300f-1a71-4a05-b9d0-981a69b89d95
-  modified: 2026-08-06T02:27:12.964Z
+  modified: 2026-09-04T14:30:52.885Z
 ---
+
+**SUPERSEDED 2026-09-04**: promoted to production 2026-08-24 on all 5 "core" families as
+part of `CANDIDATE_MODEL_B_20260807` (pooled 151-trade bundle, never validated per-family),
+then **restricted to `equity_sviluppati` only** the same day (2026-09-04) — zero L1 entries
+for any of the 5 families in the 12 days since promotion (nothing to lose live), and today's
+independent Part B testing (deep-recovery episode study) confirmed the other 4 don't hold up
+individually. `mercati_emergenti`/`settoriali_growth`/`oro_metalli_preziosi`/
+`metalli_industriali` reverted to native 7/7 (`use_smart_6_7_macd:false`, `adx_entry`/
+`mm200_distance_max`/`l1_stop_gain_dynamic.target_max_pct` back to pre-08-24 per-family
+values), commit in `etf_sector_taxonomy_and_partB_plan_2026_09_04` session. See
+[[etf-sector-taxonomy-and-partb-plan-2026-09-04]] for the full Part B verdict this decision
+came out of. Below is the original 2026-08-05 backtest history, kept for context.
 
 On 2026-08-05, after an external pasted analysis claimed "73% of 6/7 failures are caused by MACD" (an overreach — that number was just how often MACD was the missing condition, not proof it caused losses), the user asked for it to be tested properly rather than accepted on faith.
 

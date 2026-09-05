@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: bfa51328-4875-4391-a8a1-5a8b8ed7311a
-  modified: 2026-09-04T14:03:46.080Z
+  modified: 2026-09-04T19:20:28.412Z
 ---
 
 User asked (2026-09-04) to stop being sent Directa screenshots for every buy/hold/sell
@@ -39,6 +39,6 @@ Amsterdam (CETH) and Xetra (X.CETH, the one held) — see
 [[etf-isin-ticker-fixes-2026-09-04]]. %/RSI transfer reasonably (CHF↔EUR near parity),
 absolute prices don't — not added to `etf_portfolio_entries` for that reason (would compute
 wrong SL/TP). User manages the stop manually on Directa: **Trigger €59.50 / Limite €58.90**
-(-10% from carico) advised 2026-09-04, unconfirmed whether actually placed — ask if unsure.
+(-10% from carico) advised 2026-09-04, **confirmed placed by user 2026-09-04**.
 Routine flags: RSI back ≤52, price (CHF) ≤57, or dist_ema20 ≤-1% (trend-break, one-day only,
 telegraphed as "reverify tomorrow" not confirmed).

@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: f0161496-431a-4e32-b1ad-b7395c4f0d9e
-  modified: 2026-09-03T22:12:02.891Z
+  modified: 2026-09-04T19:22:26.791Z
 ---
 
 2026-09-03. User asked whether to connect this ETF monitor with the separate
@@ -68,8 +68,10 @@ GAGG L0 row had shares=0.
   via `DELETE /api/portfolio/LU1437024729` — PAC contributions untouched, did not reappear
   after monitor re-runs (one-off, not a recurring auto-add). Active portfolio now = 4
   positions, all matching Directa.
-- **TODO next session**: verify `/riconciliazione` apply flow end-to-end once the VPS deploy
-  lands (was mid-`docker compose up` at load-avg 8, ~22:10 on 2026-09-03).
+- **Verified 2026-09-04**: user ran `/riconciliazione` for real (a full pass, not just the
+  GAGG cleanup above). DB confirms 4 clean active `etf_portfolio_entries`, all L0, all
+  `shares > 0`, no ghost rows: `FR0014002CH1`(800sh), `IE00B27YCK28`(300sh),
+  `LU1834988609`(100sh, BRES), `LU1900067601`(100sh). Apply flow works end-to-end.
 
 ## Real data issue surfaced by the first test run (needs a fresh Directa export to confirm)
 
