@@ -47,6 +47,7 @@ from backtest_l1 import (
 )
 from optimize_hyperparameters import extra_metrics, TRAIN_START, TRAIN_END, TEST_END
 from technical_analysis import ETFTechnicalAnalyzer
+from directa_exit import directa_stop_today
 
 OVERLAP_WINDOW_DAYS = 10
 
@@ -57,7 +58,7 @@ RADAR_DEFAULTS = {
 
 
 def simulate_radar(analyzer, close_full, high_full, low_full, hist_index, test_dates,
-                    radar_type, lookback, min_r2):
+                    radar_type, lookback, min_r2, exit_model='clean'):
     """Ingresso via compute_approach_signal()/compute_pullback_bounce_signal() (radar
     puramente informativi in produzione, qui usati come trigger simulato). Uscita:
     STESSA identica logica di backtest_l1.py::simulate() — SL/TP reali, check
@@ -68,6 +69,7 @@ def simulate_radar(analyzer, close_full, high_full, low_full, hist_index, test_d
     entry_price = None
     entry_date = None
     entry_score = None
+    tp_stop_max = None  # floor ratchet Directa (solo exit_model='directa')
     trades = []
 
     for d in test_dates:
@@ -93,27 +95,45 @@ def simulate_radar(analyzer, close_full, high_full, low_full, hist_index, test_d
                 entry_score = signal.get('score')
                 continue
         else:
-            # Stesse funzioni e stessa logica di monitor.py::_update_portfolio_l1_suggerito()
-            # e di backtest_l1.py::simulate() — SL = calculate_sl_suggerito_l1,
-            # TP = calculate_stop_gain_dynamic, check una volta al giorno sul Close.
             ema20_series = analyzer._ema(close_slice, 20).tail(10)
             ema20_today = float(ema20_series.iloc[-1])
 
-            sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, close_today, ema20_today)
-            sl = sl_data.get('sl_suggerito')
-
-            sg_data = analyzer.calculate_stop_gain_dynamic(entry_price, close_today, ema20_series, analyzer.p)
-            tp_hit = bool(sg_data.get('trigger'))
-            sl_hit = sl is not None and close_today <= sl
-
             exit_price = None
             exit_reason = None
-            if sl_hit:
-                exit_price = close_today
-                exit_reason = 'SL'
-            elif tp_hit:
-                exit_price = close_today
-                exit_reason = 'TP'
+            exit_detail = None
+
+            if exit_model == 'directa':
+                atr_pct = None
+                if high_slice is not None and low_slice is not None and len(close_slice) >= 14:
+                    an = analyzer._calculate_atr_normalized(high_slice, low_slice, close_slice)
+                    if an is not None:
+                        atr_pct = round(an * 100, 2)
+                step = directa_stop_today(
+                    analyzer, entry_price, close_today, 'L1',
+                    ema20_today=ema20_today, ema20_series=ema20_series,
+                    prev_tp_stop_max=tp_stop_max,
+                    sl_initial_pct=analyzer.p.get('sl_initial_pct'), atr_pct=atr_pct,
+                )
+                if step['tp_proximity_stop_max'] is not None:
+                    tp_stop_max = step['tp_proximity_stop_max']
+                if step['hit']:
+                    exit_price = close_today
+                    exit_detail = step['exit_reason']
+                    exit_reason = 'TP' if close_today > entry_price else 'SL'
+            else:
+                # SL = calculate_sl_suggerito_l1, TP = calculate_stop_gain_dynamic,
+                # check una volta al giorno sul Close (come backtest_l1.py::simulate()).
+                sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, close_today, ema20_today)
+                sl = sl_data.get('sl_suggerito')
+                sg_data = analyzer.calculate_stop_gain_dynamic(entry_price, close_today, ema20_series, analyzer.p)
+                tp_hit = bool(sg_data.get('trigger'))
+                sl_hit = sl is not None and close_today <= sl
+                if sl_hit:
+                    exit_price = close_today
+                    exit_reason = 'SL'
+                elif tp_hit:
+                    exit_price = close_today
+                    exit_reason = 'TP'
 
             if exit_reason:
                 gross_pct = round((exit_price / entry_price - 1) * 100, 3)
@@ -121,11 +141,13 @@ def simulate_radar(analyzer, close_full, high_full, low_full, hist_index, test_d
                     'entry_date': entry_date, 'entry_price': entry_price,
                     'exit_date': d.date().isoformat(), 'exit_price': exit_price,
                     'status': 'closed', 'gross_pct_gain': gross_pct,
-                    'exit_reason': exit_reason, 'entry_score': entry_score,
+                    'exit_reason': exit_reason, 'exit_detail': exit_detail,
+                    'entry_score': entry_score,
                 })
                 holding = False
                 entry_price = None
                 entry_date = None
+                tp_stop_max = None
 
     if holding:
         last_price = float(close_full.iloc[-1])
@@ -134,15 +156,17 @@ def simulate_radar(analyzer, close_full, high_full, low_full, hist_index, test_d
             'entry_date': entry_date, 'entry_price': entry_price,
             'exit_date': None, 'exit_price': last_price,
             'status': 'open', 'gross_pct_gain': gross_pct,
-            'exit_reason': None, 'entry_score': entry_score,
+            'exit_reason': None, 'exit_detail': None, 'entry_score': entry_score,
         })
 
     return trades
 
 
-def backtest_ticker(fetcher, ticker, famiglia, start_date, fetch_days, radar_types):
+def backtest_ticker(fetcher, ticker, famiglia, start_date, fetch_days, radar_types,
+                    exit_model='clean'):
     """Simula, per UN ticker: i radar richiesti + il riferimento L1 reale (suggest_level()
-    di produzione, nessun override — include gia' smart_6_macd per le famiglie core)."""
+    di produzione, nessun override — include gia' smart_6_macd per le famiglie core).
+    exit_model applica al solo simulate_radar (il riferimento L1 resta 'clean' come baseline)."""
     hist = fetcher.get_historical_data(ticker, days=fetch_days)
     if hist.empty or len(hist) < 220:
         return None, f'Storico insufficiente ({len(hist)}gg, servono >=220 per SMA200)'
@@ -170,7 +194,8 @@ def backtest_ticker(fetcher, ticker, famiglia, start_date, fetch_days, radar_typ
             analyzer_r = ETFTechnicalAnalyzer(famiglia=famiglia)
             trades = simulate_radar(analyzer_r, close_full, high_full, low_full,
                                      hist.index, test_dates, radar_type,
-                                     defaults['lookback'], defaults['min_r2'])
+                                     defaults['lookback'], defaults['min_r2'],
+                                     exit_model=exit_model)
             out['radars'][radar_type] = trades
 
     return out, None
@@ -231,6 +256,10 @@ def main():
     parser.add_argument('--overlap-window', type=int, default=OVERLAP_WINDOW_DAYS)
     parser.add_argument('--limit', type=int, default=None,
                          help='testa solo i primi N ticker dell\'universo (sanity check veloce)')
+    parser.add_argument('--exit-model', choices=['clean', 'directa'], default='clean',
+                         help="uscita dei radar: 'clean' (SL/TP primo toccato) o 'directa' "
+                              "(Stop unico effettivo con ratchet, item 15). Il riferimento L1 "
+                              "resta sempre 'clean' come baseline di confronto.")
     args = parser.parse_args()
 
     radar_types = [r.strip() for r in args.radar.split(',') if r.strip()]
@@ -241,6 +270,7 @@ def main():
     start_date = datetime.strptime(args.start, '%Y-%m-%d').date()
 
     print(f"BACKTEST RADAR — {radar_types} vs riferimento L1 reale (produzione, live YAML)")
+    print(f"Exit model radar: {args.exit_model}")
     print(f"Split: IN {TRAIN_START}->{TRAIN_END}  OUT {TRAIN_END}->{TEST_END}")
     print(f"Golden Dataset batch: {args.frozen_batch}  |  Overlap window: +/-{args.overlap_window}gg")
     print(f"Costi Directa: {DIRECTA_FEE_BUY}+{DIRECTA_FEE_SELL}EUR  |  Tax: {TAX_RATE:.0%}")
@@ -261,7 +291,8 @@ def main():
     for i, item in enumerate(universe, 1):
         ticker, famiglia = item['ticker'], item['famiglia']
         try:
-            res, err = backtest_ticker(fetcher, ticker, famiglia, start_date, args.days, radar_types)
+            res, err = backtest_ticker(fetcher, ticker, famiglia, start_date, args.days, radar_types,
+                                       exit_model=args.exit_model)
         except Exception as e:
             res, err = None, str(e)
         if err:
