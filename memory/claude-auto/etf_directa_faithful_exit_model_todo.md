@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 09a37320-8783-4b11-9516-618e20ac9073
-  modified: 2026-09-07T19:30:03.145Z
+  modified: 2026-09-08T08:11:33.554Z
 ---
 
 User asked (2026-09-03) to make the shadow monitors / backtests model **real Directa
@@ -91,9 +91,41 @@ execution** as faithfully as possible, since that's where trades actually happen
   - Still TODO (deferred while CPU steal ~80%, see [[etf-502-cpu-steal-incident-2026-09-07]]):
     full L1 re-cert on the real universe, `backtest_radars.py` wiring, `--candidate-l0` L0
     variant (low priority — L0 delta already characterised).
-- ⬜ **Step 4 NOT STARTED** (design decided 2026-09-07, not written): wire the faithful
-  exit into the ~13 live shadow monitors + `backtest_l1.py`/`backtest_radars.py`, re-certify,
-  same-day cutover. Only after Step 3 remainder + explicit user sign-off.
+- ✅ **Step 4 DONE + DEPLOYED 2026-09-08** (commit `374a139`, pushed, VPS repo synced,
+  container running it via docker cp+restart):
+  - `directa_exit.py` gained `check_shadow_exit_directa(db, analyzer, open_pos, isin, level,
+    today)` — stateless recompute-from-entry, no `etf_shadow_positions` schema change. Fetches
+    OHLC ~45d before entry → `simulate_directa_exit()` → if closed, `db.close_shadow_position`
+    with the REAL historical exit date/price/%, `exit_reason` mapped to 'SL'/'TP' by P&L sign
+    (keeps `get_shadow_digest_stats` / `get_last_shadow_sl_exit` / cooldown gate working).
+  - Wired into **11** shadow monitors: L0 (`l0`, `l0_cooldown`, `l0_oro`, `l0_metalli`,
+    `l0_sl_tier1` both 5%/6% variants, `l0_regime_baseline`) with `level='L0'`; L1
+    (`bond_trend`, `tighten_rsi`, `radars` approach+bounce, `breadth`, `adx_slope`) with
+    `level='L1'`. `bond_trend` injects its bond TP target into `analyzer.p` first.
+  - **`shadow_monitor_momentum.py` deliberately NOT converted** — its exit is a chandelier
+    hard-% trailing stop from the peak (item 18b), not SL/TP-suggerito, so the Directa
+    SL/TP+ratchet model doesn't apply. It's already close-based and ratchets with the peak,
+    i.e. reasonably Directa-faithful for what it is.
+  - Validated: py_compile (12 files), imports (all 11 + helper), functional dry-run against
+    real open shadow positions (no exceptions, correct "stays open" — market's been favorable
+    since early Sept so most positions are in profit above their trailing stop), day-by-day
+    trace on LBRE.DE (effective stop trails correctly through tier1→tier2).
+  - **Era split**: `etf_shadow_positions` rows before 2026-09-08 were tracked with the old
+    "clean" model; from the first post-deploy monitor run they use the Directa model. All
+    candidates still N<30 so little comparative data lost. At the next checkpoint, note which
+    closed trades are pre- vs post-cutover.
+  - ✅ **`backtest_radars.py --exit-model clean|directa` wired** too (commit `30f2715`) —
+    item-15 backtest wiring now complete (backtest_l0_v2 + backtest_l1 + backtest_radars).
+  - ✅ **LIVE VERIFIED 2026-09-08 08:06 UTC**: post-deploy monitor run completed in ~10 min
+    (app capped 0.65 CPU), **zero errors** — no `Errore Shadow`/`non bloccante`/`Traceback`.
+    Shadow STEPs ran normally (L0 +1 entry, radar-approach +4, radar-bounce +5, breadth
+    NORMAL), **0 exits** — matches the dry-run: market favorable since early Sept, all open
+    shadow positions sit above their trailing stop, the Directa model correctly keeps them
+    open. `check_shadow_exit_directa` executed on every open position without error.
+  - **NOT done**: full re-cert on the real universe (heavy backtests contributed to the
+    07/09 Hostinger CPU throttle — [[etf-502-cpu-steal-incident-2026-09-07]]). The shadow
+    monitors are the primary forward measurement now anyway; a one-off overnight re-cert can
+    be run later if wanted (nice -19, one at a time).
 
   **KEY DESIGN DECISION — no schema migration needed**: `etf_shadow_positions` has NO column
   to persist the ratchet floor (`tp_proximity_stop_max`) between daily runs. Rather than add
