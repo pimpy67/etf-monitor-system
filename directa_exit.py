@@ -80,7 +80,8 @@ def directa_stop_today(analyzer, entry_price: float, current_price: float,
                        prev_tp_stop_max: Optional[float] = None,
                        sl_initial_pct: Optional[float] = None,
                        atr_pct: Optional[float] = None,
-                       broker: str = 'Directa') -> Dict:
+                       broker: str = 'Directa',
+                       sl_override: Optional[float] = None) -> Dict:
     """Un solo giorno: lo Stop effettivo che sarebbe attivo su Directa oggi, e se il
     Close di oggi lo tocca.
 
@@ -103,6 +104,12 @@ def directa_stop_today(analyzer, entry_price: float, current_price: float,
         sl, tp = _l1_sl_tp(analyzer, entry_price, current_price, ema20_today, ema20_series)
     else:
         sl, tp = _l0_sl_tp(analyzer, entry_price, current_price)
+
+    # sl_override (item 17, analisi uscita L1): rimpiazza il livello SL "ufficiale" con
+    # uno calcolato dal chiamante (ATR-based, buffer largo, ecc.) — il TP e il ratchet
+    # di avvicinamento restano quelli reali.
+    if sl_override is not None:
+        sl = sl_override
 
     op = compute_order_prices(
         current_price, sl, tp, broker,
@@ -155,7 +162,10 @@ def simulate_directa_exit(analyzer, close_full: pd.Series, hist_index,
                           low_full: Optional[pd.Series] = None,
                           sl_initial_pct: Optional[float] = None,
                           atr_pct: Optional[float] = None,
-                          broker: str = 'Directa') -> Dict:
+                          broker: str = 'Directa',
+                          sl_variant: Optional[Dict] = None,
+                          ema20_precomp: Optional[pd.Series] = None,
+                          atr_abs_precomp: Optional[pd.Series] = None) -> Dict:
     """Walk-forward dall'ingresso alla fine della serie, replicando lo Stop effettivo
     Directa giorno per giorno (Close-based). Per i backtest.
 
@@ -168,6 +178,14 @@ def simulate_directa_exit(analyzer, close_full: pd.Series, hist_index,
       high_full/low_full : se forniti, l'ATR14 per-strumento viene ricalcolato ogni
                     giorno (come fa il monitor reale). Altrimenti si usa
                     sl_initial_pct di famiglia come proxy di volatilita'.
+      sl_variant  : None (default) = SL "ufficiale" EMA20-based (calculate_sl_suggerito_l1
+                    /_l0). Altrimenti dict per l'ANALISI USCITA L1 (item 17):
+                      {'mode': 'atr',        'k': 2.5}   SL = max_close_da_ingresso - k*ATR14
+                      {'mode': 'ema20_atr',  'k': 1.5}   SL = EMA20 - k*ATR14
+                      {'mode': 'ema20_wide', 'buffer': 0.04}  SL = EMA20*(1-buffer), sempre
+                    + chiavi opzionali combinabili con qualunque mode (anche mode=None):
+                      'confirm_days': N   esce solo dopo N Close consecutivi <= stop effettivo
+                      'recompute_days': N ricalcola il livello SL 1 volta ogni N giorni di trading
 
     Ritorna dict:
       exit_pos    : posizione in hist_index dell'uscita, o None se ancora aperta
@@ -183,36 +201,88 @@ def simulate_directa_exit(analyzer, close_full: pd.Series, hist_index,
     entry_date = hist_index[entry_pos].date()
     n = len(close_full)
 
+    v = sl_variant or {}
+    mode = v.get('mode')
+    confirm_days = max(1, int(v.get('confirm_days', 1)))
+    recompute_days = max(1, int(v.get('recompute_days', 1)))
+    atr_k = v.get('k', 2.5)
+    wide_buffer = v.get('buffer', 0.04)
+    needs_atr_abs = mode in ('atr', 'ema20_atr')
+
     tp_stop_max = None
-    last_diag = None
+    running_max_close = entry_price
+    below_count = 0
+    held_sl_override = None
+    day_i = 0
 
     for pos in range(entry_pos + 1, n):
         close_today = float(close_full.iloc[pos])
+        running_max_close = max(running_max_close, close_today)
 
         ema20_today = None
         ema20_series = None
-        if level == 'L1':
-            ema20_series = analyzer._ema(close_full.iloc[:pos + 1], 20).tail(10)
+        if level == 'L1' or mode in ('ema20_atr', 'ema20_wide'):
+            if ema20_precomp is not None:
+                ema20_series = ema20_precomp.iloc[max(0, pos - 9):pos + 1]
+            else:
+                ema20_series = analyzer._ema(close_full.iloc[:pos + 1], 20).tail(10)
             ema20_today = float(ema20_series.iloc[-1])
 
         day_atr_pct = atr_pct
-        if day_atr_pct is None and high_full is not None and low_full is not None:
-            atr_norm = analyzer._calculate_atr_normalized(
-                high_full.iloc[:pos + 1], low_full.iloc[:pos + 1], close_full.iloc[:pos + 1])
-            if atr_norm is not None:
-                day_atr_pct = round(atr_norm * 100, 2)
+        atr_abs = None
+        if atr_abs_precomp is not None:
+            v_at = atr_abs_precomp.iloc[pos]
+            if pd.notna(v_at):
+                atr_abs = float(v_at)
+                if day_atr_pct is None and close_today > 0:
+                    day_atr_pct = round(atr_abs / close_today * 100, 2)
+        if high_full is not None and low_full is not None:
+            if day_atr_pct is None:
+                hs = high_full.iloc[:pos + 1]; ls = low_full.iloc[:pos + 1]; cs = close_full.iloc[:pos + 1]
+                atr_norm = analyzer._calculate_atr_normalized(hs, ls, cs)
+                if atr_norm is not None:
+                    day_atr_pct = round(atr_norm * 100, 2)
+            if needs_atr_abs and atr_abs is None:
+                hs = high_full.iloc[:pos + 1]; ls = low_full.iloc[:pos + 1]; cs = close_full.iloc[:pos + 1]
+                atr_ser = analyzer._calculate_atr(hs, ls, cs, 14)
+                if atr_ser is not None and len(atr_ser) and pd.notna(atr_ser.iloc[-1]):
+                    atr_abs = float(atr_ser.iloc[-1])
+
+        # Livello SL secondo la variante (ricalcolato ogni recompute_days giorni)
+        sl_override = held_sl_override
+        if day_i % recompute_days == 0:
+            new_sl = None
+            if mode == 'atr' and atr_abs:
+                new_sl = running_max_close - atr_k * atr_abs
+            elif mode == 'ema20_atr' and atr_abs and ema20_today:
+                new_sl = ema20_today - atr_k * atr_abs
+            elif mode == 'ema20_wide' and ema20_today:
+                new_sl = ema20_today * (1 - wide_buffer)
+            elif mode is None and recompute_days > 1 and level == 'L1' and ema20_today is not None:
+                # "ricalcolo settimanale" della SL ufficiale: la congela tra un ricalcolo e l'altro
+                new_sl = analyzer.calculate_sl_suggerito_l1(
+                    entry_price, close_today, ema20_today).get('sl_suggerito')
+            if new_sl is not None:
+                held_sl_override = round(new_sl, 4)
+            sl_override = held_sl_override
+        day_i += 1
 
         d = directa_stop_today(
             analyzer, entry_price, close_today, level,
             ema20_today=ema20_today, ema20_series=ema20_series,
             prev_tp_stop_max=tp_stop_max,
             sl_initial_pct=sl_initial_pct, atr_pct=day_atr_pct, broker=broker,
+            sl_override=sl_override,
         )
         if d['tp_proximity_stop_max'] is not None:
             tp_stop_max = d['tp_proximity_stop_max']
-        last_diag = d
 
         if d['hit']:
+            below_count += 1
+        else:
+            below_count = 0
+
+        if below_count >= confirm_days:
             exit_date = hist_index[pos].date()
             return {
                 'exit_pos': pos,
