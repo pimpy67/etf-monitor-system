@@ -38,6 +38,7 @@ from datetime import date
 import pandas as pd
 
 from technical_analysis import ETFTechnicalAnalyzer
+from directa_exit import check_shadow_exit_directa
 
 MODEL_NAME = 'candidate_adx_slope_20260905'
 TARGET_FAMILY = 'equity_sviluppati'
@@ -71,29 +72,13 @@ def run_shadow_monitor_adx_slope(db, results: list, add_log=print):
             analyzer = ETFTechnicalAnalyzer(famiglia=famiglia)
 
             if open_pos:
-                entry_price = float(open_pos['entry_price'])
-                hist = db.get_ohlc_by_isin(isin, days=40)
-                if hist.empty or len(hist) < 25:
-                    continue
-                close = hist['Close'].astype(float)
-                ema20_series = analyzer._ema(close, analyzer.ema20_period)
-                ema20_today = float(ema20_series.iloc[-1])
-
-                sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, current_price, ema20_today)
-                sl = sl_data.get('sl_suggerito')
-                sl_hit = sl is not None and current_price <= sl
-
-                tp_data = analyzer.calculate_stop_gain_dynamic(entry_price, current_price,
-                                                                 ema20_series, analyzer.p)
-                tp_hit = bool(tp_data.get('trigger'))
-
-                if sl_hit or tp_hit:
-                    gross_pct = round((current_price / entry_price - 1) * 100, 3)
-                    db.close_shadow_position(open_pos['id'], today, current_price,
-                                              'TP' if tp_hit else 'SL', gross_pct)
+                # Uscita modello Directa-fedele (item 15, 2026-09-08), stateless.
+                res = check_shadow_exit_directa(db, analyzer, open_pos, isin, 'L1', today)
+                if res:
                     closed += 1
-                    add_log(f"    🔵 SHADOW ADX-SLOPE EXIT {ticker} | {'TP' if tp_hit else 'SL'} | "
-                            f"{gross_pct:+.2f}%")
+                    add_log(f"    🔵 SHADOW ADX-SLOPE EXIT {ticker} | "
+                            f"{res['exit_reason_mapped']} ({res['exit_reason']}) | "
+                            f"{res['gross_pct_gain']:+.2f}%")
             else:
                 if a.get('suggested_level') != 1:
                     continue  # la produzione non entrerebbe nemmeno lei, niente da testare

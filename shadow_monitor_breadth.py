@@ -34,6 +34,7 @@ migrations/005_add_breadth_regime_state.sql.
 from datetime import date
 
 from technical_analysis import ETFTechnicalAnalyzer
+from directa_exit import check_shadow_exit_directa
 
 MODEL_NAME = 'candidate_breadth_20260820'
 
@@ -130,33 +131,13 @@ def run_shadow_monitor_breadth(db, results: list, add_log=print) -> list:
             analyzer = make_breadth_analyzer(famiglia)
 
             if open_pos:
-                # Posizione ombra aperta — stessa uscita reale di L1 (SL/TP), parametri
-                # famiglia invariati (solo il gate d'ingresso e' diverso per questo candidato).
-                entry_price = float(open_pos['entry_price'])
-                ema20 = a.get('ema20')
-
-                hist_recent = db.get_ohlc_by_isin(isin, days=40)
-                ema20_series = None
-                if not hist_recent.empty and len(hist_recent) >= 20:
-                    close_recent = hist_recent['Close'].astype(float).dropna()
-                    if len(close_recent) >= 20:
-                        ema20_series = analyzer._ema(close_recent, 20).tail(10)
-
-                sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, current_price, ema20)
-                sl = sl_data.get('sl_suggerito')
-                sg_data = analyzer.calculate_stop_gain_dynamic(entry_price, current_price,
-                                                                 ema20_series, analyzer.p)
-
-                sl_hit = sl is not None and current_price <= sl
-                tp_hit = bool(sg_data.get('trigger'))
-
-                if sl_hit or tp_hit:
-                    gross_pct = round((current_price / entry_price - 1) * 100, 3)
-                    db.close_shadow_position(open_pos['id'], today, current_price,
-                                              'SL' if sl_hit else 'TP', gross_pct)
+                # Uscita modello Directa-fedele (item 15, 2026-09-08), stateless.
+                res = check_shadow_exit_directa(db, analyzer, open_pos, isin, 'L1', today)
+                if res:
                     closed += 1
-                    add_log(f"    🟡 SHADOW BREADTH EXIT {ticker} | {'SL' if sl_hit else 'TP'} | "
-                            f"{gross_pct:+.2f}%")
+                    add_log(f"    🟡 SHADOW BREADTH EXIT {ticker} | "
+                            f"{res['exit_reason_mapped']} ({res['exit_reason']}) | "
+                            f"{res['gross_pct_gain']:+.2f}%")
             else:
                 # Nessuna posizione ombra — valuta ingresso: buy_count==6 + MACD +
                 # fondamenta (regime BULL, prezzo>SMA50, no kill switch), SOLO perche'

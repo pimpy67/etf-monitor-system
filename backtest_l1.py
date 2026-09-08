@@ -41,6 +41,7 @@ import pandas as pd
 from technical_analysis import ETFTechnicalAnalyzer
 from data_fetcher import ETFDataFetcher
 from database import PriceDatabase
+from directa_exit import directa_stop_today
 
 # Default: tutti i backtest leggono dal Golden Dataset congelato (etf_price_history_frozen),
 # non da Yahoo Finance live — vedi CLAUDE.md "L1 -- Come Si Esce" per il perche' (indagine
@@ -110,7 +111,7 @@ def make_analyzer(famiglia, min_buy_override=None):
 
 
 def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, require_macd=False,
-             precomputed_full=None, macd_skip_mask=None, volume_ok_mask=None):
+             precomputed_full=None, macd_skip_mask=None, volume_ok_mask=None, exit_model='clean'):
     """Ingresso via suggest_level() (7/7 o 6/7). Uscita: SOLO SL o TP, ricalcolati e
     controllati una volta al giorno sul Close (come il monitor reale). Nessuna regola B/C/E/F.
 
@@ -151,6 +152,7 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, 
     entry_buy_count = None
     entry_missing = None
     entry_features = None
+    tp_stop_max = None  # floor ratchet Directa, persistito tra i giorni (solo exit_model='directa')
     trades = []
 
     quiet = io.StringIO()
@@ -210,23 +212,50 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, 
                 ema20_series = analyzer._ema(close_slice, 20).tail(10)
                 ema20_today = float(ema20_series.iloc[-1])
 
-                sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, close_today, ema20_today)
-                sl = sl_data.get('sl_suggerito')
-
-                sg_data = analyzer.calculate_stop_gain_dynamic(entry_price, close_today, ema20_series, analyzer.p)
-                tp = entry_price * (1 + sg_data.get('target_pct', 0.0))
-
-                sl_hit = sl is not None and close_today <= sl
-                tp_hit = bool(sg_data.get('trigger'))
-
                 exit_price = None
                 exit_reason = None
-                if sl_hit:
-                    exit_price = close_today
-                    exit_reason = 'SL'
-                elif tp_hit:
-                    exit_price = close_today
-                    exit_reason = 'TP'
+                exit_detail = None
+
+                if exit_model == 'directa':
+                    # Modello di uscita fedele a Directa (item 15): un solo ordine attivo,
+                    # lo Stop effettivo = max(SL ufficiale, ratchet di avvicinamento al TP),
+                    # ratchettato tra i giorni. Vedi directa_exit.py.
+                    atr_pct = None
+                    if high_slice is not None and low_slice is not None and len(close_slice) >= 14:
+                        an = analyzer._calculate_atr_normalized(high_slice, low_slice, close_slice)
+                        if an is not None:
+                            atr_pct = round(an * 100, 2)
+                    step = directa_stop_today(
+                        analyzer, entry_price, close_today, 'L1',
+                        ema20_today=ema20_today, ema20_series=ema20_series,
+                        prev_tp_stop_max=tp_stop_max,
+                        sl_initial_pct=analyzer.p.get('sl_initial_pct'),
+                        atr_pct=atr_pct,
+                    )
+                    if step['tp_proximity_stop_max'] is not None:
+                        tp_stop_max = step['tp_proximity_stop_max']
+                    if step['hit']:
+                        exit_price = close_today
+                        exit_detail = step['exit_reason']
+                        # Mantiene exit_reason in {SL,TP} per non rompere aggregate() e le
+                        # FASI 2 (analyze_missing_conditions/analyze_entry_features), che
+                        # bucketano su 'TP'/'SL'. Il dettaglio reale resta in exit_detail.
+                        exit_reason = 'TP' if close_today > entry_price else 'SL'
+                else:
+                    sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, close_today, ema20_today)
+                    sl = sl_data.get('sl_suggerito')
+
+                    sg_data = analyzer.calculate_stop_gain_dynamic(entry_price, close_today, ema20_series, analyzer.p)
+                    tp = entry_price * (1 + sg_data.get('target_pct', 0.0))
+
+                    sl_hit = sl is not None and close_today <= sl
+                    tp_hit = bool(sg_data.get('trigger'))
+                    if sl_hit:
+                        exit_price = close_today
+                        exit_reason = 'SL'
+                    elif tp_hit:
+                        exit_price = close_today
+                        exit_reason = 'TP'
 
                 if exit_reason:
                     gross_pct = round((exit_price / entry_price - 1) * 100, 3)
@@ -234,13 +263,14 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, 
                         'entry_date': entry_date, 'entry_price': entry_price,
                         'exit_date': d.date().isoformat(), 'exit_price': exit_price,
                         'status': 'closed', 'gross_pct_gain': gross_pct,
-                        'exit_reason': exit_reason,
+                        'exit_reason': exit_reason, 'exit_detail': exit_detail,
                         'entry_buy_count': entry_buy_count, 'entry_missing': entry_missing,
                         'entry_features': entry_features,
                     })
                     holding = False
                     entry_price = None
                     entry_date = None
+                    tp_stop_max = None
 
     if holding:
         last_price = float(close_full.iloc[-1])
@@ -249,7 +279,7 @@ def simulate(analyzer, close_full, high_full, low_full, hist_index, test_dates, 
             'entry_date': entry_date, 'entry_price': entry_price,
             'exit_date': None, 'exit_price': last_price,
             'status': 'open', 'gross_pct_gain': gross_pct,
-            'exit_reason': None,
+            'exit_reason': None, 'exit_detail': None,
             'entry_buy_count': entry_buy_count, 'entry_missing': entry_missing,
             'entry_features': entry_features,
         })
@@ -273,7 +303,8 @@ def apply_costs_and_tax(trade, position_size):
     return trade
 
 
-def backtest_ticker(fetcher, ticker, famiglia, start_date, fetch_days, min_buy_variants):
+def backtest_ticker(fetcher, ticker, famiglia, start_date, fetch_days, min_buy_variants,
+                    exit_model='clean'):
     """Simula UNA volta per ticker/variante (solo % lordi) — i costi/tasse si
     applicano dopo, per size diverse, senza dover ri-simulare."""
     hist = fetcher.get_historical_data(ticker, days=fetch_days)
@@ -293,7 +324,7 @@ def backtest_ticker(fetcher, ticker, famiglia, start_date, fetch_days, min_buy_v
     for label, override, require_macd in min_buy_variants:
         analyzer = make_analyzer(famiglia, override)
         trades = simulate(analyzer, close_full, high_full, low_full, hist.index, test_dates,
-                           require_macd=require_macd)
+                           require_macd=require_macd, exit_model=exit_model)
         per_variant[label] = {'n_trades': len(trades), 'trades': trades}
 
     return {'ticker': ticker, 'famiglia': famiglia, 'variants': per_variant}, None
@@ -323,12 +354,23 @@ def aggregate(results, label, position_size):
     sl_trades = [t for t in closed if t['exit_reason'] == 'SL']
     tp_trades = [t for t in closed if t['exit_reason'] == 'TP']
 
+    wins_eur = sum(t['net_gain_eur'] for t in closed if t['net_gain_eur'] > 0)
+    loss_eur = -sum(t['net_gain_eur'] for t in closed if t['net_gain_eur'] < 0)
+    detail_counts = {}
+    for t in closed:
+        dk = t.get('exit_detail')
+        if dk:
+            detail_counts[dk] = detail_counts.get(dk, 0) + 1
+
     return {
         'n_trades_total': len(all_trades),
         'n_trades_closed': len(closed),
         'n_trades_open': len(open_),
         'n_exit_sl': len(sl_trades),
         'n_exit_tp': len(tp_trades),
+        'profit_factor': (round(wins_eur / loss_eur, 2) if loss_eur > 0
+                          else (None if wins_eur == 0 else float('inf'))),
+        'exit_detail_counts': detail_counts,
         'avg_duration_days': round(sum(durations) / len(durations), 1) if durations else None,
         'avg_gross_pct_gain': round(sum(gross_gains) / len(gross_gains), 2) if gross_gains else None,
         'avg_net_pct_gain': round(sum(net_gains) / len(net_gains), 2) if net_gains else None,
@@ -429,6 +471,13 @@ def main():
                               '(risultati NON riproducibili run-to-run, vedi CLAUDE.md)')
     parser.add_argument('--frozen-batch', default=DEFAULT_FROZEN_BATCH,
                          help=f'quale snapshot congelato usare (default: {DEFAULT_FROZEN_BATCH})')
+    parser.add_argument('--limit', type=int, default=None,
+                         help='analizza solo i primi N ticker (smoke test)')
+    parser.add_argument('--exit-model', choices=['clean', 'directa'], default='clean',
+                         help="'clean' (default) = SL/TP primo toccato, fill esatto. "
+                              "'directa' = Stop unico effettivo con ratchet di avvicinamento "
+                              "al TP (item 15, vedi directa_exit.py). exit_reason resta "
+                              "SL/TP per compatibilita', il dettaglio va in exit_detail.")
     args = parser.parse_args()
     position_sizes = [float(x) for x in args.position_sizes.split(',')]
 
@@ -443,6 +492,7 @@ def main():
         variants.append((f'smart_{args.compare_min_buy}_macd', args.compare_min_buy, True))
 
     print(f"BACKTEST L1 v4 — portafoglio reale (SL/TP giornalieri su Close, no B/C/E/F) — dal {start_date.isoformat()} a oggi")
+    print(f"Exit model: {args.exit_model}")
     print(f"Famiglie: {', '.join(sorted(TARGET_FAMILIES))}")
     print(f"Varianti: {[v[0] for v in variants]}  |  Position sizes: {position_sizes}EUR  |  "
           f"Costi Directa: {DIRECTA_FEE_BUY}+{DIRECTA_FEE_SELL}EUR  |  Tax: {TAX_RATE:.0%}")
@@ -453,6 +503,8 @@ def main():
     print("=" * 78)
 
     universe = load_universe()
+    if args.limit:
+        universe = universe[:args.limit]
     print(f"ETF nell'universo target: {len(universe)}\n")
 
     fetcher = ETFDataFetcher() if args.live else FrozenDataFetcher(args.frozen_batch)
@@ -462,7 +514,8 @@ def main():
         ticker = item['ticker']
         print(f"[{i}/{len(universe)}] {ticker:14s} ({item['famiglia']})...", end=' ')
         try:
-            res, err = backtest_ticker(fetcher, ticker, item['famiglia'], start_date, args.days, variants)
+            res, err = backtest_ticker(fetcher, ticker, item['famiglia'], start_date, args.days, variants,
+                                       exit_model=args.exit_model)
         except Exception as e:
             res, err = None, str(e)
         if err:
@@ -496,7 +549,9 @@ def main():
             agg_by_variant[label] = agg
             print(f"--- Variante {label} | Size {size}EUR ---")
             print(f"  Trade totali: {agg['n_trades_total']}  (chiusi: {agg['n_trades_closed']}, ancora aperti: {agg['n_trades_open']})")
-            print(f"  Uscite: {agg['n_exit_sl']} via SL, {agg['n_exit_tp']} via TP")
+            print(f"  Uscite: {agg['n_exit_sl']} via SL, {agg['n_exit_tp']} via TP  |  PF: {agg['profit_factor']}")
+            if agg['exit_detail_counts']:
+                print(f"  Exit detail (modello directa): {agg['exit_detail_counts']}")
             print(f"  Durata media posizione chiusa: {agg['avg_duration_days']} giorni")
             print(f"  Rendimento medio LORDO per trade: {agg['avg_gross_pct_gain']}%")
             print(f"  Rendimento medio NETTO per trade (dopo costi+tasse): {agg['avg_net_pct_gain']}%")

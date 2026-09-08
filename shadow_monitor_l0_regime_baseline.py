@@ -19,6 +19,7 @@ reale), stesso pattern di shadow_monitor_l0.py.
 from datetime import date
 
 from technical_analysis import ETFTechnicalAnalyzer
+from directa_exit import check_shadow_exit_directa
 
 MODEL_NAME = 'baseline_l0_regime_bull'
 
@@ -52,19 +53,13 @@ def run_shadow_monitor_l0_regime_baseline(db, results: list, add_log=print):
             open_pos = db.get_open_shadow_position(MODEL_NAME, ticker)
 
             if open_pos:
-                entry_price = float(open_pos['entry_price'])
-                sl_data = analyzer.calculate_sl_suggerito_l0(entry_price, current_price)
-                tp_data = analyzer.calculate_tp_suggerito_l0(entry_price, current_price)
-                sl = sl_data.get('sl_suggerito')
-                sl_hit = sl is not None and current_price <= sl
-                tp_hit = bool(tp_data.get('trigger'))
-                if sl_hit or tp_hit:
-                    gross_pct = round((current_price / entry_price - 1) * 100, 3)
-                    db.close_shadow_position(open_pos['id'], today, current_price,
-                                             'TP' if tp_hit else 'SL', gross_pct)
+                # Uscita modello Directa-fedele (item 15, 2026-09-08), stateless.
+                res = check_shadow_exit_directa(db, analyzer, open_pos, isin, 'L0', today)
+                if res:
                     closed += 1
                     add_log(f"    ⚪ SHADOW L0-BASELINE EXIT {ticker} | "
-                            f"{'TP' if tp_hit else 'SL'} | {gross_pct:+.2f}%")
+                            f"{res['exit_reason_mapped']} ({res['exit_reason']}) | "
+                            f"{res['gross_pct_gain']:+.2f}%")
             else:
                 hist = db.get_ohlc_by_isin(isin, days=250)
                 if hist.empty or len(hist) < 220:

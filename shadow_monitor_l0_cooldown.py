@@ -49,6 +49,7 @@ gia' attivo per gli altri candidati dal 2026-08-19.
 from datetime import date
 
 from technical_analysis import ETFTechnicalAnalyzer
+from directa_exit import check_shadow_exit_directa
 
 MODEL_NAME = 'candidate_l0_cooldown_20260827'
 
@@ -95,23 +96,14 @@ def run_shadow_monitor_l0_cooldown(db, results: list, add_log=print):
             analyzer = ETFTechnicalAnalyzer(famiglia=famiglia)
 
             if open_pos:
-                # Posizione ombra aperta — SL/TP nativi di famiglia, invariati
-                # (il candidato tocca solo il gate d'ingresso, mai l'uscita).
-                entry_price = float(open_pos['entry_price'])
-                sl_data = analyzer.calculate_sl_suggerito_l0(entry_price, current_price)
-                tp_data = analyzer.calculate_tp_suggerito_l0(entry_price, current_price)
-
-                sl = sl_data.get('sl_suggerito')
-                sl_hit = sl is not None and current_price <= sl
-                tp_hit = bool(tp_data.get('trigger'))
-
-                if sl_hit or tp_hit:
-                    gross_pct = round((current_price / entry_price - 1) * 100, 3)
-                    db.close_shadow_position(open_pos['id'], today, current_price,
-                                              'TP' if tp_hit else 'SL', gross_pct)
+                # Posizione ombra aperta — uscita modello Directa-fedele (item 15,
+                # 2026-09-08), ricalcolata stateless dall'ingresso. Vedi directa_exit.py.
+                res = check_shadow_exit_directa(db, analyzer, open_pos, isin, 'L0', today)
+                if res:
                     closed += 1
                     add_log(f"    🔵 SHADOW L0-COOLDOWN EXIT {ticker} | "
-                            f"{'TP' if tp_hit else 'SL'} | {gross_pct:+.2f}%")
+                            f"{res['exit_reason_mapped']} ({res['exit_reason']}) | "
+                            f"{res['gross_pct_gain']:+.2f}%")
             else:
                 # Nessuna posizione ombra aperta — serve lo storico OHLC completo
                 # (non solo il prezzo di oggi) sia per SMA200/percorso SLOW sia

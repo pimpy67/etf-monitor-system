@@ -38,6 +38,7 @@ principio degli altri Shadow Monitor).
 from datetime import date
 
 from technical_analysis import ETFTechnicalAnalyzer
+from directa_exit import check_shadow_exit_directa
 
 RADAR_PARAMS = {
     # Stessi default usati dagli endpoint live /api/approach-radar e
@@ -99,26 +100,14 @@ def _run(radar_type, db, results, add_log):
             open_pos = db.get_open_shadow_position(model_name, ticker)
 
             if open_pos:
-                # Stesse funzioni e stessa logica di backtest_radars.py::simulate_radar()
-                # e di L1 reale — SL = calculate_sl_suggerito_l1, TP = calculate_stop_
-                # gain_dynamic, check una volta al giorno sul Close.
-                entry_price = float(open_pos['entry_price'])
-                ema20_series = analyzer._ema(close, 20).tail(10)
-                ema20_today = float(ema20_series.iloc[-1])
-
-                sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, current_price, ema20_today)
-                sl = sl_data.get('sl_suggerito')
-                sg_data = analyzer.calculate_stop_gain_dynamic(entry_price, current_price, ema20_series, analyzer.p)
-                tp_hit = bool(sg_data.get('trigger'))
-                sl_hit = sl is not None and current_price <= sl
-
-                if sl_hit or tp_hit:
-                    gross_pct = round((current_price / entry_price - 1) * 100, 3)
-                    db.close_shadow_position(open_pos['id'], today, current_price,
-                                              'TP' if tp_hit else 'SL', gross_pct)
+                # Uscita modello Directa-fedele (item 15, 2026-09-08), stateless —
+                # Stop unico effettivo con ratchet di avvicinamento al TP. Vedi directa_exit.py.
+                res = check_shadow_exit_directa(db, analyzer, open_pos, isin, 'L1', today)
+                if res:
                     closed += 1
                     add_log(f"    🔁 SHADOW RADAR-{radar_type.upper()} EXIT {ticker} | "
-                            f"{'TP' if tp_hit else 'SL'} | {gross_pct:+.2f}%")
+                            f"{res['exit_reason_mapped']} ({res['exit_reason']}) | "
+                            f"{res['gross_pct_gain']:+.2f}%")
             else:
                 if radar_type == 'approach':
                     signal = analyzer.compute_approach_signal(close, high, low, **params)

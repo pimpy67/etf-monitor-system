@@ -43,6 +43,7 @@ deve mai bloccare il ciclo di monitoraggio reale.
 from datetime import date
 
 from technical_analysis import ETFTechnicalAnalyzer
+from directa_exit import check_shadow_exit_directa
 
 MODEL_NAME = 'candidate_bond_trend_20260824'
 
@@ -94,6 +95,10 @@ def run_shadow_monitor_bond_trend(db, results: list, add_log=print):
         try:
             open_pos = db.get_open_shadow_position(MODEL_NAME, ticker)
             analyzer = ETFTechnicalAnalyzer(famiglia=famiglia)
+            # Il target TP di questo meccanismo e' bond-specifico (~3% vs 15% equity):
+            # lo inietto in analyzer.p cosi' il modello Directa-fedele (che legge
+            # analyzer.p['l1_stop_gain_dynamic']) usa il target giusto.
+            analyzer.p = {**analyzer.p, 'l1_stop_gain_dynamic': sg_params}
 
             # Serve solo il Close storico (nessun OHLC/RSI/ADX per questo meccanismo)
             days_needed = persistence_days + 40
@@ -104,24 +109,13 @@ def run_shadow_monitor_bond_trend(db, results: list, add_log=print):
             ema20_series = analyzer._ema(close, analyzer.ema20_period)
 
             if open_pos:
-                entry_price = float(open_pos['entry_price'])
-                ema20_today = float(ema20_series.iloc[-1])
-                sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, current_price, ema20_today)
-                sl = sl_data.get('sl_suggerito')
-                sl_hit = sl is not None and current_price <= sl
-
-                tp_data = analyzer.calculate_stop_gain_dynamic(entry_price, current_price,
-                                                                 ema20_series,
-                                                                 {'l1_stop_gain_dynamic': sg_params})
-                tp_hit = bool(tp_data.get('trigger'))
-
-                if sl_hit or tp_hit:
-                    gross_pct = round((current_price / entry_price - 1) * 100, 3)
-                    db.close_shadow_position(open_pos['id'], today, current_price,
-                                              'TP' if tp_hit else 'SL', gross_pct)
+                # Uscita modello Directa-fedele (item 15, 2026-09-08), stateless.
+                res = check_shadow_exit_directa(db, analyzer, open_pos, isin, 'L1', today)
+                if res:
                     closed += 1
-                    add_log(f"    🟡 SHADOW BOND-TREND EXIT {ticker} | {'TP' if tp_hit else 'SL'} | "
-                            f"{gross_pct:+.2f}%")
+                    add_log(f"    🟡 SHADOW BOND-TREND EXIT {ticker} | "
+                            f"{res['exit_reason_mapped']} ({res['exit_reason']}) | "
+                            f"{res['gross_pct_gain']:+.2f}%")
             else:
                 entry_check = analyzer.suggest_bond_trend_entry(close, ema20_series,
                                                                   persistence_days, dist_max_pct)

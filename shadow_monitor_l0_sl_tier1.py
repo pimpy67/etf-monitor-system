@@ -33,6 +33,7 @@ model_name. Email sui nuovi ingressi via alerts.py::send_shadow_entries.
 from datetime import date
 
 from technical_analysis import ETFTechnicalAnalyzer
+from directa_exit import check_shadow_exit_directa
 
 # equity_sviluppati e' l'unica famiglia raggiungibile da L0 (whitelist gate in
 # suggest_level_0()). "Azionari Tematici" ci cade dentro per il default_family
@@ -85,19 +86,15 @@ def _run_variant(db, results, add_log, model_name, tier1_buffer):
             analyzer = _make_analyzer(famiglia, tier1_buffer)
 
             if open_pos:
-                entry_price = float(open_pos['entry_price'])
-                sl_data = analyzer.calculate_sl_suggerito_l0(entry_price, current_price)
-                tp_data = analyzer.calculate_tp_suggerito_l0(entry_price, current_price)
-                sl = sl_data.get('sl_suggerito')
-                sl_hit = sl is not None and current_price <= sl
-                tp_hit = bool(tp_data.get('trigger'))
-                if sl_hit or tp_hit:
-                    gross_pct = round((current_price / entry_price - 1) * 100, 3)
-                    db.close_shadow_position(open_pos['id'], today, current_price,
-                                              'TP' if tp_hit else 'SL', gross_pct)
+                # Uscita modello Directa-fedele (item 15, 2026-09-08), stateless.
+                # L'analyzer ha gia' l'override tier1_buffer -> calculate_sl_suggerito_l0
+                # dentro la simulazione lo rispetta (e' il punto di questo candidato).
+                res = check_shadow_exit_directa(db, analyzer, open_pos, isin, 'L0', today)
+                if res:
                     closed += 1
                     add_log(f"    🟣 SHADOW L0-SL{int(tier1_buffer*100)} EXIT {ticker} | "
-                            f"{'TP' if tp_hit else 'SL'} | {gross_pct:+.2f}%")
+                            f"{res['exit_reason_mapped']} ({res['exit_reason']}) | "
+                            f"{res['gross_pct_gain']:+.2f}%")
             else:
                 # Ingresso NATIVO — nessun override sui parametri d'ingresso.
                 hist = db.get_ohlc_by_isin(isin, days=250)

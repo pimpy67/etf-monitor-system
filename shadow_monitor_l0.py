@@ -25,6 +25,7 @@ get_shadow_positions().
 from datetime import date
 
 from technical_analysis import ETFTechnicalAnalyzer
+from directa_exit import check_shadow_exit_directa
 
 MODEL_NAME = 'candidate_model_l0_20260808'
 
@@ -78,24 +79,15 @@ def run_shadow_monitor_l0(db, results: list, add_log=print):
             analyzer = make_candidate_l0_analyzer(famiglia)
 
             if open_pos:
-                # Posizione ombra aperta — stesse funzioni reali di L0 (SL e TP non
-                # sono toccati dal candidato: SL è hardcoded, TP legge
-                # l0_take_profit_pct invariato dallo YAML).
-                entry_price = float(open_pos['entry_price'])
-                sl_data = analyzer.calculate_sl_suggerito_l0(entry_price, current_price)
-                tp_data = analyzer.calculate_tp_suggerito_l0(entry_price, current_price)
-
-                sl = sl_data.get('sl_suggerito')
-                sl_hit = sl is not None and current_price <= sl
-                tp_hit = bool(tp_data.get('trigger'))
-
-                if sl_hit or tp_hit:
-                    gross_pct = round((current_price / entry_price - 1) * 100, 3)
-                    db.close_shadow_position(open_pos['id'], today, current_price,
-                                              'TP' if tp_hit else 'SL', gross_pct)
+                # Posizione ombra aperta — uscita col modello Directa-fedele (item 15,
+                # 2026-09-08): un solo ordine attivo, Stop effettivo = max(SL ufficiale,
+                # ratchet di avvicinamento al TP), ricalcolato dall'ingresso a oggi in
+                # modo stateless. Vedi directa_exit.py.
+                res = check_shadow_exit_directa(db, analyzer, open_pos, isin, 'L0', today)
+                if res:
                     closed += 1
-                    add_log(f"    🟣 SHADOW L0 EXIT {ticker} | {'TP' if tp_hit else 'SL'} | "
-                            f"{gross_pct:+.2f}%")
+                    add_log(f"    🟣 SHADOW L0 EXIT {ticker} | {res['exit_reason_mapped']} "
+                            f"({res['exit_reason']}) | {res['gross_pct_gain']:+.2f}%")
             else:
                 # Nessuna posizione ombra aperta — valuta ingresso con
                 # regime_min_days_below_sma200=5 invece del baseline di famiglia

@@ -5,7 +5,35 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c23e4e15-4c77-4fcf-a9c0-f0d2dc00b62b
-  modified: 2026-09-03T12:33:19.463Z
+  modified: 2026-09-07T11:33:14.810Z
+---
+
+## ✅ CHECKPOINT 06/09 ESEGUITO (2026-09-07) — nessuna promozione
+
+Estratto `etf_shadow_positions` + dashboard/regime dal DB produzione VPS.
+
+- **Produzione `native_7`: ancora 0 ingressi L1, 0 ingressi L0 dal 05/08** (33gg). Dashboard L0/L1
+  vuoti. Regime BULL (risk 73) ma `equity_adx 12.9` LATERALE — il grind debole del 03/09 continua.
+- **Shadow: nessuno vicino a N≥30 chiusi → nessuna modifica YAML.** Conteggi chiusi/aperti:
+  radar_approach 15/6 (avg −1,09%, WR ~13%), model_l0_20260808 3/11 (3/3 SL, 0% WR),
+  l0_oro 5/5 (5/5 SL, avg −5,29%), radar_bounce 4/43 (4/4 SL oro/argento, avg −6,79%),
+  bond_trend 0/5 (5 ingressi solo il 24/08, **fermo da 2 settimane — verificare STEP 8f uscite**),
+  l0_metalli/cooldown/sl_tier1-5%/sl_tier1-6% 0/2 cad., breadth 0/0 (mai scattato, breadth 60% vs 80%),
+  tighten_rsi 0/0, baseline_l0_regime_bull 0/0.
+- **2 nuovi shadow non documentati qui**: `candidate_momentum_20260905` (item 18b, STEP 8L) e
+  `candidate_adx_slope_20260905` (idea esterna ADX slope, STEP 8N, commit `7ac5c5e`) — costruiti
+  il 05/09, 0 ingressi finora. **Verificare che il momentum abbia passato il backtest per-famiglia
+  richiesto (OOS PF≥1,3 su settoriali_growth E oro, mai pooled) PRIMA della build** — item 18b
+  step 1 lo imponeva.
+- **Tema periodo**: il crollo oro/argento fine agosto ha affondato ogni shadow mean-reversion sui
+  metalli (l0_oro 5/5, radar_bounce 4/4). radar_approach/bounce continuano a non filtrare per
+  famiglia (LVO.MI dentro) — fix confermato al 06/10 (item 16).
+- **Decision 3**: confermata (già chiusa 03/09 — PAC VWCE+GAGG+riserva).
+- **Item 15 (modello uscita Directa-fedele): SBLOCCATO** — è il prossimo progetto, prima dell'item 17.
+- **Item 16 (pruning shadow): resta al 06/10.** Ora ~13 moduli shadow — sprawl peggiorato.
+- Portafoglio reale: 4 L0 aperte, nessuna sotto stop; **WATC.PA** sl_suggested +2,4% > sl_inserted
+  → alzare lo Stop su Directa.
+
 ---
 
 ## ⚠️ Aggiornamento 2026-08-23 — processo cambiato da scadenza fissa a checkpoint ricorrente
