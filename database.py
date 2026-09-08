@@ -1701,8 +1701,13 @@ class PriceDatabase:
     def upsert_pac_plan(self, isin: str, ticker: str, shares_per_exec: float,
                         exec_days: list, start_date: str, fund_name: str = '',
                         fee_eur: float = 0.0, broker: str = 'Directa',
-                        active: bool = True) -> bool:
-        """Crea o aggiorna il piano PAC per un ISIN (UNIQUE su isin)."""
+                        active: bool = True, amount_eur_per_exec: float = None) -> bool:
+        """Crea o aggiorna il piano PAC per un ISIN (UNIQUE su isin).
+
+        Se amount_eur_per_exec e' valorizzato, l'auto-tracking del monitor compra
+        floor(amount / prezzo) quote (come fa davvero Directa: importo fisso, quote
+        intere entro budget). shares_per_exec resta come stima di fallback.
+        """
         conn = self._get_connection()
         if not conn:
             return False
@@ -1710,8 +1715,8 @@ class PriceDatabase:
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO etf_pac_plan
-                        (isin, ticker, fund_name, shares_per_exec, exec_days, fee_eur, broker, start_date, active)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        (isin, ticker, fund_name, shares_per_exec, exec_days, fee_eur, broker, start_date, active, amount_eur_per_exec)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (isin) DO UPDATE
                         SET ticker = EXCLUDED.ticker,
                             fund_name = EXCLUDED.fund_name,
@@ -1720,9 +1725,10 @@ class PriceDatabase:
                             fee_eur = EXCLUDED.fee_eur,
                             broker = EXCLUDED.broker,
                             start_date = EXCLUDED.start_date,
-                            active = EXCLUDED.active
+                            active = EXCLUDED.active,
+                            amount_eur_per_exec = EXCLUDED.amount_eur_per_exec
                 """, (isin, ticker, fund_name, shares_per_exec, list(exec_days),
-                      fee_eur, broker, start_date, active))
+                      fee_eur, broker, start_date, active, amount_eur_per_exec))
                 conn.commit()
                 return True
         except Exception as e:

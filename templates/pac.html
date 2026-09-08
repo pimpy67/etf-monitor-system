@@ -198,12 +198,13 @@
     <div class="section-title">Piani PAC automatici</div>
     <div class="card">
         <p style="color:var(--color-text-muted);margin-top:0">
-            Il monitor registra da solo i versamenti di questi piani (giorni fissi del mese ×
-            quote fisse), usando la chiusura del giorno. Non serve più inserirli a mano.
+            Il monitor registra da solo i versamenti di questi piani nei giorni fissi del mese,
+            usando la chiusura del giorno. Con "Importo/vers." valorizzato compra quote intere
+            entro il budget (come Directa); le esecuzioni reali vengono poi corrette dallo Storico Directa.
         </p>
         <table id="plansTable">
             <thead>
-                <tr><th>ETF</th><th class="num">Quote/vers.</th><th>Giorni del mese</th><th class="num">Commiss.</th><th>Broker</th><th>Dal</th><th>Stato</th></tr>
+                <tr><th>ETF</th><th class="num">Importo/vers.</th><th class="num">Quote stim.</th><th>Giorni del mese</th><th class="num">Commiss.</th><th>Broker</th><th>Dal</th><th>Stato</th></tr>
             </thead>
             <tbody id="plansBody"></tbody>
         </table>
@@ -320,6 +321,7 @@ function renderPlans(plans) {
     plans.forEach(p => {
         body.innerHTML += `<tr>
             <td>${p.ticker}<br><small style="color:var(--color-text-muted)">${p.fund_name || p.isin}</small></td>
+            <td class="num">${p.amount_eur_per_exec != null ? fmtEur(p.amount_eur_per_exec) : '—'}</td>
             <td class="num">${(+p.shares_per_exec).toLocaleString('it-IT')}</td>
             <td>${(p.exec_days || []).join(', ')}</td>
             <td class="num">${fmtEur(p.fee_eur)}</td>

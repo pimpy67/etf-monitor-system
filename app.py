@@ -1396,6 +1396,8 @@ def get_pac():
             'id': p['id'], 'isin': p['isin'], 'ticker': p['ticker'],
             'fund_name': p.get('fund_name') or '',
             'shares_per_exec': float(p['shares_per_exec']),
+            'amount_eur_per_exec': (float(p['amount_eur_per_exec'])
+                                    if p.get('amount_eur_per_exec') is not None else None),
             'exec_days': list(p['exec_days'] or []),
             'fee_eur': float(p.get('fee_eur') or 0),
             'broker': p.get('broker') or 'Directa',
@@ -1420,14 +1422,18 @@ def upsert_pac_plan_route():
         shares_per_exec = float(data.get('shares_per_exec'))
         exec_days = sorted({int(d) for d in (data.get('exec_days') or [])})
         fee_eur = float(data.get('fee_eur') or 0)
+        amt = data.get('amount_eur_per_exec')
+        amount_eur_per_exec = float(amt) if amt not in (None, '') else None
         if (not isin or not ticker or not start_date or shares_per_exec <= 0
-                or not exec_days or any(d < 1 or d > 28 for d in exec_days) or fee_eur < 0):
+                or not exec_days or any(d < 1 or d > 28 for d in exec_days) or fee_eur < 0
+                or (amount_eur_per_exec is not None and amount_eur_per_exec <= 0)):
             raise ValueError
     except (ValueError, TypeError):
         return jsonify({'error': 'isin, ticker, start_date, shares_per_exec>0, '
                                  'exec_days (1-28) obbligatori'}), 400
     ok = db.upsert_pac_plan(isin, ticker, shares_per_exec, exec_days, start_date,
-                            fund_name=fund_name, fee_eur=fee_eur, broker=broker, active=active)
+                            fund_name=fund_name, fee_eur=fee_eur, broker=broker, active=active,
+                            amount_eur_per_exec=amount_eur_per_exec)
     return (jsonify({'status': 'ok', 'isin': isin}) if ok
             else (jsonify({'error': 'Errore salvataggio piano'}), 503))
 

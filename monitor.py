@@ -1647,9 +1647,10 @@ class ETFMonitor:
             start = plan['start_date']
             start = start.date() if hasattr(start, 'date') else start
             exec_days = sorted({int(d) for d in (plan.get('exec_days') or [])})
-            shares = float(plan['shares_per_exec'] or 0)
+            shares_fixed = float(plan['shares_per_exec'] or 0)
+            amount_target = float(plan.get('amount_eur_per_exec') or 0)
             fee = float(plan.get('fee_eur') or 0)
-            if not exec_days or shares <= 0:
+            if not exec_days or (shares_fixed <= 0 and amount_target <= 0):
                 continue
 
             px = self.db.get_close_by_isin(isin, days=800)
@@ -1685,6 +1686,13 @@ class ETFMonitor:
                     if exec_date in existing:
                         continue
                     close = float(fut.iloc[0]['Close'])
+                    # Directa: importo fisso -> quote intere entro il budget.
+                    if amount_target > 0:
+                        shares = int(amount_target // close)
+                        if shares <= 0:
+                            continue
+                    else:
+                        shares = shares_fixed
                     amount = shares * close
                     ok = self.db.add_pac_contribution(
                         isin, plan['ticker'], exec_date.isoformat(),
