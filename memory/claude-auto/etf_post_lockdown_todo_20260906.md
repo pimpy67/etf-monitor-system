@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: c23e4e15-4c77-4fcf-a9c0-f0d2dc00b62b
-  modified: 2026-09-07T11:33:14.810Z
+  modified: 2026-09-08T08:23:33.203Z
 ---
 
 ## ✅ CHECKPOINT 06/09 ESEGUITO (2026-09-07) — nessuna promozione
@@ -691,15 +691,41 @@ still classified L3). Fix: in `monitor.py::analyze_etf()` skip those 4 blocks fo
 the `technical_analysis.py` methods. Deferred to here (not worth a lockdown deploy for log
 noise) — batch with the radar family-exclusion, one deploy.
 
-## 17. L1 EXIT analysis — queued AFTER item 15 (Directa-faithful helper)
+## 17. L1 EXIT analysis — 🔶 IN CORSO 2026-09-08 (code done, full run launched)
 
-Fixed order: 06/09 checkpoint → item 15 (Directa-faithful exit model) → this.
-The 2026-09-01 analysis concluded the EXIT is the real problem (78-83% of L1 exits are
-stop losses in every variant), not the entry gate. Test wider / ATR-based / 2-day-confirm /
-weekly-recompute SL variants vs the current EMA20-based `calculate_sl_suggerito_l1`, on a
-LARGE entry pool (every L1/L2 crossing or the ~1000+ radar entries) for statistical power,
-decoupled from the entry gate. Full detail + variant list in
-[[etf-l1-gate-widening-analysis-2026-09-01]].
+Fixed order: 06/09 checkpoint → item 15 → this. Item 15 done 2026-09-08, so this started
+same day. The 2026-09-01 analysis concluded the EXIT is the real problem (78-83% of L1
+exits are stop losses), not the entry gate.
+
+- **`backtest_l1_exit.py`** (new, committed `e0136ce`): entry pool = every EMA20 upward
+  cross, all families, frozen batch, IN/OOS split at 2025-08-05. Sweeps 13 SL variants
+  through the **Directa-faithful exit model** (`simulate_directa_exit` gained `sl_variant`):
+  `baseline` (current EMA20 SL) · `ema20_wide_3/4/5/6%` · `atr_2.0/2.5/3.0` (chandelier
+  max_close−k·ATR) · `ema20_atr_1.0/1.5/2.0` · `confirm2` (2 consecutive closes below) ·
+  `weekly` (recompute SL every 5 trading days).
+- **15-ticker smoke (2026-09-08, NOT conclusive):**
+
+  | variant | IN: WR/PF/P&L | OUT: WR/PF/P&L |
+  |---|---|---|
+  | baseline (EMA20 SL) | 45% / **0.87** / −5.5k€ | 57% / 1.79 / +14.5k€ |
+  | ema20_wide_5% | 65% / **1.16** / +5.0k€ | **79% / 2.90** / +17.4k€ |
+  | ema20_wide_6% | **71% / 1.23** / +6.3k€ | 82% / 2.82 / +17.2k€ |
+  | atr_* / ema20_atr_* | all PF 0.81–0.92 IN (lose) | PF 1.7–2.0 OUT |
+  | confirm2 | PF 0.83 IN (worst) | PF 2.86 OUT (N=80) |
+  | weekly | PF 0.89 IN (lose) | 1.75 OUT |
+
+  → **Preliminary: the current EMA20 SL is too tight** (loses money in-sample on the large
+  pool). A **wider EMA20 buffer (5–6%)** beats it on WR/PF/avg/P&L in BOTH windows — same
+  direction as the L0-SL-tier1 2%→4% change that was promoted. ATR-based and 2-day-confirm
+  do NOT help (ATR whipsaws, confirm just delays into worse fills).
+- **Full run** (236 tickers) launched detached 2026-09-08 ~10:20 UTC inside the container
+  (capped 0.65 CPU so it can't re-trigger the throttle), `nice -19` →
+  `/app/data/l1_exit_full.txt`. ~2h ETA.
+- **At results**: update [[etf-l1-gate-widening-analysis-2026-09-01]] EXIT ANALYSIS section
+  with real numbers. If a variant clearly beats baseline IN+OUT at full N → **it's a
+  candidate, NOT a promotion**: needs explicit user decision + (probably) a Shadow Monitor
+  first, same discipline as everything else. The change would be to
+  `calculate_sl_suggerito_l1` (or a new `sl_l1_*` YAML block).
 
 ## 8. Known gaps, not yet built (lower priority, not blocking)
 
