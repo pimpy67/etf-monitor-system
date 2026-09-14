@@ -1512,6 +1512,14 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor L0 Resistenze (non bloccante): {e}")
 
+        # STEP 8P — Shadow Monitor Portafoglio Resistenze (candidato 2026-09-14)
+        # Testa resistenze su L0+L1 insieme nel portafoglio reale
+        try:
+            from shadow_monitor_portafoglio_resistances import run_shadow_monitor_portafoglio_resistances
+            run_shadow_monitor_portafoglio_resistances(results, self.db, add_log=add_log)
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor Portafoglio Resistenze (non bloccante): {e}")
+
         # STEP 8 — Sincronizza segnali L1 al portafoglio personale
         try:
             from sync_l1_portfolio import PortfolioL1Syncer
