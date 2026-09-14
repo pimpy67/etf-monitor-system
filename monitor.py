@@ -1520,6 +1520,14 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor Portafoglio Resistenze (non bloccante): {e}")
 
+        # STEP 8Q — Shadow Monitor Portafoglio Breakout Trading (candidato 2026-09-14)
+        # Testa rottura dinamica: se prezzo rompe R1 → target R2, se rimbalza → exit rapida
+        try:
+            from shadow_monitor_portafoglio_breakout import run_shadow_monitor_portafoglio_breakout
+            run_shadow_monitor_portafoglio_breakout(results, self.db, add_log=add_log)
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor Portafoglio Breakout (non bloccante): {e}")
+
         # STEP 8 — Sincronizza segnali L1 al portafoglio personale
         try:
             from sync_l1_portfolio import PortfolioL1Syncer
