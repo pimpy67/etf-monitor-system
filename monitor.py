@@ -1745,7 +1745,8 @@ class ETFMonitor:
             # Leggi tutte le entry L0 attive
             query = """
                 SELECT id, isin, entry_date, entry_price, fund_name,
-                       days_no_recovery, stallo_counter, broker, tp_proximity_stop_max
+                       days_no_recovery, stallo_counter, broker, tp_proximity_stop_max,
+                       stop_loss_suggested
                 FROM etf_portfolio_entries
                 WHERE status = 'active' AND portafoglio = 'L0'
             """
@@ -1768,7 +1769,7 @@ class ETFMonitor:
 
             add_log(f"  Aggiornamento {len(rows)} posizioni L0...")
 
-            for entry_id, isin, entry_date_str, entry_price_str, fund_name, days_no_rec, stallo_cnt, broker, prev_tp_stop_max in rows:
+            for entry_id, isin, entry_date_str, entry_price_str, fund_name, days_no_rec, stallo_cnt, broker, prev_tp_stop_max, previous_sl in rows:
                 try:
                     entry_price = float(entry_price_str) if entry_price_str else None
                     if not entry_price or entry_price <= 0:
@@ -1820,10 +1821,11 @@ class ETFMonitor:
                     except Exception as e:
                         add_log(f"    ⚠️  Errore ATR {isin}: {e}")
 
-                    # CALCOLA SL SUGGERITO — trailing progressivo
-                    sl_data = analyzer.calculate_sl_suggerito_l0(entry_price, current_price)
+                    # CALCOLA SL SUGGERITO — trailing progressivo (non scende mai)
+                    sl_data = analyzer.calculate_sl_suggerito_l0(entry_price, current_price, previous_sl=previous_sl)
                     sl_suggerito = sl_data.get('sl_suggerito')
                     stage = sl_data.get('stage')
+                    sl_respected = sl_data.get('previous_sl_respected', False)
 
                     # CALCOLA TP SUGGERITO — target fisso di famiglia
                     tp_data = analyzer.calculate_tp_suggerito_l0(entry_price, current_price)
@@ -1987,7 +1989,7 @@ class ETFMonitor:
             # Leggi tutte le entry L1 attive
             query = """
                 SELECT id, isin, entry_date, entry_price, fund_name,
-                       broker, tp_proximity_stop_max
+                       broker, tp_proximity_stop_max, stop_loss_suggested
                 FROM etf_portfolio_entries
                 WHERE status = 'active' AND portafoglio = 'L1'
             """
@@ -2010,7 +2012,7 @@ class ETFMonitor:
 
             add_log(f"  Aggiornamento {len(rows)} posizioni L1...")
 
-            for entry_id, isin, entry_date_str, entry_price_str, fund_name, broker, prev_tp_stop_max in rows:
+            for entry_id, isin, entry_date_str, entry_price_str, fund_name, broker, prev_tp_stop_max, previous_sl in rows:
                 try:
                     entry_price = float(entry_price_str) if entry_price_str else None
                     if not entry_price or entry_price <= 0:
@@ -2065,9 +2067,10 @@ class ETFMonitor:
                     except Exception as e:
                         add_log(f"    ⚠️  Errore EMA20 series {isin}: {e}")
 
-                    # CALCOLA SL SUGGERITO — formula ibrida
-                    sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, current_price, ema20)
+                    # CALCOLA SL SUGGERITO — formula ibrida (non scende mai)
+                    sl_data = analyzer.calculate_sl_suggerito_l1(entry_price, current_price, ema20, previous_sl=previous_sl)
                     sl_suggerito = sl_data.get('sl_suggerito')
+                    sl_respected = sl_data.get('previous_sl_respected', False)
 
                     # CALCOLA SG SUGGERITO — Stop Gain Dinamico basato su Slope (STEP 3 v3.0)
                     sg_data = analyzer.calculate_stop_gain_dynamic(entry_price, current_price, ema20_series, analyzer.p)

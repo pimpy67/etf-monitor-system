@@ -1682,7 +1682,7 @@ class ETFTechnicalAnalyzer:
     # ── STEP 3 — Funzioni L1 per portafoglio breve termine ─────────────────────
 
     def calculate_sl_suggerito_l1(self, entry_price: float, current_price: float,
-                                   ema20: Optional[float]) -> Dict:
+                                   ema20: Optional[float], previous_sl: Optional[float] = None) -> Dict:
         """
         Calcola Stop Loss suggerito per posizioni L1 — formula ibrida.
 
@@ -1690,16 +1690,21 @@ class ETFTechnicalAnalyzer:
         - Profitto < 2%  → SL largo = EMA20 − buffer_famiglia
         - Profitto ≥ 2%  → SL stretto = EMA20 − 1%
 
+        CORREZIONE 2026-09-14: SL non scende mai (trailing proteggente)
+        - Se previous_sl è fornito, il nuovo SL sarà: max(sl_calcolato, previous_sl)
+        - Questo impedisce whipsaw e mantiene il capitale protetto
+
         Args:
             entry_price: Prezzo di carico della posizione
             current_price: Prezzo corrente
             ema20: Media mobile 20 periodi
+            previous_sl: SL precedente (opzionale) — se fornito, il nuovo SL non scenderà mai sotto questo
 
         Returns:
-            Dict con 'sl_suggerito', 'profit_pct', 'formula_used'
+            Dict con 'sl_suggerito', 'profit_pct', 'formula_used', 'previous_sl_respected'
         """
         if ema20 is None or entry_price is None or entry_price <= 0:
-            return {'sl_suggerito': None, 'profit_pct': 0, 'formula_used': None}
+            return {'sl_suggerito': None, 'profit_pct': 0, 'formula_used': None, 'previous_sl_respected': False}
 
         profit_pct = (current_price - entry_price) / entry_price
 
@@ -1714,10 +1719,17 @@ class ETFTechnicalAnalyzer:
             sl = ema20 * 0.99
             formula = f'STRETTO: EMA20 × 0.99'
 
+        # Trailing proteggente: SL non scende mai
+        sl_respected = False
+        if previous_sl is not None and sl < previous_sl:
+            sl = previous_sl
+            sl_respected = True
+
         return {
             'sl_suggerito': round(sl, 4),
             'profit_pct': round(profit_pct * 100, 2),
-            'formula_used': formula
+            'formula_used': formula,
+            'previous_sl_respected': sl_respected
         }
 
     def calculate_stop_gain_dynamic(self, entry_price: float, current_price: float,
@@ -2189,7 +2201,8 @@ class ETFTechnicalAnalyzer:
             'reason': 'tutte_ok' if l0_signal else 'condizioni_mancanti',
         }
 
-    def calculate_sl_suggerito_l0(self, entry_price: float, current_price: float) -> Dict:
+    def calculate_sl_suggerito_l0(self, entry_price: float, current_price: float,
+                                  previous_sl: Optional[float] = None) -> Dict:
         """
         Calcola Stop Loss suggerito per L0 — trailing progressivo.
 
@@ -2223,15 +2236,20 @@ class ETFTechnicalAnalyzer:
         bypassano la whitelist per il test ma usavano comunque questi stessi
         parametri "a taglia unica".
 
+        CORREZIONE 2026-09-14: SL non scende mai (trailing proteggente)
+        - Se previous_sl è fornito, il nuovo SL sarà: max(sl_calcolato, previous_sl)
+        - Questo impedisce whipsaw e mantiene il capitale protetto
+
         Args:
             entry_price: Prezzo di carico
             current_price: Prezzo corrente
+            previous_sl: SL precedente (opzionale) — se fornito, il nuovo SL non scenderà mai sotto questo
 
         Returns:
-            Dict con 'sl_suggerito', 'profit_pct', 'stage'
+            Dict con 'sl_suggerito', 'profit_pct', 'stage', 'previous_sl_respected'
         """
         if entry_price is None or entry_price <= 0:
-            return {'sl_suggerito': None, 'profit_pct': 0, 'stage': None}
+            return {'sl_suggerito': None, 'profit_pct': 0, 'stage': None, 'previous_sl_respected': False}
 
         profit_pct = (current_price - entry_price) / entry_price
 
@@ -2254,10 +2272,17 @@ class ETFTechnicalAnalyzer:
             sl = entry_price * (1 + profit_pct - tier3_giveback)
             stage = 'protezione_guadagno'
 
+        # Trailing proteggente: SL non scende mai
+        sl_respected = False
+        if previous_sl is not None and sl < previous_sl:
+            sl = previous_sl
+            sl_respected = True
+
         return {
             'sl_suggerito': round(sl, 4),
             'profit_pct': round(profit_pct * 100, 2),
-            'stage': stage
+            'stage': stage,
+            'previous_sl_respected': sl_respected
         }
 
     def calculate_tp_suggerito_l0(self, entry_price: float, current_price: float) -> Dict:
