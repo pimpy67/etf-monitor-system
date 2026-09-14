@@ -1505,6 +1505,13 @@ class ETFMonitor:
             except Exception as e:
                 add_log(f"⚠️  Errore aggiornamento snapshot Preferiti: {e}")
 
+        # STEP 8O — Shadow Monitor L0 Resistenze (candidato 2026-09-14)
+        try:
+            from shadow_monitor_l0_resistances import run_shadow_monitor_l0_resistances
+            run_shadow_monitor_l0_resistances(results, self.db, add_log=add_log)
+        except Exception as e:
+            add_log(f"⚠️  Errore Shadow Monitor L0 Resistenze (non bloccante): {e}")
+
         # STEP 8 — Sincronizza segnali L1 al portafoglio personale
         try:
             from sync_l1_portfolio import PortfolioL1Syncer
