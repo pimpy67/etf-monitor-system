@@ -3349,9 +3349,9 @@ async function loadDetailSL() {
     if (pos) {
       if (slPanel) slPanel.style.display = 'flex';
       if (elEntry) elEntry.value = pos.entry_price ? '€' + pos.entry_price.toFixed(4) : '—';
-      if (elSLSugg) elSLSugg.value = pos.sl_suggested ? '€' + pos.sl_suggested.toFixed(4) : '—';
+      if (elSLSugg) elSLSugg.value = pos.stop_loss_inserted ? '€' + pos.stop_loss_inserted.toFixed(4) : (pos.sl_suggested ? '€' + pos.sl_suggested.toFixed(4) : '—');
       const slSuggLabel = document.getElementById('slSuggLabel');
-      if (slSuggLabel) slSuggLabel.textContent = 'SL Suggerito' + (pos.stop_tightened ? ' 🔶' : '');
+      if (slSuggLabel) slSuggLabel.textContent = 'Prezzo Stop (Trigger)' + (pos.stop_tightened ? ' 🔶' : '') + (pos.stage ? ' [' + pos.stage + ']' : '');
       if (elSGSugg) elSGSugg.value = pos.sg_suggested ? '€' + pos.sg_suggested.toFixed(4) : '—';
       if (elSLIns) elSLIns.value = pos.sl_inserted || '';
       if (elShares) elShares.value = pos.shares || '';
