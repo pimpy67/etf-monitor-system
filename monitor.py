@@ -2231,9 +2231,11 @@ class ETFMonitor:
                     sl_suggested = sl_result.get('stop_loss_trailing') or sl_result.get('stop_loss_initial')
                     
                     if sl_suggested and sl_suggested > 0:
-                        # Salva nel DB
-                        update_query = "UPDATE etf_portfolio_entries SET stop_loss_suggested = %s, stop_loss_updated_at = now() WHERE id = %s"
-                        self.db.conn.execute(update_query, (round(float(sl_suggested), 4), entry_id))
+                        # Salva nel DB — aggiorna ENTRAMBI i campi con nuovo valore HIGH WATERMARK + Tier
+                        # stop_loss_inserted: nuovo valore per dashboard (legge questo per primo)
+                        # stop_loss_suggested: vecchio nome (backward compatibility)
+                        update_query = "UPDATE etf_portfolio_entries SET stop_loss_inserted = %s, stop_loss_suggested = %s, stop_loss_updated_at = now() WHERE id = %s"
+                        self.db.conn.execute(update_query, (round(float(sl_suggested), 4), round(float(sl_suggested), 4), entry_id))
                         self.db.conn.commit()
                         
                 except Exception as e:
