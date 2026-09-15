@@ -624,7 +624,7 @@ class PriceDatabase:
             conn = self.get_connection()
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT MAX(price) FROM etf_price_history
+                    SELECT MAX(close) FROM etf_price_history
                     WHERE isin = %s AND date >= %s
                 """, (isin, start_date_str))
                 result = cur.fetchone()
