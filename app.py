@@ -336,7 +336,7 @@ def _compute_portfolio_sl_positions(isin_filter=None):
                     SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
                            pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at, pe.shares,
                            pe.sl_suggerito, pe.sg_suggerito, pe.broker, pe.tp_proximity_stop_max,
-                           pe.stop_trigger_inserted
+                           pe.stop_trigger_inserted, pe.stop_loss_l0_suggested
                     FROM etf_portfolio_entries pe
                     WHERE pe.status = 'active' AND pe.isin = %s
                     ORDER BY pe.entry_date DESC
@@ -346,7 +346,7 @@ def _compute_portfolio_sl_positions(isin_filter=None):
                     SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
                            pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at, pe.shares,
                            pe.sl_suggerito, pe.sg_suggerito, pe.broker, pe.tp_proximity_stop_max,
-                           pe.stop_trigger_inserted
+                           pe.stop_trigger_inserted, pe.stop_loss_l0_suggested
                     FROM etf_portfolio_entries pe
                     WHERE pe.status = 'active'
                     ORDER BY pe.entry_date DESC
@@ -370,9 +370,9 @@ def _compute_portfolio_sl_positions(isin_filter=None):
                     pct_change = ((current_price - float(pos['entry_price'])) /
                                  float(pos['entry_price']) * 100) if pos['entry_price'] > 0 else 0
 
-                    # Usa SL suggerito da STEP 4 (formula ibrida) se disponibile, altrimenti fallback a vecchio
+                    # Usa SL High Watermark L0 (2026-09-15) se disponibile, altrimenti fallback a vecchio
                     entry_price = float(pos['entry_price'])
-                    sl_suggerito = float(pos['sl_suggerito']) if pos.get('sl_suggerito') else None
+                    sl_suggerito = float(pos['stop_loss_l0_suggested']) if pos.get('stop_loss_l0_suggested') else (float(pos['sl_suggerito']) if pos.get('sl_suggerito') else None)
                     sg_suggerito = float(pos['sg_suggerito']) if pos.get('sg_suggerito') else None
 
                     # Fallback: calcola SL consigliato (logica a 2 fasi) solo se non ho SL suggerito
