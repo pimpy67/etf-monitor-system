@@ -2202,89 +2202,93 @@ class ETFTechnicalAnalyzer:
         }
 
     def calculate_sl_suggerito_l0(self, entry_price: float, current_price: float,
-                                  previous_sl: Optional[float] = None) -> Dict:
+                              max_price: Optional[float] = None,
+                              previous_sl: Optional[float] = None) -> Dict:
         """
-        Calcola Stop Loss suggerito per L0 — trailing progressivo.
-
-        SCELTA CONFERMATA: Protezione capitale + graduale riduzione del rischio
-
-        Formula:
-        - Profitto < 5%   → SL = entry × 0.96  (non perdere il capitale)
-        - Profitto 5-15%  → SL = entry × 1.01  (almeno in pareggio)
-        - Profitto > 15%  → SL = entry × (1 + profitto - 0.08)
-                             (proteggi circa metà del gain accumulato)
-
-        Primo scaglione allargato 2%→4% il 2026-08-20: backtest one-shot su Golden
-        Dataset (batch 2026-08-07, stesso split IN/OUT di CANDIDATE_MODEL_L0_20260808)
-        ha mostrato miglioramento monotono di WR/PF/P&L netto su ogni buffer 2%→6%
-        testato, sia IN che OUT-of-sample (nessun segno di overfitting). Promosso
-        direttamente in produzione su richiesta esplicita dell'utente, in deroga al
-        lockdown parametri fino al 06/09/2026 (trigger: whipsaw reale su BRES/LBRE.DE,
-        uscito a -2.35% col vecchio 2% e rimbalzato quasi a pareggio lo stesso
-        pomeriggio). Trade-off consapevole: la perdita massima teorica per trade
-        raddoppia (2%→4%). Vedi memory/etf_post_lockdown_todo_20260906.md sezione 3 e
-        CLAUDE.md.
-
-        Parametrizzato per famiglia dal 2026-08-24 (gap noto, mai chiuso prima):
-        `l0_sl_tier1_buffer_pct`/`l0_sl_tier1_threshold_pct`/`l0_sl_tier2_markup_pct`/
-        `l0_sl_tier2_threshold_pct`/`l0_sl_tier3_giveback_pct` nello YAML, con default
-        = ai valori hardcoded qui sotto (4%/5%/1%/15%/8%) — nessun comportamento
-        cambiato per `equity_sviluppati` (unica famiglia oggi raggiungibile via
-        whitelist L0). Prima era hardcoded uguale per tutte, irrilevante finché solo
-        equity_sviluppati era raggiungibile — ora rilevante anche per gli Shadow
-        Monitor L0 su oro/metalli (`shadow_monitor_l0_oro.py`/`_metalli.py`), che
-        bypassano la whitelist per il test ma usavano comunque questi stessi
-        parametri "a taglia unica".
-
-        CORREZIONE 2026-09-14: SL non scende mai (trailing proteggente)
-        - Se previous_sl è fornito, il nuovo SL sarà: max(sl_calcolato, previous_sl)
-        - Questo impedisce whipsaw e mantiene il capitale protetto
-
+        Calcola Stop Loss suggerito per L0 — HIGH WATERMARK + Trailing Progressivo.
+        
+        Architettura migliorata (2026-09-15):
+        - Usa il PREZZO MASSIMO RAGGIUNTO (High Watermark), non l'entry
+        - Lock-in progressivo: più il prezzo sale, più strettamente lo proteggiamo
+        - Evita di perdere guadagni reali durante pullback
+        
+        Formula per tier (basata su profitto dal MAX raggiunto):
+        - Profitto < 3%:   SL = entry × 0.96        (protezione capitale, 4% buffer)
+        - Profitto 3-8%:   SL = entry × 1.005       (break-even + commissioni)
+        - Profitto 8-20%:  SL = max_price × 0.95    (lock-in 5% dal max)
+        - Profitto > 20%:  SL = max_price × 0.96    (lock-in 4% dal max, più stretto)
+        
+        Vantaggi rispetto alla versione entry-based:
+        1. Non ignora il drawdown dal picco
+        2. Protegge i guadagni reali, non solo il profitto contabile
+        3. Trailing automaticamente progressivo: più sale il max, più stretto diventa l'SL
+        
+        Trailing proteggente:
+        - SL non scende mai: max(sl_calcolato, previous_sl)
+        
         Args:
             entry_price: Prezzo di carico
             current_price: Prezzo corrente
-            previous_sl: SL precedente (opzionale) — se fornito, il nuovo SL non scenderà mai sotto questo
-
+            max_price: Prezzo massimo raggiunto (High Watermark) — se None, usa current_price
+            previous_sl: SL precedente — se fornito, il nuovo SL non scenderà mai
+            
         Returns:
             Dict con 'sl_suggerito', 'profit_pct', 'stage', 'previous_sl_respected'
         """
         if entry_price is None or entry_price <= 0:
             return {'sl_suggerito': None, 'profit_pct': 0, 'stage': None, 'previous_sl_respected': False}
-
-        profit_pct = (current_price - entry_price) / entry_price
-
-        tier1_threshold = self.p.get('l0_sl_tier1_threshold_pct', 0.05)
-        tier1_buffer     = self.p.get('l0_sl_tier1_buffer_pct', 0.04)
-        tier2_threshold  = self.p.get('l0_sl_tier2_threshold_pct', 0.15)
-        tier2_markup     = self.p.get('l0_sl_tier2_markup_pct', 0.01)
-        tier3_giveback   = self.p.get('l0_sl_tier3_giveback_pct', 0.08)
-
-        if profit_pct < tier1_threshold:
-            # < soglia tier1 → protezione stretta (4% dal 2026-08-20, era 2%)
+        
+        # High Watermark: usa il massimo raggiunto, fallback al current
+        if max_price is None or max_price < entry_price:
+            max_price = entry_price
+        
+        # Calcola il profitto dal massimo raggiunto (High Watermark)
+        profit_pct_from_max = (max_price - entry_price) / entry_price
+        
+        # Calcola il profitto dal prezzo corrente (informativo)
+        profit_pct_current = (current_price - entry_price) / entry_price
+        
+        tier1_threshold = self.p.get('l0_sl_tier1_threshold_pct', 0.03)   # 3%
+        tier2_threshold = self.p.get('l0_sl_tier2_threshold_pct', 0.08)   # 8%
+        tier1_buffer    = self.p.get('l0_sl_tier1_buffer_pct', 0.04)      # 4%
+        tier2_markup    = self.p.get('l0_sl_tier2_markup_pct', 0.005)     # 0.5%
+        
+        # TIER 1: Protezione Capitale (profitto < 3%)
+        if profit_pct_from_max < tier1_threshold:
             sl = entry_price * (1 - tier1_buffer)
             stage = 'protezione_capitale'
-        elif profit_pct < tier2_threshold:
-            # soglia tier1-tier2 → almeno pareggio
+            
+        # TIER 2: Break-Even (profitto 3-8%)
+        elif profit_pct_from_max < tier2_threshold:
             sl = entry_price * (1 + tier2_markup)
-            stage = 'pareggio'
+            stage = 'break_even'
+            
+        # TIER 3: Lock-in 5% (profitto 8-20%)
+        elif profit_pct_from_max < 0.20:
+            sl = max_price * 0.95
+            stage = 'lock_in_5pct'
+            
+        # TIER 4: Lock-in 4% — Profit Run (profitto > 20%)
         else:
-            # > soglia tier2 → protezione parziale del gain accumulato
-            sl = entry_price * (1 + profit_pct - tier3_giveback)
-            stage = 'protezione_guadagno'
-
+            sl = max_price * 0.96
+            stage = 'lock_in_4pct'
+        
         # Trailing proteggente: SL non scende mai
         sl_respected = False
         if previous_sl is not None and sl < previous_sl:
             sl = previous_sl
             sl_respected = True
-
+        
         return {
             'sl_suggerito': round(sl, 4),
-            'profit_pct': round(profit_pct * 100, 2),
+            'profit_pct': round(profit_pct_current * 100, 2),
+            'profit_pct_from_max': round(profit_pct_from_max * 100, 2),
+            'max_price': round(max_price, 4),
             'stage': stage,
             'previous_sl_respected': sl_respected
         }
 
+    
     def calculate_tp_suggerito_l0(self, entry_price: float, current_price: float) -> Dict:
         """
         Calcola Take Profit suggerito per L0 — target fisso per famiglia.

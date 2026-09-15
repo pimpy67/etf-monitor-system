@@ -1844,8 +1844,17 @@ class ETFMonitor:
                     except Exception as e:
                         add_log(f"    ⚠️  Errore ATR {isin}: {e}")
 
-                    # CALCOLA SL SUGGERITO — trailing progressivo (non scende mai)
-                    sl_data = analyzer.calculate_sl_suggerito_l0(entry_price, current_price, previous_sl=previous_sl)
+                    # CALCOLA SL SUGGERITO — High Watermark + trailing progressivo
+                    # Ottieni il massimo prezzo raggiunto (High Watermark) dal entry_date
+                    max_price = self.db.get_max_price_since(isin, entry_date_str)
+                    if max_price is None or max_price < entry_price:
+                        max_price = entry_price  # Fallback: usa entry se nulla trovato
+                    
+                    sl_data = analyzer.calculate_sl_suggerito_l0(
+                        entry_price, current_price,
+                        max_price=max_price,
+                        previous_sl=previous_sl
+                    )
                     sl_suggerito = sl_data.get('sl_suggerito')
                     stage = sl_data.get('stage')
                     sl_respected = sl_data.get('previous_sl_respected', False)

@@ -618,6 +618,24 @@ class PriceDatabase:
         finally:
             conn.close()
 
+    def get_max_price_since(self, isin: str, start_date_str: str) -> Optional[float]:
+        """Ottiene il prezzo massimo (High Watermark) dal start_date ad oggi."""
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT MAX(price) FROM etf_price_history
+                    WHERE isin = %s AND date >= %s
+                """, (isin, start_date_str))
+                result = cur.fetchone()
+                return float(result[0]) if result and result[0] else None
+        except Exception as e:
+            logging.error(f"Errore max price {isin}: {e}")
+            return None
+        finally:
+            conn.close()
+
+
     def save_frozen_ohlcv_bulk(self, ticker: str, isin: str, df: pd.DataFrame,
                                 freeze_batch: str) -> int:
         """
