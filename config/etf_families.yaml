@@ -28,7 +28,6 @@ global_params:
   l0_regime_allowed:
   - BULL
   - LATERALE
-  - BEAR
   bond_trend_model:
     families:
     - bond_corp_hy_em
