@@ -2021,7 +2021,7 @@ class ETFMonitor:
             # Leggi tutte le entry L1 attive
             query = """
                 SELECT id, isin, entry_date, entry_price, fund_name,
-                       broker, tp_proximity_stop_max, sl_suggerito
+                       broker, tp_proximity_stop_max, stop_loss_inserted
                 FROM etf_portfolio_entries
                 WHERE status = 'active' AND portafoglio = 'L1'
             """
