@@ -1769,7 +1769,7 @@ class ETFMonitor:
             query = """
                 SELECT id, isin, entry_date, entry_price, fund_name,
                        days_no_recovery, stallo_counter, broker, tp_proximity_stop_max,
-                       stop_loss_suggested
+                       sl_suggerito
                 FROM etf_portfolio_entries
                 WHERE status = 'active' AND portafoglio = 'L0'
             """
@@ -2012,7 +2012,7 @@ class ETFMonitor:
             # Leggi tutte le entry L1 attive
             query = """
                 SELECT id, isin, entry_date, entry_price, fund_name,
-                       broker, tp_proximity_stop_max, stop_loss_suggested
+                       broker, tp_proximity_stop_max, sl_suggerito
                 FROM etf_portfolio_entries
                 WHERE status = 'active' AND portafoglio = 'L1'
             """
