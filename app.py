@@ -390,15 +390,20 @@ def _compute_portfolio_sl_positions(isin_filter=None):
                     famiglia = ETFTechnicalAnalyzer.detect_family(pos['fund_name'] or '')
                     sl_initial_pct = ETFTechnicalAnalyzer(famiglia=famiglia).p.get('sl_initial_pct')
                     tp_proximity_stop_max = pos.get('tp_proximity_stop_max')
+
+                    # NON usare tightened stop se TP è già stato raggiunto/superato
+                    # (il ratchet non dovrebbe restringere lo stop SOPRA il prezzo di carico)
+                    use_tightened = False
+                    if tp_proximity_stop_max and sg_suggerito and current_price:
+                        use_tightened = (sg_suggerito > current_price)  # TP ancora raggiungibile
+
                     op = compute_order_prices(
                         current_price, sl_suggerito, sg_suggerito, broker,
-                        previous_tightened_stop=float(tp_proximity_stop_max) if tp_proximity_stop_max else None,
+                        previous_tightened_stop=float(tp_proximity_stop_max) if (tp_proximity_stop_max and use_tightened) else None,
                         sl_initial_pct=sl_initial_pct,
                     )
-                    # sl_suggested riflette il ratchet/tightening (stesso valore mostrato
-                    # come "Prezzo Stop (Trigger)" nell'elenco portafoglio via /api/portfolio)
-                    # cosi' il pannello di dettaglio ETF resta sempre coerente con l'elenco.
-                    sl_suggested_final = op['prezzo_stop'] if op['prezzo_stop'] else (round(sl_suggerito, 4) if sl_suggerito else None)
+                    # Usa il valore base da DB, NON il tightened (che può diventare > carico se TP superato)
+                    sl_suggested_final = round(sl_suggerito, 4) if sl_suggerito else None
 
                     result.append({
                         'isin': isin,
