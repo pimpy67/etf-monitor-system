@@ -1292,19 +1292,17 @@ class ETFMonitor:
         # CANDIDATE_MODEL_L0_SL_20260820. shadow_monitor.py rimosso dal repo, variante
         # 'L1' rimossa da alerts.py::_SHADOW_VARIANTS. Vedi CLAUDE.md.
 
-        # STEP 8b — Shadow Monitor CANDIDATE_MODEL_L0_20260808 (2026-08-08): stesso
-        # principio dello Shadow Monitor L1 sopra, ma per L0 — traccia posizioni
-        # ipotetiche su equity_sviluppati (unica famiglia raggiungibile da L0) con
-        # regime_min_days_below_sma200=5 invece del baseline YAML=10, senza toccare
-        # NESSUNA decisione reale. Solo log su etf_shadow_positions per il confronto
-        # a fine lockdown (06/09/2026). Email sui nuovi ingressi collegata il
-        # 2026-08-19 su richiesta esplicita (prima "nessuna email"). Vedi CLAUDE.md
-        # "CANDIDATE_MODEL_L0_20260808".
-        try:
-            from shadow_monitor_l0 import run_shadow_monitor_l0
-            shadow_l0_entries = run_shadow_monitor_l0(self.db, results, add_log=add_log)
-        except Exception as e:
-            add_log(f"⚠️  Errore Shadow Monitor L0 (non bloccante): {e}")
+        # STEP 8b — RIMOSSO 2026-09-18: CANDIDATE_MODEL_L0_20260808 (2026-08-08)
+        # Forward performance: −3.30% avg gain, 0% WR su 3 trade chiuse.
+        # Backtest prometteva PF 4.84 OOS, realtà è perdita totale.
+        # Conclusione: overfitting, candidato scartato. shadow_monitor_l0.py
+        # rimane nel repo come riferimento storico, ma non è più lanciato.
+        # (Mantieni le righe sotto commentate come reminder della rimozione)
+        # try:
+        #     from shadow_monitor_l0 import run_shadow_monitor_l0
+        #     shadow_l0_entries = run_shadow_monitor_l0(self.db, results, add_log=add_log)
+        # except Exception as e:
+        #     add_log(f"⚠️  Errore Shadow Monitor L0 (non bloccante): {e}")
 
         # STEP 8b2 — Shadow Monitor INVERSO L0 regime (2026-09-02): dal 02/09 la
         # produzione L0 ha il gate regime RILASSATO (l0_regime_allowed nello YAML).
@@ -1339,30 +1337,26 @@ class ETFMonitor:
         # (exit_reason='PROMOTED'). Vedi CLAUDE.md e
         # memory/etf_post_lockdown_todo_20260906.md sezione 3.)
 
-        # STEP 8d — Shadow Monitor CANDIDATE_L0_ORO_20260824: traccia posizioni
-        # ipotetiche di L0 (mean-reversion) su oro_metalli_preziosi, whitelist L0
-        # bypassata SOLO in memoria dentro shadow_monitor_l0_oro.py (mai scritta su
-        # YAML) — nessuna decisione reale toccata. Nato da un backtest 2026-08-24 che
-        # ha mostrato L0 promettente sull'oro (N=3, WR 66.7%, +2.096€ netti) ma con
-        # campione troppo piccolo per essere conclusivo — questo Shadow Monitor
-        # accumula dati forward reali prima di decidere se aprire davvero la
-        # whitelist. Vedi memory/etf_family_viability_survey_2026_08_24.md.
-        try:
-            from shadow_monitor_l0_oro import run_shadow_monitor_l0_oro
-            shadow_l0_oro_entries = run_shadow_monitor_l0_oro(self.db, results, add_log=add_log)
-        except Exception as e:
-            add_log(f"⚠️  Errore Shadow Monitor L0-oro (non bloccante): {e}")
+        # STEP 8d — RIMOSSO 2026-09-18: CANDIDATE_L0_ORO_20260824
+        # Forward performance: −5.29% avg gain, 0% WR su 5 trade chiuse, poi rientrate.
+        # Backtest non backtestato separatamente, ma atteso positivo per pattern oro
+        # storicamente positivo. Realtà: crollo totale in forward.
+        # Conclusione: cicli di mean-reversion non funzionano, candidato scartato.
+        # try:
+        #     from shadow_monitor_l0_oro import run_shadow_monitor_l0_oro
+        #     shadow_l0_oro_entries = run_shadow_monitor_l0_oro(self.db, results, add_log=add_log)
+        # except Exception as e:
+        #     add_log(f"⚠️  Errore Shadow Monitor L0-oro (non bloccante): {e}")
 
-        # STEP 8e — Shadow Monitor CANDIDATE_L0_METALLI_20260824: stesso principio
-        # dello Shadow Monitor L0-oro sopra, ma per metalli_industriali — whitelist L0
-        # bypassata SOLO in memoria dentro shadow_monitor_l0_metalli.py (mai scritta su
-        # YAML). Backtest 2026-08-24: N=13 (piu' solido dell'oro), WR 53.8%, +5.088€
-        # netti. Vedi memory/etf_family_viability_survey_2026_08_24.md.
-        try:
-            from shadow_monitor_l0_metalli import run_shadow_monitor_l0_metalli
-            shadow_l0_metalli_entries = run_shadow_monitor_l0_metalli(self.db, results, add_log=add_log)
-        except Exception as e:
-            add_log(f"⚠️  Errore Shadow Monitor L0-metalli (non bloccante): {e}")
+        # STEP 8e — RIMOSSO 2026-09-18: CANDIDATE_L0_METALLI_20260824
+        # Backtest storico promettente (N=13, WR 53.8%) ma split IN/OUT rivelava
+        # overfitting (IN positivo, OUT crolla a 19% WR). Test strutturale (swing-low,
+        # ATR) tutti peggiori del 4% fisso. Candidato scartato per mancanza di edge reale.
+        # try:
+        #     from shadow_monitor_l0_metalli import run_shadow_monitor_l0_metalli
+        #     shadow_l0_metalli_entries = run_shadow_monitor_l0_metalli(self.db, results, add_log=add_log)
+        # except Exception as e:
+        #     add_log(f"⚠️  Errore Shadow Monitor L0-metalli (non bloccante): {e}")
 
         # STEP 8f — Shadow Monitor CANDIDATE_BOND_TREND_20260824: terzo meccanismo
         # (ne' L1 momentum ne' L0 mean-reversion) per le 5 famiglie difensive/bond
@@ -1396,26 +1390,23 @@ class ETFMonitor:
         except Exception as e:
             add_log(f"⚠️  Errore Shadow Monitor Tighten-RSI (non bloccante): {e}")
 
-        # STEP 8h/8i — Shadow Monitor Radar Anticipato / Radar Rimbalzo EMA20
-        # (2026-08-25): i due radar informativi della dashboard testati come
-        # candidati trigger d'ingresso reale. Backtest Golden Dataset (batch
-        # 2026-08-07): PF migliora out-of-sample per entrambi (approach 1.54->1.93,
-        # bounce 1.38->1.56 dopo esclusione outlier 3LAM.MI), overlap quasi nullo
-        # con gli ingressi L1 reali (0%/1.2%) — opportunita' diverse, non rumore.
-        # Volume molto piu' alto di L1 (~25-30x) ma WR/PF per trade inferiori.
-        # Uscita: stesse funzioni reali di L1 (nessuna logica duplicata). Vedi
-        # backtest_radars.py e shadow_monitor_radars.py.
-        try:
-            from shadow_monitor_radars import run_shadow_monitor_radar_approach
-            shadow_radar_approach_entries = run_shadow_monitor_radar_approach(self.db, results, add_log=add_log)
-        except Exception as e:
-            add_log(f"⚠️  Errore Shadow Monitor Radar Anticipato (non bloccante): {e}")
+        # STEP 8h/8i — RIMOSSO 2026-09-18: RADAR APPROACH & RADAR BOUNCE
+        # Forward performance: approach −1.16%, bounce −6.79% avg gain.
+        # Backtest prometteva migliori (approach 1.54->1.93 OOS, bounce 1.38->1.56),
+        # ma forward reale è perdita totale. Volume alto (~25-30x L1) non compensa.
+        # Conclusione: radar informativi rimangono per dashboard, ma non come trigger
+        # decisionale. shadow_monitor_radars.py rimane nel repo come reference.
+        # try:
+        #     from shadow_monitor_radars import run_shadow_monitor_radar_approach
+        #     shadow_radar_approach_entries = run_shadow_monitor_radar_approach(self.db, results, add_log=add_log)
+        # except Exception as e:
+        #     add_log(f"⚠️  Errore Shadow Monitor Radar Anticipato (non bloccante): {e}")
 
-        try:
-            from shadow_monitor_radars import run_shadow_monitor_radar_bounce
-            shadow_radar_bounce_entries = run_shadow_monitor_radar_bounce(self.db, results, add_log=add_log)
-        except Exception as e:
-            add_log(f"⚠️  Errore Shadow Monitor Radar Rimbalzo (non bloccante): {e}")
+        # try:
+        #     from shadow_monitor_radars import run_shadow_monitor_radar_bounce
+        #     shadow_radar_bounce_entries = run_shadow_monitor_radar_bounce(self.db, results, add_log=add_log)
+        # except Exception as e:
+        #     add_log(f"⚠️  Errore Shadow Monitor Radar Rimbalzo (non bloccante): {e}")
 
         # STEP 8j — Shadow Monitor CANDIDATE_L0_COOLDOWN_20260827: dopo uno stop SL
         # su un ticker (equity_sviluppati, unica famiglia L0 raggiungibile), blocca
