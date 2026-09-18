@@ -345,7 +345,7 @@ def _compute_portfolio_sl_positions(isin_filter=None):
                 cur.execute("""
                     SELECT pe.isin, pe.entry_price, pe.entry_date, pe.fund_name,
                            pe.stop_loss_inserted, pe.stop_loss_suggested, pe.stop_loss_updated_at, pe.shares,
-                           pe.sl_suggerito, pe.sg_suggerito, pe.broker, pe.tp_proximity_stop_max,
+                           pe.sl_suggerito, pe.sg_suggerito, pe.broker, pe.tp_proximity_stop_max, pe.portfolio_type,
                            pe.stop_trigger_inserted, pe.stop_loss_l0_suggested
                     FROM etf_portfolio_entries pe
                     WHERE pe.status = 'active'
