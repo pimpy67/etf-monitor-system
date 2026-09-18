@@ -417,6 +417,7 @@ def _compute_portfolio_sl_positions(isin_filter=None):
                         'sl_updated': str(pos['stop_loss_updated_at']) if pos['stop_loss_updated_at'] else None,
                         'shares': float(pos['shares']) if pos['shares'] else None,
                         'broker': broker,
+                        'portfolio_type': portfolio_type,
                         'order_parallel_ok': op['parallel_ok'],
                     })
 
