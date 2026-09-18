@@ -419,6 +419,8 @@ def _compute_portfolio_sl_positions(isin_filter=None):
                         'sl_inserted': float(pos['stop_loss_inserted']) if pos['stop_loss_inserted'] else None,
                         'trigger_inserted': float(pos['stop_trigger_inserted']) if pos.get('stop_trigger_inserted') else None,
                         'sl_suggested': sl_suggested_final,
+                        'prezzo_stop': op['prezzo_stop'],  # Usato dal dashboard (Prezzo Stop Trigger)
+                        'prezzo_limite_stop': op['prezzo_limite_stop'],  # Margine sotto il trigger
                         'sg_suggested': round(sg_suggerito, 4) if sg_suggerito else None,
                         'stop_tightened': op['tightened'],
                         'sl_updated': str(pos['stop_loss_updated_at']) if pos['stop_loss_updated_at'] else None,
