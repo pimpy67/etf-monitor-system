@@ -391,18 +391,20 @@ def _compute_portfolio_sl_positions(isin_filter=None):
                     sl_initial_pct = ETFTechnicalAnalyzer(famiglia=famiglia).p.get('sl_initial_pct')
                     tp_proximity_stop_max = pos.get('tp_proximity_stop_max')
 
-                    # NON usare tightened stop se TP è già stato raggiunto/superato
-                    # (il ratchet non dovrebbe restringere lo stop SOPRA il prezzo di carico)
+                    # NON usare tightened stop se supera il prezzo di carico
+                    # Il ratchet non dovrebbe mai stringere lo stop SOPRA il carico iniziale
                     use_tightened = False
-                    if tp_proximity_stop_max and sg_suggerito and current_price:
-                        use_tightened = (sg_suggerito > current_price)  # TP ancora raggiungibile
+                    if tp_proximity_stop_max and sg_suggerito and current_price and entry_price:
+                        is_tp_reachable = (sg_suggerito > current_price)
+                        is_tightened_valid = (float(tp_proximity_stop_max) < entry_price)
+                        use_tightened = is_tp_reachable and is_tightened_valid
 
                     op = compute_order_prices(
                         current_price, sl_suggerito, sg_suggerito, broker,
                         previous_tightened_stop=float(tp_proximity_stop_max) if (tp_proximity_stop_max and use_tightened) else None,
                         sl_initial_pct=sl_initial_pct,
                     )
-                    # Usa il valore base da DB, NON il tightened (che può diventare > carico se TP superato)
+                    # Usa il valore base da DB, NON il tightened (che può diventare > carico)
                     sl_suggested_final = round(sl_suggerito, 4) if sl_suggerito else None
 
                     result.append({
