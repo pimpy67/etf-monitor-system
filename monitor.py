@@ -1919,9 +1919,9 @@ class ETFMonitor:
                             UPDATE etf_portfolio_entries
                             SET sl_suggerito = %s, sg_suggerito = %s, days_no_recovery = %s,
                                 stallo_counter = %s, stop_loss_updated_at = now(),
-                                tp_proximity_stop_max = %s
+                                tp_proximity_stop_max = %s, stop_loss_l0_suggested = %s
                             WHERE id = %s
-                        """, (sl_suggerito, tp_suggerito, days_no_rec, stallo_cnt, tp_proximity_stop_max, entry_id))
+                        """, (sl_suggerito, tp_suggerito, days_no_rec, stallo_cnt, tp_proximity_stop_max, sl_suggerito, entry_id))
                         conn.commit()
 
                     alert_msg = ''
