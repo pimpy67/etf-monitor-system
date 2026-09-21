@@ -522,8 +522,60 @@ NON le posizioni comprate davvero):
 
 | Priorità | Regola | Trigger |
 |:---:|--------|---------|
-| 1 | SL trailing | Prezzo ≤ SL suggerito (`calculate_sl_suggerito_l0`: <5% profitto → entry×0.96 [4%, era 2% fino al 2026-08-20], 5-15% → pareggio entry×1.01, >15% → protegge metà gain) |
-| 2 | TP fisso di famiglia | Prezzo ≥ TP suggerito (`calculate_tp_suggerito_l0`, **nuovo 2026-08-05** — target fisso `l0_take_profit_pct` per famiglia, vedi tabella sotto) |
+| 1 | SL HIGH WATERMARK | Prezzo ≤ SL suggerito — **Formula 4 TIER (2026-09-15)**: <br/> • **TIER 1 (profit < 3%)**: SL = entry × 0.96 (protezione capitale) <br/> • **TIER 2 (3-8%)**: SL = entry × 1.005 (break-even + commissioni) <br/> • **TIER 3 (8-20%)**: SL = max_price × 0.95 (lock-in 5% dal massimo) <br/> • **TIER 4 (> 20%)**: SL = max_price × 0.96 (lock-in 4% dal massimo) |
+| 2 | TP fisso di famiglia | Prezzo ≥ TP suggerito (`calculate_tp_suggerito_l0` — target fisso `l0_take_profit_pct` per famiglia, vedi tabella sotto) |
+
+### Stop Loss L0 — Formula HIGH WATERMARK (aggiornamento 2026-09-15)
+
+La formula **non usa il prezzo di entry per proteggere i guadagni** — usa il **massimo prezzo raggiunto (High Watermark)** dal momento dell'entry in poi.
+
+**Benefici**:
+- **Non ignora il drawdown dal picco**: se un ETF è entrato a €100, è salito a €110, e ora è a €105, il vecchio sistema diceva "protezione 4% da €100 = €96", permettendo di perdere €10. Il nuovo sistema dice "protezione dal massimo €110" quindi "SL circa €104".
+- **Trailing automatico**: più l'ETF sale, più lo SL è stretto (TIER progressivi).
+- **Protezione reale dei guadagni**: cattura le inversioni rapide prima di dare la perdita.
+
+**Formula completa** (da `technical_analysis.py::calculate_sl_suggerito_l0()`, aggiornata 2026-09-15):
+
+```python
+profit_pct_from_max = (max_price - entry_price) / entry_price
+
+if profit_pct_from_max < 0.03:           # < 3%
+    SL = entry_price × 0.96              # TIER 1: protezione 4% dal capitale
+    stage = "protezione_capitale"
+
+elif profit_pct_from_max < 0.08:         # 3-8%
+    SL = entry_price × 1.005             # TIER 2: break-even + 0.5% (commissioni)
+    stage = "break_even"
+
+elif profit_pct_from_max < 0.20:         # 8-20%
+    SL = max_price × 0.95                # TIER 3: lock-in 5% dal picco
+    stage = "lock_in_5pct"
+
+else:                                     # > 20%
+    SL = max_price × 0.96                # TIER 4: lock-in 4% dal picco
+    stage = "lock_in_4pct"
+
+# Trailing proteggente: SL non scende MAI
+SL = max(SL, previous_sl)                # rispetta il vecchio SL se era più alto
+```
+
+**Esempi pratici**:
+
+| Scenario | Entry | Max | Current | Profit% | Tier | SL Calcolato |
+|---|---|---|---|---|---|---|
+| **Entry subito down** | €100 | €99 | €99 | -1% | TIER 1 | €96.00 (protezione 4% entry) |
+| **Rialzo lento** | €100 | €102 | €101 | +2% | TIER 1 | €96.00 (protezione 4% entry) |
+| **Rialzo moderato** | €100 | €105.50 | €104 | +5.5% | TIER 2 | €100.50 (pareggio + commissioni) |
+| **Rialzo buono** | €100 | €112 | €110 | +12% | TIER 3 | €106.40 (lock-in 5% da max €112) |
+| **Grande rialzo** | €100 | €125 | €123 | +25% | TIER 4 | €120.00 (lock-in 4% da max €125) |
+
+**Parametri YAML** (per famiglia):
+- `l0_sl_tier1_threshold_pct`: 0.03 (default 3%, quando attivare TIER 2)
+- `l0_sl_tier2_threshold_pct`: 0.08 (default 8%, quando attivare TIER 3)
+- `l0_sl_tier1_buffer_pct`: 0.04 (buffer 4% in TIER 1, è il massimo tollerato)
+- `l0_sl_tier2_markup_pct`: 0.005 (markup 0.5% in TIER 2, copre le commissioni Directa)
+
+---
 
 > **Fix 2026-08-05 — stessa contraddizione già risolta su L1**: `check_l0_exit()` chiudeva
 > automaticamente le posizioni reali su kill switch, RSI<25, prezzo<minimo 30gg o timeout
