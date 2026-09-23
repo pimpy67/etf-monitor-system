@@ -1525,18 +1525,15 @@ function renderBounceRadarTable(rows) {
 function renderSectorMomentumSection() {
   const tm = (allData && allData.taxonomy_momentum) || {};
   const rows = tm[taxoDim] || [];
-  const disp = sectorMomentumOpen ? 'block' : 'none';
-  const tog  = sectorMomentumOpen ? '&#9650;' : '&#9660;';
   return `
   <div class="portfolio-section" id="sectorMomentumSection">
-    <div class="portfolio-header" onclick="event.stopPropagation();toggleSectorMomentumSection()">
+    <div class="portfolio-header">
       <h3>&#128202; Momentum Settori</h3>
       <div style="display:flex;align-items:center;gap:12px;">
         <span style="font-size:0.78em;color:#555">${(tm.settori||[]).length} settori · ${(tm.geografie||[]).length} aree</span>
-        <span id="sectorMomentumToggle" style="color:#555;font-size:0.75em">${tog}</span>
       </div>
     </div>
-    <div class="portfolio-body" id="sectorMomentumBody" style="display:${disp};">
+    <div class="portfolio-body" id="sectorMomentumBody" style="display:block;">
       <p style="margin:0 0 10px;font-size:0.85em;color:#aaa;">
         Aggregato degli ETF monitorati per <b>Settore</b> o <b>Geografia</b>.
         <b>Score</b> = media dei percentile-rank del gruppo su %1M, %1W e ampiezza (quota di ETF sopra la EMA20), scala 0-100.
@@ -1648,14 +1645,6 @@ function toggleTaxoRow(name) {
   if (taxoExpanded.has(name)) taxoExpanded.delete(name); else taxoExpanded.add(name);
   const host = document.getElementById('sectorMomentumSection');
   if (host) host.outerHTML = renderSectorMomentumSection();
-}
-
-function toggleSectorMomentumSection() {
-  sectorMomentumOpen = !sectorMomentumOpen;
-  const body = document.getElementById('sectorMomentumBody');
-  const tog  = document.getElementById('sectorMomentumToggle');
-  if (body) body.style.display = sectorMomentumOpen ? 'block' : 'none';
-  if (tog)  tog.innerHTML = sectorMomentumOpen ? '&#9650;' : '&#9660;';
 }
 
 function setTaxoDim(d) {
