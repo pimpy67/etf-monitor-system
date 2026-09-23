@@ -1263,6 +1263,7 @@ function renderFavoritesTable(favs) {
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-weight:700;font-size:1.05em;">${bc}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-size:1.05em;">${regime}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:right;font-weight:600;">${price}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${getPortfolioButton(f.isin)}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">
         <button onclick="event.stopPropagation();removeFavorite('${f.isin}')" style="background:none;border:1px solid rgba(220,53,69,0.5);color:#f87070;border-radius:4px;cursor:pointer;font-size:0.85em;font-weight:600;padding:4px 10px;">Rimuovi</button>
       </td>
@@ -1398,6 +1399,7 @@ function renderApproachRadarTable(rows) {
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.adx != null ? fmtNum(r.adx, 1) : '—'}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.rvol != null ? fmtNum(r.rvol, 2) + 'x' : '—'}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.macd_histogram != null ? fmtNum(r.macd_histogram, 4) : '—'}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${getPortfolioButton(r.isin)}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${regime}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-weight:700;">${r.score}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-weight:700;">${r.quality_score != null ? r.quality_score : '—'}</td>
@@ -1494,6 +1496,7 @@ function renderBounceRadarTable(rows) {
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.days_since_min != null ? r.days_since_min + 'gg' : '—'}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.adx != null ? fmtNum(r.adx, 1) : '—'}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${r.rvol != null ? fmtNum(r.rvol, 2) + 'x' : '—'}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${getPortfolioButton(r.isin)}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center">${regime}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-weight:700;">${r.score}</td>
       <td style="padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;font-weight:700;">${r.quality_score != null ? r.quality_score : '—'}</td>
@@ -2054,6 +2057,14 @@ function renderPortfolioTable(portfolioData, portfolioType) {
   tableHtml += '</tbody></table>';
   return tableHtml;
 }
+
+// Helper: genera il bottone "+PORTAFOGLIO"
+function getPortfolioButton(isin) {
+  if (!isin) return '';
+  const inPf = portfolio_isins && portfolio_isins.has(isin);
+  return `<button class="btn-portfolio-add ${inPf?'in-portfolio':''}" onclick="event.stopPropagation();openPortfolioModal('${isin}')" title="${inPf?'Nel portafoglio':'Aggiungi al portafoglio'}" style="background:none;border:none;cursor:pointer;color:${inPf?'#28a745':'#8b949e'};font-size:0.9em;padding:0 4px;">${inPf?'✓ Port':'+ Port'}</button>`;
+}
+
 function togglePortfolioSection() {
   portfolioSectionOpen = !portfolioSectionOpen;
   const body = document.getElementById('portfolioBody');
