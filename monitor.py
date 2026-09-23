@@ -798,6 +798,13 @@ class ETFMonitor:
         os.makedirs('data', exist_ok=True)
         with open('data/dashboard_data.json', 'w') as f:
             json.dump(dashboard, f, indent=2, cls=SafeEncoder)
+        
+        # 🚀 Ricarica la cache in app.py (da locale)
+        try:
+            import requests
+            requests.post('http://localhost:5001/api/reload-dashboard-cache', timeout=2)
+        except Exception:
+            pass  # Non è critico se fallisce
 
         return dashboard
 

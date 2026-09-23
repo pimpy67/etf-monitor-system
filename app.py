@@ -557,6 +557,13 @@ def get_monitor_log():
     })
 
 
+
+@app.route('/api/reload-dashboard-cache', methods=['POST'])
+def reload_dashboard_cache():
+    """Ricarica dashboard_data.json in cache (chiamato da monitor.py dopo salvataggio)."""
+    _load_dashboard_cache()
+    return jsonify({'status': 'ok', 'message': 'Cache ricaricato'})
+
 @app.route('/api/health')
 def health_check():
     """Health check completo del sistema."""
@@ -1504,8 +1511,7 @@ def get_favorites_route():
 
     etf_analysis = {}
     try:
-        with open('data/dashboard_data.json', 'r') as f:
-            dash = json.load(f)
+        dash = _dashboard_cache  # ✅ Usa cache invece di ricaricare file
         for level_key, level_etfs in dash.get('levels', {}).items():
             for etf in level_etfs:
                 key = etf.get('isin') or etf.get('ticker') or ''
