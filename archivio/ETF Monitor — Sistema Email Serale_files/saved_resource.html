@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<!-- saved from url=(0253)https://bfb462db-50de-4fb4-a0af-aa63196a57af.frame.claudeusercontent.com/_f/1783344272-b362/?__frame_t=ZXCf38YoZT2J6aafGJLNcV_G.a0b306d7-3427-4104-947e-ff976606a4d9.3fdc5d6d-367d-45a5-b31c-886bebd53c42.1783347880&__frame_v=manifest.bda96bdb5ebc99bf.json -->
+<html lang="it"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><!-- frame-runtime --><!--<base href="/_f/1783344272-b362/">--><base href="."><script>window.__FRAME_PREAMBLE={"capabilities":{"mcp":"mcp.BQqQVVN_.js"},"transforms":"_transforms.DYk1Ltlh.js"}</script><script>(function(){"use strict";const J="modulepreload",K=function(e){return"/"+e},V={},N=function(t,n,u){let o=Promise.resolve();function i(f){const a=new Event("vite:preloadError",{cancelable:!0});if(a.payload=f,window.dispatchEvent(a),!a.defaultPrevented)throw f}return o.then(f=>{for(const a of f||[])a.status==="rejected"&&i(a.reason);return t().catch(i)})},$=["light","dark","system"];function q(e){if(e==null||typeof e!="object")return!1;const t=e.__frame_init;return t!=null&&typeof t=="object"}function I(e){if(e==null||typeof e!="object")return!1;const t=e.__frame_theme;if(t==null||typeof t!="object")return!1;const n=t.theme;return typeof n=="string"&&$.includes(n)}function S(e){if(window===top||e.type==="auxclick"&&e.button!==1)return;const t=e.composedPath?e.composedPath():[e.target];let n=null;for(let f=0;f<t.length;f++){const a=t[f];if(a&&a.matches&&a.matches("a[href],area[href]")){n=a;break}}if(!n&&e.target&&e.target.closest&&(n=e.target.closest("a[href],area[href]")),!n)return;const u=n.getAttribute("href");if(!u)return;let o,i;try{o=new URL(u,document.baseURI),i=new URL(document.baseURI).origin}catch{return}(o.protocol==="http:"||o.protocol==="https:")&&o.origin!==i&&(e.preventDefault(),parent.postMessage({__frame_nav:!0,url:o.href},"*"))}const L={};function v(e){if(window===top)return;const t=Date.now();t-(L[e]||0)<500||(L[e]=t,parent.postMessage({__frame_engaged:!0,kind:e},"*"))}function U(){addEventListener("click",S,!0),addEventListener("auxclick",S,!0)}function D(){addEventListener("scroll",()=>v("scroll"),{capture:!0,passive:!0}),addEventListener("pointermove",()=>v("pointer"),{capture:!0,passive:!0}),addEventListener("click",()=>v("click"),{capture:!0,passive:!0})}function F(e,t,n){const u=[...t.values()].filter(o=>o.targets.some(i=>i.startsWith(e+".")));return{wrap(o,i){const f=`${e}.${o}`,a=u.filter(s=>s.targets.includes(f));return a.length===0?(...s)=>{try{return i(...s)}catch(d){return Promise.reject(d)}}:(...s)=>{let d=s;for(const c of a){const l=c.module.parameters;if(l)try{d=l(d)}catch{return Promise.reject({code:"transform_error",id:c.id,scope:e,message:"parameters transform failed"})}}let m;try{m=i(...d)}catch(c){m=Promise.reject(c)}return m.then(c=>{for(let l=a.length-1;l>=0;l--){const g=a[l],p=g.module.returns;if(p)try{c=p(c)}catch{return n({id:g.id,scope:e,leg:"returns"}),c}}return c},c=>{for(let l=a.length-1;l>=0;l--){const g=a[l],p=g.module.throws;if(p)try{c=p(c)}catch{return n({id:g.id,scope:e,leg:"throws"}),Promise.reject(c)}}return Promise.reject(c)})}}}}function B(e,t,n,u=()=>{}){const o=new Set(e.changes??[]),i=new Map;for(const f of o){const a=t[f];a&&i.set(f,a)}return{contract:e.contract,changes:o,flags:new Set(e.flags??[]),capabilities:e.capabilities??{},transforms:i,shellOrigin:n.shellOrigin,mount:n.mount,pipe:f=>F(f,i,u)}}(function(){const e=Object.defineProperty,t=globalThis,n=["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceCandidate","RTCSessionDescription","RTCRtpSender","RTCRtpReceiver"];let u=0;for(let o=0;o<n.length;o++){const i=n[o];try{e(t,i,{value:void 0,writable:!1,configurable:!1})}catch{try{delete t[i]}catch{}try{e(t,i,{value:void 0,writable:!1,configurable:!0})}catch{}}typeof t[i]=="function"&&u++}if(u&&window!==top)try{parent.postMessage({__frame_rtc_lockdown_failed:u},"*")}catch{}})();const z=1e4,x=Object.freeze([...window.__FRAME_PREAMBLE?.origins??["https://claude.ai","https://preview.claude.ai"]]);function W(e){for(const t of x)if(t.endsWith(":*"))try{const n=new URL(e);if(`${n.protocol}//${n.hostname}:*`===t)return!0}catch{}else if(e===t)return!0;return!1}const b=Object.freeze({...window.__FRAME_PREAMBLE?.capabilities??{}}),E=window.__FRAME_PREAMBLE?.transforms,k=/^[\w.-]+\.js$/,H=/^[a-z][a-z0-9_-]{0,63}$/;let C=null,h=null;function P(e,t,n){try{Object.defineProperty(e,t,{value:n,writable:!1,configurable:!1,enumerable:!0})}catch{try{Object.defineProperty(e,t,{value:n,writable:!1,configurable:!0,enumerable:!0})}catch{}}}let R=!1;function A(e){const t=document.documentElement;e==="light"||e==="dark"?(t.dataset.theme=e,t.style.colorScheme=e,R=!0):R&&(delete t.dataset.theme,t.style.colorScheme="",R=!1)}const _=new Map;function G(e,t){const n=_.get(e);if(!n)return;Object.assign(n.impl,t),n.impl.__settled=()=>Promise.reject({code:"capability_removed",message:`${e}: method not in this runtime`});const u=n.queue;n.queue=[];for(const o of u){const i=t[o.method];i?i(...o.args).then(o.resolve,o.reject):o.reject({code:"capability_removed",message:`${e}.${o.method} is not in this runtime`})}}function j(e,t){const n=_.get(e);if(!n)return;n.impl.__settled=()=>Promise.reject(t);const u=n.queue;n.queue=[];for(const o of u)o.reject(t)}const O=Object.getOwnPropertyDescriptor(window,"claude");if(window!==top&&!(O&&O.writable===!1)){U(),D();const e=O?.value??{};P(window,"claude",e);const t=s=>{const d={impl:Object.create(null),queue:[]};_.set(s,d);const m=new Proxy(d.impl,{get:(c,l)=>{if(typeof l=="string"&&!(l==="then"||l==="toJSON"||l==="valueOf"))return l==="toString"?Object.prototype.toString:(...g)=>{const p=c[l]??c.__settled;return p?p(...g):new Promise((w,M)=>{d.queue.push({method:l,args:g,resolve:w,reject:M})})}},set:()=>!1});P(e,s,m)};for(const s of Object.keys(b)){if(e[s]!==void 0){P(e,s,e[s]);continue}t(s)}let n=null,u=null,o=0;const i=s=>{s.source!==parent||!W(s.origin)||q(s.data)&&(n=s.data.__frame_init,h=s.origin,removeEventListener("message",i),clearTimeout(o),u?.())};addEventListener("message",i),parent.postMessage({__frame_connect:!0},"*");const f=new Promise(s=>{u=s,o=setTimeout(()=>{removeEventListener("message",i),s()},z)}),a=document.readyState==="loading"?new Promise(s=>document.addEventListener("DOMContentLoaded",()=>s(),{once:!0})):Promise.resolve();f.then(async()=>{if(!n||!h){for(const r of _.keys())j(r,{code:"not_granted",message:"frame initialization did not arrive - capability unavailable"});return}A(n.theme);const s=h;addEventListener("message",r=>{r.source!==parent||r.origin!==s||I(r.data)&&A(r.data.__frame_theme.theme)});const d=r=>N(()=>import("/_runtime/"+r),void 0),m=Object.keys(n.capabilities??{});for(const r of m)Object.hasOwn(b,r)||H.test(r)&&e[r]===void 0&&(t(r),j(r,{code:"capability_disabled",message:"capability not in this runtime generation"}));const c=m.filter(r=>Object.hasOwn(b,r)).map(r=>[r,b[r]]).filter(r=>typeof r[1]=="string"&&k.test(r[1])),[l,...g]=await Promise.allSettled([E&&k.test(E)?d(E):Promise.resolve({}),...c.map(([,r])=>d(r))]),p=h;C=B(n,l.status==="fulfilled"&&l.value?.TRANSFORMS||{},{shellOrigin:p,mount:G},r=>parent.postMessage({__frame_cap_telemetry:r},p));const w=r=>parent.postMessage({__frame_cap_telemetry:{kind:"cap-load-error",cap:r}},p),M=C;g.forEach((r,y)=>{const T=c[y][0];if(r.status!=="fulfilled"){w(T);return}try{r.value?.install?.(M)}catch{w(T)}});for(const[r,y]of _)y.queue.length===0&&Object.keys(y.impl).length>0||j(r,{code:m.includes(r)?"capability_disabled":"not_granted",message:"capability not available in this session"});await a,parent.postMessage({__frame_ready:!0},h)})}})();</script><!-- /frame-runtime --><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+
+
+
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETF Monitor — Sistema Email Serale</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 40px 20px; }
+.container { max-width: 1200px; margin: 0 auto; }
+h1 { color: white; text-align: center; margin-bottom: 40px; font-size: 2.5em; text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+.subtitle { color: rgba(255,255,255,0.9); text-align: center; margin-bottom: 30px; font-size: 1.1em; }
+
+.flow-container { display: grid; grid-template-columns: 1fr; gap: 30px; margin-bottom: 40px; }
+
+.schedule-box {
+  background: white; border-radius: 12px; padding: 25px; box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  border-left: 6px solid #667eea;
+}
+.schedule-box h2 { color: #667eea; margin-bottom: 15px; font-size: 1.3em; }
+.schedule-box p { color: #555; line-height: 1.8; }
+.time { font-weight: bold; color: #667eea; font-size: 1.1em; }
+
+.email-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 25px; margin-bottom: 40px; }
+
+.email-card {
+  background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.1); transition: transform 0.3s, box-shadow 0.3s;
+}
+.email-card:hover { transform: translateY(-5px); box-shadow: 0 12px 40px rgba(0,0,0,0.15); }
+
+.email-header {
+  padding: 20px; color: white; font-size: 0.9em; font-weight: bold; display: flex; align-items: center; gap: 12px;
+}
+.email-header-green { background: linear-gradient(135deg, #00B050 0%, #007A36 100%); }
+.email-header-red { background: linear-gradient(135deg, #DC3545 0%, #AA0000 100%); }
+.email-header-orange { background: linear-gradient(135deg, #FF8F00 0%, #E65100 100%); }
+.email-header-gray { background: linear-gradient(135deg, #6c757d 0%, #495057 100%); }
+
+.email-icon { font-size: 1.8em; }
+.email-title { flex: 1; }
+
+.email-content { padding: 20px; }
+.email-trigger { font-size: 0.85em; color: #888; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #eee; }
+.trigger-label { font-weight: bold; color: #667eea; }
+
+.email-details { margin-top: 15px; }
+.detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 0.95em; }
+.detail-label { color: #666; font-weight: 500; }
+.detail-value { color: #333; font-family: 'Monaco', monospace; }
+
+.featured { background: #f9f9f9; padding: 12px; border-radius: 6px; margin-top: 12px; border-left: 3px solid; }
+.featured-green { border-left-color: #00B050; background: #f0f8f0; }
+.featured-red { border-left-color: #DC3545; background: #f8f0f0; }
+.featured-orange { border-left-color: #FF8F00; background: #fff8f0; }
+
+.featured-title { font-weight: bold; color: #333; margin-bottom: 5px; }
+.featured-text { font-size: 0.9em; color: #555; }
+
+.portfolio-note {
+  background: white; border-radius: 12px; padding: 25px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); border-left: 6px solid #FF8F00; margin-bottom: 30px;
+}
+.portfolio-note h3 { color: #FF8F00; margin-bottom: 12px; font-size: 1.2em; }
+.portfolio-note p { color: #555; line-height: 1.8; }
+.missing { color: #DC3545; font-weight: bold; }
+
+.legend-box {
+  background: white; border-radius: 12px; padding: 25px; box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  margin-top: 40px;
+}
+.legend-box h3 { color: #667eea; margin-bottom: 15px; }
+.legend-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }
+.legend-item { padding: 12px; background: #f9f9f9; border-radius: 6px; border-left: 4px solid #667eea; }
+.legend-item strong { color: #667eea; }
+
+.footer { text-align: center; color: rgba(255,255,255,0.8); margin-top: 60px; font-size: 0.95em; }
+</style>
+
+
+
+<div class="container">
+  <h1>📧 Sistema Email ETF Monitor</h1>
+  <p class="subtitle">Panoramica completa dell'invio email serale con focus portafoglio ETF</p>
+
+  <!-- SCHEDULE -->
+  <div class="schedule-box">
+    <h2>⏰ Quando vengono inviate?</h2>
+    <p><span class="time">Ogni giorno lun-ven, ore 17:00 CEST (run principale)</span><br>
+    Il monitor esegue l'analisi, aggiorna i livelli e invia tutti gli alert del giorno.<br><br>
+    <em>Nota:</em> Esiste anche un run silenzioso alle 09:00 che NON invia email (solo aggiorna dashboard).</p>
+  </div>
+
+  <!-- EMAIL CARDS -->
+  <div class="email-grid">
+
+    <!-- EMAIL 1: NUOVI INGRESSI -->
+    <div class="email-card">
+      <div class="email-header email-header-green">
+        <span class="email-icon">🟢</span>
+        <span class="email-title">Nuovi Ingressi L1 + L0</span>
+      </div>
+      <div class="email-content">
+        <div class="email-trigger">
+          <span class="trigger-label">Trigger:</span><br>
+          Se almeno 1 ETF entra oggi in L1 o L0
+        </div>
+        <div class="email-details">
+          <div class="detail-row">
+            <span class="detail-label">Subject:</span>
+            <span class="detail-value">🟢 N nuovi in L1 · M in L0 — dd/mm/yyyy</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Frequenza:</span>
+            <span class="detail-value">Max 1 email/giorno</span>
+          </div>
+        </div>
+        <div class="featured featured-green">
+          <div class="featured-title">📋 Contenuto (L1)</div>
+          <div class="featured-text">
+            Tabella con colonne: <strong>ETF | Categoria | Prezzo | RSI | ADX | Regime | Cond. 6/6</strong>
+            <br><br>
+            • Regime: 🟢 Rialzista se price &gt; SMA200, 🔴 Ribassista altrimenti<br>
+            • Cond.: numero di condizioni L1 soddisfatte (es. 5/6)<br>
+            • Per L0: include Dist. dal Picco, Panic Low, RSI
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EMAIL 2: USCITE L1 -->
+    <div class="email-card">
+      <div class="email-header email-header-red">
+        <span class="email-icon">🔴</span>
+        <span class="email-title">Uscita da L1</span>
+      </div>
+      <div class="email-content">
+        <div class="email-trigger">
+          <span class="trigger-label">Trigger:</span><br>
+          Quando un ETF esce da L1 (una email per ETF)
+        </div>
+        <div class="email-details">
+          <div class="detail-row">
+            <span class="detail-label">Subject:</span>
+            <span class="detail-value">🔴 Uscita ETF L1 — [ETF] — [Regola] — ±X.XX%</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Frequenza:</span>
+            <span class="detail-value">1 email per ogni uscita</span>
+          </div>
+        </div>
+        <div class="featured featured-red">
+          <div class="featured-title">📋 Contenuto</div>
+          <div class="featured-text">
+            • <strong>Regola uscita</strong> (A/B/C/D/E/F) con colore codificato<br>
+            • Data entrata + giorni in L1<br>
+            • Prezzo entrata / uscita<br>
+            • <strong>% Guadagno/Perdita</strong> (grande, rosso se negativa)<br>
+            • Indicatori al momento uscita: EMA10 vs EMA20, RSI, ADX
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EMAIL 3: SEGNALI PORTAFOGLIO -->
+    <div class="email-card">
+      <div class="email-header email-header-orange">
+        <span class="email-icon">⚠️</span>
+        <span class="email-title">Segnali Portafoglio</span>
+      </div>
+      <div class="email-content">
+        <div class="email-trigger">
+          <span class="trigger-label">Trigger:</span><br>
+          Se almeno 1 ETF in L1 ha un segnale attivo
+        </div>
+        <div class="email-details">
+          <div class="detail-row">
+            <span class="detail-label">Subject:</span>
+            <span class="detail-value">⚠️ N segnali portafoglio ETF — dd/mm/yyyy</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Frequenza:</span>
+            <span class="detail-value">Max 1 email/giorno</span>
+          </div>
+        </div>
+        <div class="featured featured-orange">
+          <div class="featured-title">📋 Tipi di segnale</div>
+          <div class="featured-text">
+            <strong>🦶 Piede Dentro</strong> — RSI &gt; 78<br>
+            Azione: Valuta vendita 90% e parcheggio su XEON (€STR)<br><br>
+            <strong>😮 Stanchezza RSI</strong> — RSI ≥ 72<br>
+            Azione: Tieni il dito sul grilletto (possibile inversione)<br><br>
+            <strong>⚠️ Deterioramento</strong> — &lt; 5/6 condizioni dopo 5gg in L1<br>
+            Azione: Monitora attentamente
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EMAIL 4: HEALTH REPORT -->
+    <div class="email-card">
+      <div class="email-header email-header-gray">
+        <span class="email-icon">🔴</span>
+        <span class="email-title">Errori Monitor (Health Report)</span>
+      </div>
+      <div class="email-content">
+        <div class="email-trigger">
+          <span class="trigger-label">Trigger:</span><br>
+          Solo se ci sono errori di fetch o problemi DB
+        </div>
+        <div class="email-details">
+          <div class="detail-row">
+            <span class="detail-label">Subject:</span>
+            <span class="detail-value">🔴 Errori monitor ETF — dd/mm/yyyy HH:MM</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Frequenza:</span>
+            <span class="detail-value">Solo se errori</span>
+          </div>
+        </div>
+        <div class="featured featured-red">
+          <div class="featured-title">📋 Contenuto</div>
+          <div class="featured-text">
+            Tabella con: <strong>Ticker | Errore</strong><br><br>
+            Statistiche:<br>
+            • ETF con errore: N<br>
+            • Senza prezzo: M<br>
+            • DB: OK/NON DISPONIBILE
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PORTFOLIO NOTE -->
+  <div class="portfolio-note">
+    <h3>📌 Focus: Email relative al PORTAFOGLIO ETF</h3>
+    <p>
+      Le email principalmente rilevanti per il <strong>portafoglio personale</strong> sono:<br><br>
+
+      <strong>1️⃣ Segnali Portafoglio (⚠️)</strong> — La più importante per operazioni quotidiane<br>
+      Ti avverte quando ETF in L1 raggiungono RSI &gt; 78 (Piede Dentro) o RSI ≥ 72 (Stanchezza).<br>
+      <em>È qui che trovi le azioni operative suggerite (vendere 90%, parcheggiare su XEON).</em><br><br>
+
+      <strong>2️⃣ Uscita da L1 (🔴)</strong> — Conferma che una posizione è stata chiusa<br>
+      Ti dice la regola di uscita (Stop Loss, Trailing Stop, ecc.) e il % realizzato.<br><br>
+
+      <strong>3️⃣ Nuovi Ingressi (🟢)</strong> — Opportunità di nuovi buy<br>
+      <span class="missing">⚠️ NOTA MANCANTE:</span> Attualmente <strong>NON c'è una email di resoconto portafoglio giornaliero</strong><br>
+      (esiste la funzione <code>send_portfolio_report()</code> in alerts.py, ma non viene invocata dal monitor).
+    </p>
+  </div>
+
+  <!-- LEGEND -->
+  <div class="legend-box">
+    <h3>🎯 Legenda colori + Regole Uscita L1</h3>
+    <div class="legend-items">
+      <div class="legend-item">
+        <strong style="color: #00B050">Regola A</strong><br>
+        Stop Loss: Prezzo &lt; EMA20 per ≥3 giorni
+      </div>
+      <div class="legend-item">
+        <strong style="color: #fd7e14">Regola B</strong><br>
+        Trailing Stop: EMA10 &lt; EMA20
+      </div>
+      <div class="legend-item">
+        <strong style="color: #dc3545">Regola C</strong><br>
+        Stanchezza: RSI era ≥70, ora sceso &lt;70
+      </div>
+      <div class="legend-item">
+        <strong style="color: #E65100">Regola D</strong><br>
+        Piede Dentro: RSI &gt; 78 → uscita parziale 90%
+      </div>
+      <div class="legend-item">
+        <strong style="color: #6c757d">Regola E</strong><br>
+        ADX Debole: ADX &lt; 18 + price &lt; EMA20
+      </div>
+      <div class="legend-item">
+        <strong style="color: #b71c1c">Regola F</strong><br>
+        Kill Switch: Calo giornaliero ≤ −3%
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>📧 Email a: andreapavan67@gmail.com | Via: Resend API</p>
+    <p>🕒 Last Monitor Run: 2026-07-06 17:00 CEST</p>
+  </div>
+</div>
+
+
+
+</body></html>

@@ -1,0 +1,312 @@
+families:
+  equity_sviluppati:
+    description: "Equity sviluppati — Large cap, ACWI, All-World"
+    rsi_entry_low: 45
+    rsi_entry_high: 55
+    rsi_exit_min: 40
+    rsi_overbought: 78
+    adx_entry: 22
+    ema_dist_max: 4.0
+    ema20_slope_min: 0.4
+    lateral_band: 0.01
+    atr_max: 0.03
+    aum_min: 50
+    days_above_ema: 5
+    mm200_filter: true
+    l0_drawdown: 15.0
+    l0_rsi_max: 35
+    min_buy_count: 5
+  mercati_emergenti:
+    description: "Mercati emergenti — EM globale, Asia, LatAm, EMEA"
+    rsi_entry_low: 40
+    rsi_entry_high: 52
+    rsi_exit_min: 38
+    rsi_overbought: 76
+    adx_entry: 22
+    ema_dist_max: 5.0
+    ema20_slope_min: 0.4
+    lateral_band: 0.012
+    atr_max: 0.04
+    aum_min: 50
+    days_above_ema: 3
+    mm200_filter: true
+    l0_drawdown: 20.0
+    l0_rsi_max: 38
+    min_buy_count: 6
+  settoriali_growth:
+    description: "Settoriali crescita — Tech, AI, Semi, Nasdaq, Digitale"
+    rsi_entry_low: 48
+    rsi_entry_high: 58
+    rsi_exit_min: 38
+    rsi_overbought: 78
+    adx_entry: 25
+    ema_dist_max: 5.0
+    ema20_slope_min: 0.5
+    lateral_band: 0.015
+    atr_max: 0.05
+    aum_min: 50
+    days_above_ema: 5
+    mm200_filter: true
+    l0_drawdown: 18.0
+    l0_rsi_max: 38
+    min_buy_count: 5
+  settoriali_difensivi:
+    description: "Settoriali difensivi — Salute, Utilities, Insurance, Food"
+    rsi_entry_low: 42
+    rsi_entry_high: 50
+    rsi_exit_min: 38
+    rsi_overbought: 65
+    adx_entry: 18
+    ema_dist_max: 2.5
+    ema20_slope_min: 0.3
+    lateral_band: 0.01
+    atr_max: 0.025
+    aum_min: 50
+    days_above_ema: 5
+    mm200_filter: true
+    l0_drawdown: 15.0
+    l0_rsi_max: 35
+    min_buy_count: 5
+  bond_governativi:
+    description: "Bond governativi EUR/USD — BTP, Bund, UST, Gov Euro, IL"
+    rsi_entry_low: 38
+    rsi_entry_high: 48
+    rsi_exit_min: 42
+    rsi_overbought: 70
+    adx_entry: 12
+    ema_dist_max: 1.5
+    ema20_slope_min: 0.1
+    lateral_band: 0.005
+    atr_max: 0.015
+    aum_min: 100
+    days_above_ema: 3
+    mm200_filter: false
+    l0_drawdown: 8.0
+    l0_rsi_max: 38
+    min_buy_count: 5
+  bond_corp_hy_em:
+    description: "Bond corporate / HY / EM — Corp EUR/USD, HY, EM bond"
+    rsi_entry_low: 42
+    rsi_entry_high: 52
+    rsi_exit_min: 38
+    rsi_overbought: 70
+    adx_entry: 15
+    ema_dist_max: 2.0
+    ema20_slope_min: 0.15
+    lateral_band: 0.008
+    atr_max: 0.025
+    aum_min: 50
+    days_above_ema: 3
+    mm200_filter: false
+    l0_drawdown: 10.0
+    l0_rsi_max: 38
+    min_buy_count: 5
+  commodities:
+    description: "Commodities broad — Bloomberg Comm, GSCI, Agri, Energia"
+    rsi_entry_low: 40
+    rsi_entry_high: 55
+    rsi_exit_min: 38
+    rsi_overbought: 75
+    adx_entry: 22
+    ema_dist_max: 3.0
+    ema20_slope_min: 0.3
+    lateral_band: 0.015
+    atr_max: 0.06
+    aum_min: 50
+    days_above_ema: 3
+    mm200_filter: true
+    l0_drawdown: 20.0
+    l0_rsi_max: 40
+    min_buy_count: 6
+  oro_metalli_preziosi:
+    description: "Oro e metalli preziosi — Oro, Argento, Platino, Basket PM"
+    rsi_entry_low: 38
+    rsi_entry_high: 52
+    rsi_exit_min: 38
+    rsi_overbought: 68
+    adx_entry: 18
+    ema_dist_max: 2.5
+    ema20_slope_min: 0.2
+    lateral_band: 0.015
+    atr_max: 0.04
+    aum_min: 50
+    days_above_ema: 3
+    mm200_filter: true
+    l0_drawdown: 15.0
+    l0_rsi_max: 35
+    min_buy_count: 5
+  metalli_industriali:
+    description: "Metalli industriali — Rame, Alluminio, Zinco, Nichel, Battery"
+    rsi_entry_low: 38
+    rsi_entry_high: 50
+    rsi_exit_min: 38
+    rsi_overbought: 65
+    adx_entry: 20
+    ema_dist_max: 3.0
+    ema20_slope_min: 0.3
+    lateral_band: 0.012
+    atr_max: 0.05
+    aum_min: 30
+    days_above_ema: 3
+    mm200_filter: true
+    l0_drawdown: 18.0
+    l0_rsi_max: 38
+    min_buy_count: 5
+  real_estate_reit:
+    description: "Real Estate / REIT — EPRA Europe, NAREIT Global, REIT"
+    rsi_entry_low: 42
+    rsi_entry_high: 52
+    rsi_exit_min: 38
+    rsi_overbought: 65
+    adx_entry: 15
+    ema_dist_max: 2.0
+    ema20_slope_min: 0.2
+    lateral_band: 0.01
+    atr_max: 0.03
+    aum_min: 50
+    days_above_ema: 3
+    mm200_filter: false
+    l0_drawdown: 12.0
+    l0_rsi_max: 38
+    min_buy_count: 5
+  crypto_digital_assets:
+    description: "Crypto / asset digitali — Bitcoin, Ethereum, Solana, Basket"
+    rsi_entry_low: 35
+    rsi_entry_high: 52
+    rsi_exit_min: 38
+    rsi_overbought: 70
+    adx_entry: 28
+    ema_dist_max: 6.0
+    ema20_slope_min: 0.6
+    lateral_band: 0.03
+    atr_max: 0.15
+    aum_min: 100
+    days_above_ema: 3
+    mm200_filter: true
+    l0_drawdown: 25.0
+    l0_rsi_max: 40
+    min_buy_count: 5
+  leva_single_stock:
+    description: "Leva / single stock / struct — ETP 3x long/short su singoli titoli"
+    rsi_entry_low: 45
+    rsi_entry_high: 58
+    rsi_exit_min: 38
+    rsi_overbought: 65
+    adx_entry: 28
+    ema_dist_max: 4.0
+    ema20_slope_min: 0.5
+    lateral_band: 0.02
+    atr_max: 0.2
+    aum_min: 50
+    days_above_ema: 3
+    mm200_filter: true
+    l0_drawdown: 20.0
+    l0_rsi_max: 40
+    hold_days_max: 30
+    min_buy_count: 5
+  private_equity_buffer:
+    description: "Private Equity / Buffer ETF — Listed PE, Buffer strategy"
+    rsi_entry_low: 40
+    rsi_entry_high: 55
+    rsi_exit_min: 38
+    rsi_overbought: 65
+    adx_entry: 15
+    ema_dist_max: 2.5
+    ema20_slope_min: 0.15
+    lateral_band: 0.008
+    atr_max: 0.03
+    aum_min: 50
+    days_above_ema: 3
+    mm200_filter: false
+    l0_drawdown: 15.0
+    l0_rsi_max: 38
+    min_buy_count: 5
+  monetario_liquidita:
+    description: "Monetario / liquidità — ETF overnight, short-term"
+    rsi_entry_low: null
+    rsi_entry_high: null
+    rsi_exit_min: 42
+    rsi_overbought: 97
+    adx_entry: null
+    ema_dist_max: 0.5
+    ema20_slope_min: 0.0
+    lateral_band: 0.0
+    atr_max: 0.005
+    aum_min: 100
+    days_above_ema: 3
+    mm200_filter: false
+    l0_drawdown: null
+    l0_rsi_max: null
+    min_buy_count: 6
+family_detection:
+- pattern:
+  - monetario
+  - liquidita
+  - money market
+  family: monetario_liquidita
+- pattern:
+  - asia - emergente
+  - america latina
+  - africa & middle
+  - europa dell'est
+  family: mercati_emergenti
+- pattern:
+  - settoriale - tecnolog
+  - settoriale - energia
+  - settoriale - industri
+  - settoriale - finanza
+  family: settoriali_growth
+- pattern:
+  - settoriale - salute
+  - settoriale - consumi
+  family: settoriali_difensivi
+- pattern:
+  - obbligazionari - governativi
+  - obbligazionari - globali
+  - obbligazionari - inflation
+  family: bond_governativi
+- pattern:
+  - obbligazionari - corporate
+  - obbligazionari - high yield
+  - obbligazionari - emergenti
+  - obbligazionari - aggregati
+  family: bond_corp_hy_em
+- pattern:
+  - materie prime
+  - settoriale - materie prime
+  family: commodities
+- pattern:
+  - oro
+  - metalli preziosi
+  family: oro_metalli_preziosi
+- pattern:
+  - metalli industriali
+  family: metalli_industriali
+- pattern:
+  - real estate
+  - reit
+  - infrastrutture
+  family: real_estate_reit
+- pattern:
+  - crypto
+  family: crypto_digital_assets
+- pattern:
+  - leva singolo
+  - volatilita
+  - strutturati
+  family: leva_single_stock
+- pattern:
+  - private equity
+  family: private_equity_buffer
+- pattern:
+  - stati uniti
+  - europa occidentale
+  - giappone
+  - globale
+  - azionario
+  - canada
+  - australasia
+  - regno unito
+  - asia - paesi sviluppati
+  family: equity_sviluppati
+default_family: equity_sviluppati
